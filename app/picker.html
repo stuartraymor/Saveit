@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Choose a window</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:#e8eaec;user-select:none}
+body{background:#000 center/cover no-repeat}
+.dim{position:fixed;inset:0;background:rgba(10,12,14,.72);backdrop-filter:blur(3px)}
+.wrap{position:fixed;inset:0;display:flex;flex-direction:column;padding:28px 40px;gap:18px}
+header{display:flex;align-items:center;gap:14px}
+h1{margin:0;font-size:20px;font-weight:700}
+.hint{color:#9aa1a8;font-size:13px}
+.sp{flex:1}
+button.cancel{font:inherit;font-weight:600;background:#30343a;color:#e8eaec;border:1px solid #3a3f45;border-radius:8px;padding:7px 14px;cursor:pointer}
+.grid{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;align-content:start;padding:4px}
+.card{background:#26292d;border:2px solid #3a3f45;border-radius:12px;padding:10px;cursor:pointer;display:flex;flex-direction:column;gap:9px;text-align:left;color:inherit;font:inherit;transition:transform .12s,border-color .12s}
+.card:hover,.card:focus-visible{border-color:#2db3a0;transform:translateY(-2px);outline:none}
+.card img.t{width:100%;aspect-ratio:16/10;object-fit:contain;background:#111;border-radius:7px}
+.name{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:600;min-width:0}
+.name img{width:18px;height:18px;flex:none}
+.name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.k{font-family:"Cascadia Mono",Consolas,monospace;font-size:11px;color:#9aa1a8;border:1px solid #3a3f45;border-radius:4px;padding:1px 5px;margin-left:auto;flex:none}
+@media (prefers-reduced-motion:reduce){.card{transition:none}}
+</style></head>
+<body>
+<div class="dim"></div>
+<div class="wrap">
+  <header><h1>Choose a window</h1><span class="hint">Click a window, or press its number. Esc cancels.</span><span class="sp"></span><button class="cancel" id="x">Cancel</button></header>
+  <div class="grid" id="g"></div>
+</div>
+<script>
+let list=[];
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+window.overlay.onData(d=>{
+  document.body.style.backgroundImage=`url(${d.bg})`;
+  list=d.list;
+  document.getElementById('g').innerHTML=list.map((w,i)=>`<button class="card" data-i="${i}"><img class="t" alt="" src="${w.thumb}"><div class="name">${w.icon?`<img alt="" src="${w.icon}">`:''}<span>${esc(w.name)}</span>${i<9?`<span class="k">${i+1}</span>`:''}</div></button>`).join('');
+  const first=document.querySelector('.card');if(first)first.focus();
+});
+document.getElementById('g').addEventListener('click',e=>{const b=e.target.closest('.card');if(b)window.overlay.done(list[+b.dataset.i].id)});
+document.getElementById('x').onclick=()=>window.overlay.done(null);
+addEventListener('keydown',e=>{if(e.key==='Escape')window.overlay.done(null);const n=+e.key;if(n>=1&&n<=9&&list[n-1])window.overlay.done(list[n-1].id)});
+</script>
+</body></html>

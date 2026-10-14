@@ -1,0 +1,23 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Step capture</title>
+<style>
+html,body{margin:0;height:100%;background:#16181a;overflow:hidden;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;user-select:none;color:#e8eaec}
+.bar{position:fixed;inset:0;border:1px solid #3a3f45;display:flex;align-items:center;gap:8px;padding:0 8px 0 12px;-webkit-app-region:drag}
+.dot{width:10px;height:10px;border-radius:50%;background:#2db3a0;flex:none}
+.paused .dot{background:#f5c400}
+.txt{display:flex;flex-direction:column;line-height:1.2;min-width:0;flex:1}
+.txt b{font-size:13px}
+.txt span{font-size:11px;color:#9aa1a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+button{-webkit-app-region:no-drag;font:inherit;font-size:12px;font-weight:700;border-radius:6px;border:1px solid #3a3f45;background:#30343a;color:#e8eaec;padding:6px 10px;cursor:pointer;flex:none}
+button.stop{background:#e5483b;border-color:#e5483b;color:#fff}
+</style></head>
+<body>
+<div class="bar" id="bar"><span class="dot"></span><div class="txt"><b id="n">Capturing steps · 0</b><span id="h">Starting…</span></div><button id="shot" title="Capture a step now (F9)">+ Step</button><button id="pause">Pause</button><button class="stop" id="stop">Stop</button></div>
+<script>
+const $=id=>document.getElementById(id),bar=$('bar'),n=$('n'),h=$('h'),shotBtn=$('shot'),pauseBtn=$('pause'),stopBtn=$('stop');
+shotBtn.onclick=()=>window.steps.cmd('shot');pauseBtn.onclick=()=>window.steps.cmd('pause');stopBtn.onclick=()=>{stopBtn.disabled=true;stopBtn.textContent='Finishing…';window.steps.cmd('stop')};
+window.steps.onState(st=>{n.textContent=(st.paused?'Paused · ':'Capturing steps · ')+st.count;bar.classList.toggle('paused',st.paused);pauseBtn.textContent=st.paused?'Resume':'Pause';
+  h.textContent=st.paused?'Clicks are not being captured':(st.auto?'Every click takes a screenshot · F9 adds one':'Press F9 or + Step to capture each step')});
+addEventListener('keydown',e=>{if(e.key==='Escape')window.steps.cmd('stop')});
+</script>
+</body></html>

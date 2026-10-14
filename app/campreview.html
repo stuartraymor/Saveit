@@ -1,0 +1,15 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Webcam preview</title>
+<style>
+html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);background:#111;box-sizing:border-box}
+</style></head>
+<body><video id="v" autoplay muted playsinline></video>
+<script>
+const q=new URLSearchParams(location.search),v=document.getElementById('v');
+v.style.borderRadius=q.get('shape')==='circle'?'50%':(q.get('corners')==='rounded'?'14%':'0');
+if(q.get('border')==='1')v.style.border='2px solid #fff';
+const dev=q.get('dev');
+const open=id=>navigator.mediaDevices.getUserMedia({video:id?{deviceId:{exact:id},width:{ideal:640},height:{ideal:360}}:{width:{ideal:640},height:{ideal:360}},audio:false});
+open(dev).catch(()=>open('')).then(s=>{v.srcObject=s}).catch(()=>{});
+</script></body></html>

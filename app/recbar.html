@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Recording</title>
+<style>
+html,body{margin:0;height:100%;background:#16181a;overflow:hidden;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;user-select:none}
+.bar{position:fixed;inset:0;background:#16181a;border:1px solid #3a3f45;display:flex;align-items:center;gap:8px;padding:0 6px 0 14px;color:#e8eaec;-webkit-app-region:drag}
+.dot{width:10px;height:10px;border-radius:50%;background:#e5483b;animation:p 1s infinite}
+.paused .dot{animation:none;background:#f5c400}
+.t{font-family:"Cascadia Mono",Consolas,monospace;font-variant-numeric:tabular-nums;font-size:14px;min-width:52px}
+.info{font-size:11px;color:#9aa1a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp{flex:1}
+button{-webkit-app-region:no-drag;font:inherit;font-size:12px;font-weight:700;border-radius:999px;border:1px solid #3a3f45;background:#30343a;color:#e8eaec;padding:5px 12px;cursor:pointer}
+button.stop{background:#e5483b;border-color:#e5483b;color:#fff}
+@keyframes p{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.dot{animation:none}}
+</style></head>
+<body>
+<div class="bar" id="bar"><span class="dot"></span><span class="t" id="t">00:00</span><span class="info" id="info"></span><span class="sp"></span><button id="pause">Pause</button><button class="stop" id="stop">Stop</button></div>
+<script>
+let secs=0,paused=false;
+const $=id=>document.getElementById(id),t=$('t'),bar=$('bar'),pauseBtn=$('pause'),stopBtn=$('stop');
+const q=new URLSearchParams(location.search);
+$('info').textContent=[q.get('size'),q.get('cursor')==='1'?'Cursor':'',q.get('sys')==='1'?'Audio':'',q.get('mic')==='1'?'Mic':'',q.get('cam')==='1'?'Cam':''].filter(Boolean).join(' · ');
+setInterval(()=>{if(!paused){secs++;t.textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0')}},1000);
+pauseBtn.onclick=()=>window.recbar.cmd('pause');
+stopBtn.onclick=()=>{stopBtn.disabled=true;stopBtn.textContent='Saving…';window.recbar.cmd('stop')};
+window.recbar.onState(st=>{paused=st==='paused';bar.classList.toggle('paused',paused);pauseBtn.textContent=paused?'Resume':'Pause'});
+addEventListener('keydown',e=>{if(e.key==='Escape')window.recbar.cmd('stop')});
+</script>
+</body></html>
