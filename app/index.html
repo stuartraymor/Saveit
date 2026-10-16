@@ -2489,7 +2489,8 @@ function fit91(b,k,x,y,shift){let L=b.x,T=b.y,R=b.x+b.w,B=b.y+b.h;const corner=k
   if(corner&&b.w>0&&b.h>0&&((S.p.lockRatio!==false)!==!!shift)){const f=Math.max((R-L)/b.w,(B-T)/b.h),w=b.w*f,h=b.h*f;if(k.includes('w'))L=R-w;else R=L+w;if(k.includes('n'))T=B-h;else B=T+h}
   return{x:L,y:T,w:R-L,h:B-T}}
 let gdrag91=null;
-window.grpOutline9=function(c,G,z){if(rzOn80())return true;const b=gdrag91?gdrag91.nb:box91(G),hs=4.5/z;c.strokeRect(b.x,b.y,b.w,b.h);c.setLineDash([]);
+window.grpOutline9=function(c,G,z){c.save();c.globalAlpha=.75;c.lineWidth=1/z;c.setLineDash([3/z,3/z]);G.forEach(q=>{const b=bbox(q);c.strokeRect(b.x-3/z,b.y-3/z,b.w+6/z,b.h+6/z)});c.restore(); // each selected item gets its own dotted box (no handles)
+  if(rzOn80())return true;const b=gdrag91?gdrag91.nb:box91(G),hs=4.5/z;c.strokeRect(b.x,b.y,b.w,b.h);c.setLineDash([]);
   for(const [,x,y] of hpts91(b)){c.fillStyle='#fff';c.beginPath();c.rect(x-hs,y-hs,hs*2,hs*2);c.fill();c.stroke()}
   if(gdrag91){const t=`${Math.round(b.w)} × ${Math.round(b.h)}`;c.font=`${12/z}px sans-serif`;const tw=c.measureText(t).width+10/z,th=18/z;c.fillStyle='rgba(0,0,0,.75)';c.fillRect(b.x,b.y-th-4/z,tw,th);c.fillStyle='#fff';c.textBaseline='middle';c.fillText(t,b.x+5/z,b.y-th/2-4/z)}
   return true};
