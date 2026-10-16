@@ -390,7 +390,7 @@ function strokeBorder(c,f,p,W,H,b,inside,style){c.save();c.strokeStyle=f.borderC
   if(style==='double'){const t=Math.max(1,b/3);ring(t,t/2);ring(t,b-t/2)}
   else{if(style==='dashed')c.setLineDash([b*2.5,b*1.5]);if(style==='dotted'){c.lineCap='round';c.setLineDash([.01,b*2])}ring(b,b/2)}
   c.restore()}
-function pad(){return padFor(S.fx);}
+function pad(){return padFor(S.fx)+rzMargin80();}
 function layoutStage(){
   const it=S.cur; stage.classList.toggle('empty',!it);
   if(vid){vid._destroy&&vid._destroy();(vid._wrap||vid).remove();vid=null;}
@@ -757,7 +757,7 @@ function resizeImg(pct,skipSnap){const it=S.cur,k=pct/100;if(!k||k===1)return;if
   it.base=c;layoutStage();render();renderProps();changed()}
 
 // ---------- export ----------
-function exportCanvas(){const it=S.cur,p=pad(),c=document.createElement('canvas');c.width=it.base.width+p*2;c.height=it.base.height+p*2;drawComposite(c.getContext('2d'),it,p,false);return c}
+function exportCanvas(){const it=S.cur,p=padFor(it.fx),c=document.createElement('canvas');c.width=it.base.width+p*2;c.height=it.base.height+p*2;drawComposite(c.getContext('2d'),it,p,false);return c}
 let dl=null;(async()=>{try{dl=await window.claude?.use?.('downloads')}catch(e){dl=null}})();
 async function saveBlob(blob,name){
   if(window.bench){try{const r=await window.bench.save(name,await blob.arrayBuffer());if(r)toast('Saved to '+r)}catch(e){toast('Could not save the file.')}return}
@@ -2094,6 +2094,49 @@ if(window.bench){$('#widgetBtn').hidden=false;$('#widgetBtn').onclick=()=>{const
   window.bench.onShortcutFailed(keys=>{if(keys.includes('PrintScreen'))toast('Windows is using the Print Screen key for Snipping Tool. Use Ctrl+Shift+X, or turn off "Use the Print screen key to open screen capture" in Windows Settings > Accessibility > Keyboard, then restart Saveit.',9000)});}
 // The version comes from package.json, so it follows each release automatically.
 window.bench?.appVersion?.().then(v=>{if(!v)return;const b=document.querySelector('.brand');const s=document.createElement('span');s.className='ver';s.textContent=v;b.append(' ',s);b.title='Saveit version '+v;document.title='Saveit '+v}).catch(()=>{});
+// ---------- 8.6: image resize handles, shown as soon as the Image tab is open ----------
+// A dashed box with eight handles (corners and middles) sits on the picture. Dragging a handle moves that edge,
+// and the opposite edge stays put. The picture is only resampled when you let go, so Undo restores it as before.
+// While the tab is open the canvas gets room around the picture, so the handles can be dragged outward.
+let rzDrag=null,lastRzM80=0;
+function rzOn80(){return S.tool==='image'&&!S.fxOpen&&S.cur?.kind==='image'&&!S.cur.guide}
+function rzMargin80(){if(!rzOn80())return 0;const it=S.cur;return Math.round(Math.max(it.base.width,it.base.height)*.35)+8}
+function rzState80(){const it=S.cur;if(!S.rz||S.rz.it!==it||S.rz.W!==it.base.width||S.rz.H!==it.base.height)S.rz={it,W:it.base.width,H:it.base.height,L:0,T:0,R:it.base.width,B:it.base.height};return S.rz}
+function rzHandles80(rz){const mx=(rz.L+rz.R)/2,my=(rz.T+rz.B)/2;return[['nw',rz.L,rz.T],['n',mx,rz.T],['ne',rz.R,rz.T],['e',rz.R,my],['se',rz.R,rz.B],['s',mx,rz.B],['sw',rz.L,rz.B],['w',rz.L,my]]}
+const RZ_CUR80={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize'};
+function rzHit80(p,rz){const r=10/scale();for(const [h,x,y] of rzHandles80(rz))if(Math.abs(p.x-x)<=r&&Math.abs(p.y-y)<=r)return h;return null}
+async function commitResize80(w,h){const it=S.cur;if(!Number.isInteger(w)||!Number.isInteger(h)||w<1||h<1||w>16384||h>16384||w*h>64000000){toast('That size is too large or not valid.');return}
+  try{await readyShapes(it.shapes);const src=flatCanvas(it),c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(src,0,0,w,h);snap();it.shapes=[];it.base=c;S.rz=null;finishEdit();toast(`Resized image to ${w} × ${h}. Ctrl+Z to undo.`)}
+  catch(e){console.error(e);actionError(e)}}
+cv.addEventListener('pointerdown',e=>{if(!rzOn80()||e.button!==0)return;const rz=rzState80(),p=pt(e),h=rzHit80(p,rz);if(!h)return;e.preventDefault();e.stopImmediatePropagation();
+  rzDrag={h,x:p.x,y:p.y,b:{L:rz.L,T:rz.T,R:rz.R,B:rz.B}};cv.setPointerCapture(e.pointerId)},true);
+cv.addEventListener('pointermove',e=>{if(!rzOn80())return;const rz=rzState80();
+  if(!rzDrag){const h=rzHit80(pt(e),rz);cv.style.cursor=h?RZ_CUR80[h]:'default';return}
+  e.stopImmediatePropagation();const p=pt(e),b=rzDrag.b,h=rzDrag.h,dx=p.x-rzDrag.x,dy=p.y-rzDrag.y;
+  const W0=b.R-b.L,H0=b.B-b.T,horiz=h.includes('w')||h.includes('e'),vert=h.includes('n')||h.includes('s'),corner=horiz&&vert;
+  const lockOn=S.p.lockRatio!==false,prop=corner?(lockOn!==e.shiftKey):lockOn;
+  let nW=W0+(h.includes('e')?dx:h.includes('w')?-dx:0),nH=H0+(h.includes('s')?dy:h.includes('n')?-dy:0);
+  if(prop){if(corner){const sx=nW/W0,sy=nH/H0,s=Math.abs(sx-1)>=Math.abs(sy-1)?sx:sy;nW=W0*s;nH=H0*s}else if(horiz)nH=nW*H0/W0;else nW=nH*W0/H0}
+  nW=Math.max(1,Math.round(nW));nH=Math.max(1,Math.round(nH));
+  const cx=(b.L+b.R)/2,cy=(b.T+b.B)/2,wAff=horiz||(prop&&vert),hAff=vert||(prop&&horiz);
+  let L=b.L,R=b.R,T=b.T,B=b.B;
+  if(wAff){if(h.includes('w')){L=b.R-nW}else if(h.includes('e')){R=b.L+nW}else{L=cx-nW/2;R=cx+nW/2}}
+  if(hAff){if(h.includes('n')){T=b.B-nH}else if(h.includes('s')){B=b.T+nH}else{T=cy-nH/2;B=cy+nH/2}}
+  const M=rzMargin80();rz.L=Math.max(-M,L);rz.R=Math.min(rz.W+M,R);rz.T=Math.max(-M,T);rz.B=Math.min(rz.H+M,B);
+  if(rz.R-rz.L<1)rz.R=rz.L+1;if(rz.B-rz.T<1)rz.B=rz.T+1;
+  render()},true);
+const endResize80=e=>{if(!rzDrag)return;e.stopImmediatePropagation();const rz=rzState80(),d=rzDrag;rzDrag=null;
+  const w=Math.round(rz.R-rz.L),h=Math.round(rz.B-rz.T);
+  if(w===rz.W&&h===rz.H){rz.L=0;rz.T=0;rz.R=rz.W;rz.B=rz.H;render();return}
+  commitResize80(w,h)};
+cv.addEventListener('pointerup',endResize80,true);cv.addEventListener('pointercancel',endResize80,true);
+// the dashed box and handles, drawn over the picture (sizes stay the same on screen at any zoom)
+const drawUIbefore86=drawUI;drawUI=function(c,it){drawUIbefore86(c,it);if(!rzOn80()||it!==S.cur)return;
+  const rz=rzState80(),k=1/scale();c.save();c.strokeStyle='#2fb8a6';c.lineWidth=1.5*k;c.setLineDash([6*k,4*k]);c.strokeRect(rz.L,rz.T,rz.R-rz.L,rz.B-rz.T);c.setLineDash([]);
+  c.lineWidth=1.2*k;const hs=5*k;for(const [,x,y] of rzHandles80(rz)){c.fillStyle='#ffffff';c.fillRect(x-hs,y-hs,hs*2,hs*2);c.strokeRect(x-hs,y-hs,hs*2,hs*2)}c.restore()};
+// the canvas needs room when the Image tab opens or closes; renderProps runs after every tool change
+const setTool86=setTool;setTool=function(t){setTool86(t);if(t!=='image')S.rz=null};
+const props86=renderProps;renderProps=function(){props86();const m=rzMargin80();if(m!==lastRzM80){lastRzM80=m;layoutStage();render()}};
 // Zoom box: type an exact percentage, step with -/+, or fit the window. The old dropdown stays hidden for compatibility.
 const ZOOM_STEPS=[10,25,33,50,67,75,100,125,150,200,300,400,600,800];
 function zoomAtCentre(z){const r=stage.getBoundingClientRect();setViewZoom(z,r.left+r.width/2,r.top+r.height/2)}
