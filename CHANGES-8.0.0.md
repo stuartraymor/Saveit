@@ -48,10 +48,46 @@ Tested in the dev build with a real 640×400-point region recording on a 2× dis
 - With the real screen, the recorded frame lines up with a screenshot of the same region at zero offset, and the length (3.6 s) is right.
 - The saved recording reopens from the library with the same 1280×800 cropped frame.
 
+## 8.07 — Image and video effects audit
+
+### What exists
+**Image Effects panel:**
+- 9 filter presets: Original, Mono, Sepia, Vivid, Fade, Cool, Warm, Dramatic, Invert.
+- Adjust sliders: Brightness, Contrast, Saturation, Hue, Blur, Grayscale, Sepia, plus Vignette.
+- Drop shadow (with softness) and edges (Straight, Torn paper, Zigzag, Wave, with depth).
+- Reset effects.
+
+**Image panel:** border (thickness, colour, style, inside/outside) and corners (square, rounded, each corner separately).
+
+**Capture-time and library effects** (`fxdefs.js`, the top-bar Effect menu and the library's batch apply): drop shadow, border, rounded corners, torn edge, black & white, sepia, vignette, soften, brighten, contrast, invert.
+
+**Video, in the Effects panel:**
+- 14 transitions with a length setting and "use on every clip".
+- Sound effects for the whole video or the selected clip: 8-band EQ with presets, low/high cut, boost, level control, reverb, echo and echo time.
+
+**Video, in the Video panel:** fade in/out from black, speed, crop, volume, mute, and audio fades.
+
+### Tested in the dev build
+- **Image:** apply preset, slider, shadow, edge, vignette and border; undo/redo; switching Tools / Image / Effects; Reset; reload (effects saved); Copy (the exported image matches the preview pixel for pixel); thumbnails.
+- **Video:** split a clip and crossfade (blends correctly mid-transition; undo removes it); EQ drag and undo; export with fade-in and crop (the saved video starts black, then shows the cropped picture); reload.
+
+### Fixed
+- **Undo/redo didn't work for any image effect.** Presets, Adjust sliders, vignette, shadow, edges, Reset, border thickness/colour and per-corner radius saved no undo step, so Undo jumped back to whatever was done before. Each change can now be undone; a slider drag counts as one step.
+- **Thumbnails ignored image effects.** The Recent tray, library and guide covers showed the plain picture. They now show filters, border, shadow and edges.
+- **EQ sliders overlapped.** A global 80 px minimum width made each vertical band 80 px wide, so grabbing one band could move its neighbour. This also made the video side panel scroll sideways, and the 12 kHz band wrapped to a second row. All 8 bands now fit and only the grabbed one moves.
+- **Sound sliders needed two Undos.** Clicking a slider saved two undo steps (pointer down and focus), so the first Undo seemed to do nothing. It now saves one.
+- **Stale clip boxes.** With no clip selected, the Video panel's clip boxes showed the previous clip's numbers and Speed showed "0.25×". They are now blank until you pick a clip.
+- Removed the duplicate "Sound effects" heading added in 8.05.
+
+### Limitations (not changed)
+- There are no visual filters for video (black & white, brightness and so on); only image effects have them. Adding them would be a new feature.
+- With an edge style (torn, zigzag, wave) the border isn't drawn. The two don't combine.
+- Effects applied to many images at once from the library can't be undone.
+- An exported video can run slightly longer than the edit (2.2 s for a 2.0 s test), because export records in real time.
+- Not tested: GIF export, PDF/Word export with effects (they use the same compositor as Copy), and how sound effects actually sound (only their settings and undo were checked).
+
 ## Known issues
-- In a video, the Sound effects controls are wider than the side panel, so it scrolls sideways. 3.7.0's Audio sub-tab does the same.
 - In a video, the Video panel is the default, so clicking Video while it is showing does nothing.
 - Window recordings: the webcam preview still sits in the screen's corner, but the webcam is recorded in the window's corner. Saveit doesn't know where the chosen window is on screen, so fixing this needs the window's position from Windows.
 - Not tested: two monitors with different scaling, and changing webcam settings during a recording (the recording keeps the settings it started with, as before).
-- When no clip is selected, the Video panel's Speed box shows "0.25×" (the first option), not a blank. This is from 3.7.0 and is left for 8.07.
 - A drawing tool picked for a video stays active after you switch back to the Video panel, as it did in 3.7.0 when you changed sub-tabs.

@@ -185,9 +185,9 @@ function css(){if(document.getElementById('vedCss2'))return;const s=document.cre
 .vh{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .vtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);padding-bottom:6px;flex-wrap:wrap}.vtabs button{border:1px solid var(--line);background:var(--panel-2);color:var(--fg);padding:5px 11px;border-radius:7px;cursor:pointer;font-weight:600;font-size:12px}.vtabs button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 .vsec{display:flex;flex-direction:column;gap:8px}.vpane{display:flex;flex-direction:column;gap:9px}.vpane>*{flex-shrink:0}.vpane[hidden]{display:none}.vtr{grid-template-columns:repeat(2,1fr)!important}.vsec[hidden]{display:none}.vnote{color:var(--muted);font-size:12px;margin:0}
-.veq{display:flex;gap:6px;align-items:flex-end;background:var(--panel-2);padding:8px 10px;border-radius:8px}
-.veq div{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--muted);width:34px}
-.veq input[type=range]{writing-mode:vertical-lr;direction:rtl;height:92px;width:22px;margin:0}
+.veq{display:flex;flex-wrap:wrap;gap:4px;align-items:flex-end;background:var(--panel-2);padding:8px 10px;border-radius:8px}
+.veq div{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--muted);width:30px}
+.veq input[type=range]{writing-mode:vertical-lr;direction:rtl;height:92px;width:22px;min-width:0;flex:none;margin:0}.veq>.vnote{flex-basis:100%;padding-left:0!important}
 .vtr{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}.vtr .btn{justify-content:flex-start}
 .vjoin .jr{display:flex;gap:6px;align-items:center;padding:5px 6px;background:var(--panel-2);border-radius:7px;margin-bottom:4px}.vjoin .jr b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}`;document.head.appendChild(s)}
 
@@ -233,7 +233,7 @@ function mount(host,it,api){css();HK=api;
      <p class="vnote" data-r="trnote">Click a video clip (not the first one), then choose how the picture changes into it. Slide a clip over the one before it to set how long the change takes.</p>
      <div class="vtr" data-r="trgrid">${TRANS.map(([k,l])=>`<button class="btn" data-tr="${k}" aria-pressed="false">${l}</button>`).join('')}</div>
      <div class="vrow"><label>Length <input type="number" min="0.1" max="10" step="0.1" data-r="trlen" value="1"> s</label><button class="btn" data-a="trlen">Set length</button><button class="btn" data-a="trall">Use this transition on every clip</button></div></div>
-   <div class="vsec"><span class="vh">Sound effects</span>
+   <div class="vsec">
      <div class="vrow"><span class="vh">Sound effects for</span><label><select data-r="atarget"><option value="master">Everything (master)</option><option value="sel">Selected clip only</option></select></label>
        <label>Preset <select data-r="eqpre">${Object.keys(EQ_PRESETS).map(k=>`<option>${k}</option>`).join('')}</select></label><button class="btn" data-a="fxreset">Reset sound</button></div>
      <div class="veq" data-r="eq">${EQ_L.map((l,i)=>`<div><span data-r="eqv${i}">0</span><input type="range" min="-12" max="12" step="1" value="0" data-eq="${i}" aria-label="${l} Hz"><span>${l}</span></div>`).join('')}<span class="vnote" style="align-self:center;padding-left:8px">Equalizer: pull a band down to cut it, push up to boost.</span></div>
@@ -393,6 +393,8 @@ function mount(host,it,api){css();HK=api;
     const row=R('cprops');row.style.opacity=c?1:.45;row.style.pointerEvents=c?'':'none';
     if(c){qa('[data-c]').forEach(i=>{const k=i.dataset.c;if(k==='vol')i.value=Math.round((c.vol==null?1:c.vol)*100);else if(i.type==='checkbox')i.checked=!!c[k];else if(k==='speed')i.value=String(c.speed||1);else i.value=(+c[k]||0).toFixed(k==='afi'||k==='afo'?1:2)});
       qa('[data-cr]').forEach(i=>{i.value=(c.crop&&c.crop[i.dataset.cr])||0;i.disabled=!isV})}
+    // 8.07: with no clip selected, show empty boxes rather than the last clip's numbers (and not "0.25×").
+    else qa('[data-c],[data-cr]').forEach(i=>{if(i.type!=='checkbox'&&i.type!=='range')i.value=''})
     // transitions
     const hasPrev=isV&&prevOf(c);R('trnote').textContent=isV?(hasPrev?'Transition into: '+srcName(c.src):'This is the first clip, so it has no transition into it. Click a later clip.'):'Click a video clip (not the first one), then choose how the picture changes into it. Slide a clip over the one before it to set how long the change takes.';
     qa('[data-tr]').forEach(b=>{b.setAttribute('aria-pressed',!!(isV&&c.trans&&c.trans.type===b.dataset.tr));b.disabled=!hasPrev});
@@ -414,8 +416,10 @@ function mount(host,it,api){css();HK=api;
     qa('[data-fx]').forEach(i=>{const k=i.dataset.fx;i.value=k==='gain'?Math.round(f.gain*100):k==='echoT'?Math.round(f.echoT*100):f[k]});
     R('eqpre').value=Object.keys(EQ_PRESETS).find(k=>EQ_PRESETS[k].join()===f.eq.join())||'Flat'}
   R('atarget').onchange=showFx;
-  qa('[data-eq]').forEach(i=>{i.addEventListener('pointerdown',snap);i.addEventListener('input',()=>{const f=fxObj(true);f.eq[+i.dataset.eq]=+i.value;R('eqv'+i.dataset.eq).textContent=+i.value>0?'+'+i.value:i.value;eng.refreshFx()});i.addEventListener('change',changed)});
-  qa('[data-fx]').forEach(i=>{i.addEventListener('pointerdown',snap);i.addEventListener('focus',snap);i.addEventListener('input',()=>{const f=fxObj(true),k=i.dataset.fx,v=+i.value;f[k]=k==='gain'||k==='echoT'?v/100:v;eng.refreshFx()});i.addEventListener('change',changed)});
+  // 8.07: a click fires pointerdown and focus; save one undo step, not two.
+  const snapOnce=()=>{if(hist[hist.length-1]!==JSON.stringify(e))snap()};
+  qa('[data-eq]').forEach(i=>{i.addEventListener('pointerdown',snapOnce);i.addEventListener('focus',snapOnce);i.addEventListener('input',()=>{const f=fxObj(true);f.eq[+i.dataset.eq]=+i.value;R('eqv'+i.dataset.eq).textContent=+i.value>0?'+'+i.value:i.value;eng.refreshFx()});i.addEventListener('change',changed)});
+  qa('[data-fx]').forEach(i=>{i.addEventListener('pointerdown',snapOnce);i.addEventListener('focus',snapOnce);i.addEventListener('input',()=>{const f=fxObj(true),k=i.dataset.fx,v=+i.value;f[k]=k==='gain'||k==='echoT'?v/100:v;eng.refreshFx()});i.addEventListener('change',changed)});
   R('eqpre').onchange=()=>{snap();const f=fxObj(true);f.eq=[...EQ_PRESETS[R('eqpre').value]];eng.refreshFx();showFx();changed()};
   R('audfile').onchange=async()=>{const f=R('audfile').files[0];R('audfile').value='';if(!f)return;try{snap();const c=await addAudioSrc(f,f.name.replace(/\.[^.]+$/,''),eng.t);select('aud',c);toast('Added. Drag it on the timeline, or use the Audio tab to change the volume and sound.');changed()}catch(err){hist.pop();toast(err.message)}};
   async function addAudioSrc(blob,name,start){const url=URL.createObjectURL(blob),meta=await loadMeta(url,true),id=newId(e,'s');e.srcs.push({id,name,kind:'audio'});it._edBlobs[id]=blob;rt.src[id]={url,blob,dur:meta.dur};

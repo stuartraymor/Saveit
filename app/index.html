@@ -368,6 +368,8 @@ function deleteItems(list,quiet){list=list.filter(it=>S.items.includes(it));if(!
 function undoDelete(){const rec=trash.pop();if(!rec)return;for(const r of rec){deletedItemIds.delete(r.it.id);S.items.splice(Math.min(r.i,S.items.length),0,r.it);persist(r.it)}
   renderTray();syncUndoDel();toast(`Restored ${rec.length} item${rec.length>1?'s':''}`)}
 function removeItem(it){const i=S.items.indexOf(it);if(i<0)return;S.items.splice(i,1);dbDel(it.id);if(it.url)URL.revokeObjectURL(it.url);if(S.cur===it)openItem(S.items[0]||null);else renderTray()}
+// 8.07: effect sliders and colour pickers fire on every move; keep one undo step per burst of changes.
+let fxSnapT=0;function fxSnap(){if(Date.now()-fxSnapT>800)snap();fxSnapT=Date.now()}
 function snap(){const it=S.cur;if(it&&it.kind==='guide'){it.undo=it.undo||[];it.redo=[];it.undo.push({page:clone(it.pageShapes||[])});if(it.undo.length>80)it.undo.shift();return}if(!it||it.kind!=='image')return;it.undo.push({shapes:clone(it.shapes),base:it.base,fx:clone(it.fx)});if(it.undo.length>80)it.undo.shift();it.redo=[];}
 function changed(){if(S.cur){persist(S.cur);thumbLater();}}
 let thumbT;function thumbLater(){clearTimeout(thumbT);thumbT=setTimeout(renderTray,400)}
@@ -1063,7 +1065,7 @@ function renderProps(){
   P.querySelectorAll('.sw button').forEach(b=>b.onclick=()=>setProp(b.dataset.k,b.dataset.v));
   P.querySelectorAll('input[type=color][data-k]').forEach(i=>i.oninput=()=>setProp(i.dataset.k,i.value,true));
   P.querySelectorAll('input[type=range][data-p]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=fmtV(i.dataset.p,i.value);setProp(i.dataset.p,+i.value,true)});
-  P.querySelectorAll('input[type=range][data-fx]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=i.value;S.fx[i.dataset.fx]=+i.value;layoutStage();render();changed()});
+  P.querySelectorAll('input[type=range][data-fx]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=i.value;fxSnap();S.fx[i.dataset.fx]=+i.value;layoutStage();render();changed()});
   const on=(id,f)=>{const e=$('#'+id);if(e)e.onclick=f};
   const sb=$('#pShadow');if(sb)sb.onchange=()=>setProp('shadow',sb.checked);
   const ss=$('#stSeq');if(ss)ss.onchange=()=>{setProp('seq',ss.value);if(!S.sel)renderProps()};
@@ -1096,14 +1098,14 @@ function renderFxPanel(P,it){const f=it.fx=Object.assign(FXBLANK(),it.fx);f.adj=
   numify(P);
   P.querySelectorAll('#fxTiles button').forEach(b=>{const q=FX_FILTERS[+b.dataset.i][1],cc=b.querySelector('canvas'),g=cc.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,96,76);const sc=Math.min(96/it.base.width,76/it.base.height),w=it.base.width*sc,hh=it.base.height*sc;
     g.filter=FXFILTER(Object.assign({},FXBLANK().adj,q));g.drawImage(it.base,(96-w)/2,(76-hh)/2,w,hh);g.filter='none';
-    b.onclick=()=>{f.adj=Object.assign(FXBLANK().adj,q);render();renderFxPanel(P,it);changed()}});
-  P.querySelectorAll('[data-fa]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=i.value;f.adj[i.dataset.fa]=+i.value;render();changed()});
-  P.querySelectorAll('[data-fv]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=i.value;f.vig=+i.value;render();changed()});
-  P.querySelectorAll('[data-fx]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=i.value;f[i.dataset.fx]=+i.value;layoutStage();render();changed()});
-  P.querySelectorAll('[data-fe]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=i.value;if(f.edge)f.edge.depth=+i.value;render();changed()});
-  $('#fxSh').onchange=e=>{f.shadow=e.target.checked;layoutStage();render();changed()};
-  $('#fxEdge').onchange=e=>{const d=+P.querySelector('[data-fe]').value;f.edge=e.target.value?{style:e.target.value,depth:d}:null;render();changed()};
-  $('#fxReset').onclick=()=>{it.fx=FXBLANK();S.fx=it.fx;layoutStage();render();renderFxPanel(P,it);changed()};
+    b.onclick=()=>{snap();it.fx.adj=Object.assign(FXBLANK().adj,q);render();renderFxPanel(P,it);changed()}});
+  P.querySelectorAll('[data-fa]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=i.value;fxSnap();f.adj[i.dataset.fa]=+i.value;render();changed()});
+  P.querySelectorAll('[data-fv]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=i.value;fxSnap();f.vig=+i.value;render();changed()});
+  P.querySelectorAll('[data-fx]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=i.value;fxSnap();f[i.dataset.fx]=+i.value;layoutStage();render();changed()});
+  P.querySelectorAll('[data-fe]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=i.value;if(f.edge){fxSnap();f.edge.depth=+i.value}render();changed()});
+  $('#fxSh').onchange=e=>{snap();f.shadow=e.target.checked;layoutStage();render();changed()};
+  $('#fxEdge').onchange=e=>{snap();const d=+P.querySelector('[data-fe]').value;f.edge=e.target.value?{style:e.target.value,depth:d}:null;render();changed()};
+  $('#fxReset').onclick=()=>{snap();it.fx=FXBLANK();S.fx=it.fx;layoutStage();render();renderFxPanel(P,it);changed()};
   $('#fxDone').onclick=()=>{S.fxOpen=false;$('#fxBtn').setAttribute('aria-pressed','false');renderProps()}}
 function captureHelp(){return S.mode==='video'?`<div class="grp"><h3>Recording</h3><p class="hint">Tab or system audio is offered in the share dialog when your browser supports it. Turn on Mic in the top bar to narrate.</p></div>`:''}
 function nameGrp(it){return `<div class="grp"><h3>Name</h3><input type="text" id="nm" value="${(it.name||'').replace(/"/g,'&quot;')}"></div>`}
@@ -1175,12 +1177,12 @@ function bindPanel(P,it,t){const on=(id,f)=>{const e=$('#'+id);if(e)e.onclick=f}
   on('imRotL',()=>transformImage('left').catch(actionError));on('imRotR',()=>transformImage('right').catch(actionError));
   on('imFlipH',()=>transformImage('horizontal').catch(actionError));on('imFlipV',()=>transformImage('vertical').catch(actionError));
   on('imResize',()=>dimensionDialog(false));on('imCanvas',()=>dimensionDialog(true));on('imScreen',()=>visualResize34().catch(actionError));on('imCrop',startCrop);
-  const bc=$('#fxBc');if(bc)bc.oninput=e=>{S.fx.borderColor=e.target.value;render();changed()};
+  const bc=$('#fxBc');if(bc)bc.oninput=e=>{fxSnap();S.fx.borderColor=e.target.value;render();changed()};
   ch('fxBs',e=>fxSet('bStyle',e.target.value));ch('fxBp',e=>fxSet('bPlace',e.target.value));
   on('cnSquare',()=>{snap();S.fx.radius=0;S.fx.radii=null;layoutStage();render();renderProps();changed()});
   on('cnRound',()=>{if(!S.fx.radii&&!(+S.fx.radius>0))fxSet('radius',16)});
   ch('cnEach',e=>{const r=+S.fx.radius||0;fxSet('radii',e.target.checked?[r,r,r,r]:null)});
-  P.querySelectorAll('[data-cn]').forEach(i=>i.oninput=()=>{if(!S.fx.radii)return;S.fx.radii[+i.dataset.cn]=Math.max(0,+i.value||0);render();changed()});
+  P.querySelectorAll('[data-cn]').forEach(i=>i.oninput=()=>{if(!S.fx.radii)return;fxSnap();S.fx.radii[+i.dataset.cn]=Math.max(0,+i.value||0);render();changed()});
   on('imFx',()=>{S.fxOpen=true;$('#fxBtn')?.setAttribute('aria-pressed','true');renderProps()});
   const tg=$('#tags33');if(tg)tg.onchange=e=>{it.tags=[...new Set(e.target.value.split(',').map(t=>t.trim()).filter(Boolean))].slice(0,30);persist(it)};
   ch('pin33',e=>{it.pinned=e.target.checked;persist(it);renderTray()})}
@@ -1277,7 +1279,11 @@ function dupSel(){const G=grpList();if(G.length>1){snap();const a=shapesOf(S.cur
   if(!S.sel)return;snap();const c=clone(S.sel);c.id=uid++;moveShape(c,20,20);if(c.t==='step'){c.n=S.cur.kind==='guide'?nextPageStep():S.stepNext++}shapesOf(S.cur).push(c);S.sel=c;render();renderProps();changed()}
 
 // ---------- tray ----------
-function thumbSrc(it,w){let src=it.thumb;const im=it.kind==='guide'?it.steps[0]:it;if(im&&im.base){try{const k=Math.min(1,(w||192)/im.base.width),c=document.createElement('canvas');c.width=Math.max(1,im.base.width*k);c.height=Math.max(1,im.base.height*k);const g=c.getContext('2d');g.scale(k,k);g.drawImage(im.base,0,0);im.shapes.forEach(s=>drawShape(g,s,im.base));src=c.toDataURL('image/jpeg',.7)}catch(e){}}return src}
+// 8.07: thumbnails show the image's effects (filters, border, shadow, edges) too, drawn by the same compositor as exports.
+const FXNONE07=JSON.stringify(FXBLANK());const hasFx07=im=>!!im.fx&&JSON.stringify(Object.assign(FXBLANK(),im.fx,{adj:Object.assign(FXBLANK().adj,im.fx.adj)}))!==FXNONE07;
+function thumbDraw07(im,w,q){if(hasFx07(im)){const p=padFor(im.fx),W=im.base.width+p*2,H=im.base.height+p*2,k=Math.min(1,w/W),c=document.createElement('canvas');c.width=Math.max(1,Math.round(W*k));c.height=Math.max(1,Math.round(H*k));const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.scale(k,k);drawComposite(g,im,p,false);return c.toDataURL('image/jpeg',q)}
+  const k=Math.min(1,w/im.base.width),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.base.width*k));c.height=Math.max(1,Math.round(im.base.height*k));const g=c.getContext('2d');g.scale(k,k);g.drawImage(im.base,0,0);im.shapes.forEach(s=>drawShape(g,s,im.base));return c.toDataURL('image/jpeg',q)}
+function thumbSrc(it,w){let src=it.thumb;const im=it.kind==='guide'?it.steps[0]:it;if(im&&im.base){try{src=thumbDraw07(im,w||192,.7)}catch(e){}}return src}
 function renderTray(){fastTray()}
 
 // ---------- library: every past capture, with filters and multi-select ----------
@@ -1883,7 +1889,7 @@ function stored33(k,def){try{return JSON.parse(localStorage.getItem('saveit33.'+
 function store33(k,v){try{localStorage.setItem('saveit33.'+k,JSON.stringify(v))}catch(_){throw Error('Settings storage is full. Export your library and remove unused custom stamps.')}}
 const baseOpen33=openItem;openItem=function(it){const ticket=++openRequest;if(!it?._lazy)return baseOpen33(it);document.querySelector('#status').textContent='Opening capture…';return hydrate(it).then(()=>{if(ticket===openRequest&&S.items.includes(it))baseOpen33(it)}).catch(storageError)};
 const baseChanged33=changed;changed=function(){if(S.cur){thumbCache.delete(S.cur.id);S.cur._catalogThumb=null}baseChanged33();document.body.dataset.catalogCount=S.items.length};
-thumbSrc=function(it,w){if(it._lazy)return it._catalogThumb||'';const key=it.guide?it.guide.id:it.id;if(thumbCache.has(key))return thumbCache.get(key);let src=it.thumb||it._catalogThumb||'';const im=it.kind==='guide'?it.steps[0]:it;if(im?.base){try{const k=Math.min(1,192/im.base.width),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.base.width*k));c.height=Math.max(1,Math.round(im.base.height*k));const g=c.getContext('2d');g.scale(k,k);g.drawImage(im.base,0,0);im.shapes.forEach(s=>drawShape(g,s,im.base));src=c.toDataURL('image/jpeg',.75)}catch(e){console.error(e)}}thumbCache.set(key,src);it._catalogThumb=src;return src};
+thumbSrc=function(it,w){if(it._lazy)return it._catalogThumb||'';const key=it.guide?it.guide.id:it.id;if(thumbCache.has(key))return thumbCache.get(key);let src=it.thumb||it._catalogThumb||'';const im=it.kind==='guide'?it.steps[0]:it;if(im?.base){try{src=thumbDraw07(im,192,.75)}catch(e){console.error(e)}}thumbCache.set(key,src);it._catalogThumb=src;return src};
 function fastTray(){const T=$('#thumbs');T.innerHTML='';const chosen=[...S.items.filter(i=>i.pinned&&!i.hiddenRecent).slice(0,16),...S.items.filter(i=>!i.pinned&&!i.hiddenRecent).slice(0,40)];if(S.cur&&!S.cur.hiddenRecent&&!S.cur.guide&&!chosen.includes(S.cur))chosen.push(S.cur);for(const it of chosen){const cell=document.createElement('div');cell.className='tcell';const b=document.createElement('div');b.className='thumb'+(it.pinned?' pinned':'');b.tabIndex=0;b.dataset.itemId=it.id;b.setAttribute('role','button');b.setAttribute('aria-label',itemName(it));b.setAttribute('aria-current',it===S.cur);const src=thumbSrc(it);if(src)b.style.backgroundImage=`url(${src})`;b.innerHTML=`<span class="tag">${it.pinned?'PIN · ':''}${it.kind.toUpperCase()}</span><button class="x" aria-label="Close ${escH(itemName(it))} from recent">✕</button>`;b.onclick=e=>{if(e.target.closest('.x'))closeRecent33(it);else openItem(it)};b.onkeydown=e=>{if(e.key==='Enter')openItem(it);if(e.key==='Delete')deleteItems([it])};const name=document.createElement('div');name.className='tn';name.textContent=itemName(it);cell.append(b,name);T.append(cell)}if(!chosen.length)T.innerHTML='<p class="hint">Capture, paste or open an image to begin.</p>';document.body.dataset.catalogCount=S.items.length;if($('#libModal'))renderLib()}
 const oldLibPaste33=libPaste;libPaste=async()=>{await Promise.all(libClip.map(id=>S.items.find(i=>i.id===id)).filter(Boolean).map(hydrate));oldLibPaste33()};
 const oldLibBatch33=libBatch;libBatch=async move=>{await Promise.all(libChosen().map(hydrate));return oldLibBatch33(move)};
