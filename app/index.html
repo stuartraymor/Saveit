@@ -339,10 +339,17 @@ function nameStamp(){return new Date().toLocaleString(undefined,{month:'short',d
 function stamp(){const d=new Date();return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});}
 function norm(s){return{x:Math.min(s.x1,s.x2),y:Math.min(s.y1,s.y2),w:Math.abs(s.x2-s.x1),h:Math.abs(s.y2-s.y1)}}
 function clone(o){return JSON.parse(JSON.stringify(o))}
+// copies shapes for undo but shares each picture's (large, never edited) data string instead of duplicating it
+function cloneShapes(a){return a.map(s=>{if(typeof s.src!=='string'||s.src.length<4096)return JSON.parse(JSON.stringify(s));const c=JSON.parse(JSON.stringify(s,(k,v)=>k==='src'?undefined:v));c.src=s.src;return c})}
 
 // ---------- items ----------
 function addImage(canvas,name,opts={}){
   const it={id:'c'+Date.now()+'-'+(uid++),kind:'image',name:name||nameStamp(),created:Date.now(),base:canvas,shapes:opts.shapes||[],fx:opts.fx||FXBLANK(),undo:[],redo:[]};
+  // 8.13: a new capture is a picture object on a white base layer, so it can be moved and resized on the main screen
+  if(!opts.flat&&!opts.shapes&&canvas.width*canvas.height<=64e6){const W=canvas.width,H=canvas.height,blank=document.createElement('canvas');blank.width=W;blank.height=H;blank._blank=true;
+    const pic={id:uid++,t:'img',x1:0,y1:0,x2:W,y2:H,src:canvas.toDataURL('image/png'),op:1,sh:false,c:'#000',w:1,fs:20};
+    it.base=blank;it.shapes=[pic];it.fx.bg='#ffffff';
+    const im=imgFor(pic.src);(im.decode?im.decode().catch(()=>{}):Promise.resolve()).then(()=>{try{thumbCache.delete(it.id)}catch(_){}it._catalogThumb=null;render();renderTray()})}
   S.items.unshift(it); openItem(it); persist(it); return it;
 }
 function addVideo(blob,name,thumb){
@@ -373,11 +380,11 @@ function undoDelete(){const rec=trash.pop();if(!rec)return;for(const r of rec){d
 function removeItem(it){const i=S.items.indexOf(it);if(i<0)return;S.items.splice(i,1);dbDel(it.id);if(it.url)URL.revokeObjectURL(it.url);if(S.cur===it)openItem(S.items[0]||null);else renderTray()}
 // 8.07: effect sliders and colour pickers fire on every move; keep one undo step per burst of changes.
 let fxSnapT=0;function fxSnap(){if(Date.now()-fxSnapT>800)snap();fxSnapT=Date.now()}
-function snap(){const it=S.cur;if(it&&it.kind==='guide'){it.undo=it.undo||[];it.redo=[];it.undo.push({page:clone(it.pageShapes||[])});if(it.undo.length>80)it.undo.shift();return}if(!it||it.kind!=='image')return;it.undo.push({shapes:clone(it.shapes),base:it.base,fx:clone(it.fx),ws:S.ws?{ox:S.ws.ox,oy:S.ws.oy}:null});if(it.undo.length>80)it.undo.shift();it.redo=[];}
+function snap(){const it=S.cur;if(it&&it.kind==='guide'){it.undo=it.undo||[];it.redo=[];it.undo.push({page:clone(it.pageShapes||[])});if(it.undo.length>80)it.undo.shift();return}if(!it||it.kind!=='image')return;it.undo.push({shapes:cloneShapes(it.shapes),base:it.base,fx:clone(it.fx),ws:S.ws?{ox:S.ws.ox,oy:S.ws.oy}:null});if(it.undo.length>80)it.undo.shift();it.redo=[];}
 function changed(){if(S.cur){persist(S.cur);thumbLater();}}
 let thumbT;function thumbLater(){clearTimeout(thumbT);thumbT=setTimeout(renderTray,400)}
-function undo(){const it=S.cur;if(!it||!it.undo||!it.undo.length)return;if(it.kind==='guide'){it.redo.push({page:clone(it.pageShapes)});it.pageShapes=it.undo.pop().page;S.sel=null;drawPage();renderProps();changed();return}it.redo.push({shapes:clone(it.shapes),base:it.base,fx:clone(it.fx),ws:S.ws?{ox:S.ws.ox,oy:S.ws.oy}:null});const s=it.undo.pop();it.shapes=s.shapes;it.base=s.base;if(s.fx)it.fx=s.fx;if(s.ws&&S.ws){S.ws.ox=s.ws.ox;S.ws.oy=s.ws.oy}S.rz=null;S.fx=it.fx;S.sel=null;S.grp=[];S.cropRect=null;S.drag=null;layoutStage();render();renderProps();changed();}
-function redo(){const it=S.cur;if(!it||!it.redo||!it.redo.length)return;if(it.kind==='guide'){it.undo.push({page:clone(it.pageShapes)});it.pageShapes=it.redo.pop().page;S.sel=null;drawPage();renderProps();changed();return}it.undo.push({shapes:clone(it.shapes),base:it.base,fx:clone(it.fx),ws:S.ws?{ox:S.ws.ox,oy:S.ws.oy}:null});const s=it.redo.pop();it.shapes=s.shapes;it.base=s.base;if(s.fx)it.fx=s.fx;if(s.ws&&S.ws){S.ws.ox=s.ws.ox;S.ws.oy=s.ws.oy}S.rz=null;S.fx=it.fx;S.sel=null;S.grp=[];S.cropRect=null;S.drag=null;layoutStage();render();renderProps();changed();}
+function undo(){const it=S.cur;if(!it||!it.undo||!it.undo.length)return;if(it.kind==='guide'){it.redo.push({page:clone(it.pageShapes)});it.pageShapes=it.undo.pop().page;S.sel=null;drawPage();renderProps();changed();return}it.redo.push({shapes:cloneShapes(it.shapes),base:it.base,fx:clone(it.fx),ws:S.ws?{ox:S.ws.ox,oy:S.ws.oy}:null});const s=it.undo.pop();it.shapes=s.shapes;it.base=s.base;if(s.fx)it.fx=s.fx;if(s.ws&&S.ws){S.ws.ox=s.ws.ox;S.ws.oy=s.ws.oy}S.rz=null;S.fx=it.fx;S.sel=null;S.grp=[];S.cropRect=null;S.drag=null;layoutStage();render();renderProps();changed();}
+function redo(){const it=S.cur;if(!it||!it.redo||!it.redo.length)return;if(it.kind==='guide'){it.undo.push({page:clone(it.pageShapes)});it.pageShapes=it.redo.pop().page;S.sel=null;drawPage();renderProps();changed();return}it.undo.push({shapes:cloneShapes(it.shapes),base:it.base,fx:clone(it.fx),ws:S.ws?{ox:S.ws.ox,oy:S.ws.oy}:null});const s=it.redo.pop();it.shapes=s.shapes;it.base=s.base;if(s.fx)it.fx=s.fx;if(s.ws&&S.ws){S.ws.ox=s.ws.ox;S.ws.oy=s.ws.oy}S.rz=null;S.fx=it.fx;S.sel=null;S.grp=[];S.cropRect=null;S.drag=null;layoutStage();render();renderProps();changed();}
 
 // ---------- layout ----------
 let vid=null;
@@ -392,8 +399,11 @@ function strokeBorder(c,f,p,W,H,b,inside,style){c.save();c.strokeStyle=f.borderC
   c.restore()}
 // 8.7.2: while the Image tab is open the viewing surface (S.ws) keeps a fixed size, zoom and picture position, so resizing
 // only changes the picture drawn inside it and nothing around it moves or refits.
-function padX(){return S.ws?S.ws.ox:padFor(S.fx)}
-function padY(){return S.ws?S.ws.oy:padFor(S.fx)}
+// 8.13: a capture with pictures gets a small margin around the canvas so a picture's handles aren't cut off at the canvas edge
+function picMargin(){const it=S.cur;return it&&it.kind==='image'&&!it.guide&&!S.ws&&it.shapes.some(s=>s.t==='img')?40:0}
+let lastPm813=0;
+function padX(){return S.ws?S.ws.ox:padFor(S.fx)+picMargin()}
+function padY(){return S.ws?S.ws.oy:padFor(S.fx)+picMargin()}
 function pad(){return padX()}
 function layoutStage(){
   const it=S.cur; stage.classList.toggle('empty',!it);
@@ -402,7 +412,7 @@ function layoutStage(){
   $('#guide').hidden=!it||it.kind!=='guide'; if(it&&it.kind==='guide')renderGuide();
   if(it&&it.kind==='video'){const w=document.createElement('div');w.className='vwrap';stage.appendChild(w);
     const m=VEdit.mount(w,it,{toast,saveBlob,baseName,addVideo,persist,changed:()=>persist(it),newShape,drawShape,bbox,handles,selBox,resizeByHandle,handleCursor:HANDLE_CURSOR,moveShape,norm,askText,setStyle:(k,v)=>{S.p[k]=v},itemById:id=>S.items.find(x=>x.id===id),videos:()=>S.items.filter(x=>x.kind==='video'&&x!==it),paneChanged:()=>sync80()});vid=m.video;vid._wrap=w;vid._destroy=m.destroy;vid._ctl=m;try{renderProps()}catch(_){}}
-  if(it&&it.kind==='image'){const p=padFor(S.fx);cv.width=S.ws?S.ws.sw:it.base.width+p*2;cv.height=S.ws?S.ws.sh:it.base.height+p*2;applyZoom();}
+  if(it&&it.kind==='image'){const p=padFor(S.fx)+picMargin();cv.width=S.ws?S.ws.sw:it.base.width+p*2;cv.height=S.ws?S.ws.sh:it.base.height+p*2;applyZoom();}
 }
 function scale(){
   if(S.zoom!=='fit')return +S.zoom;
@@ -422,7 +432,7 @@ function status(){const it=S.cur,el=$('#status');if(!el)return;
 function render(){
   const it=S.cur; status(); if(it&&it.kind==='guide'){drawPage();return} if(!it||it.kind!=='image')return;
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
-  const p0=padFor(S.fx);
+  const p0=padFor(S.fx)+(S.ws?0:picMargin());
   if(S.ws){ctx.save();ctx.translate(S.ws.ox-p0,S.ws.oy-p0);drawComposite(ctx,it,p0,true);ctx.restore()}else drawComposite(ctx,it,p0,true);
 }
 function roundRectPath(c,x,y,w,h,r){r=Math.max(0,Math.min(r,w/2,h/2));c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
@@ -993,7 +1003,7 @@ stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('dr
 stage.addEventListener('dragleave',e=>{if(e.target===stage||!stage.contains(e.relatedTarget))stage.classList.remove('dragging')});
 stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('dragging');[...e.dataTransfer.files].forEach(importFile)});
 $('#newGuideBtn').onclick=()=>{const g=newGuide();openItem(g);persist(g)};
-$('#newBtn').onclick=()=>{const c=document.createElement('canvas');c.width=1280;c.height=720;const g=c.getContext('2d');g.fillStyle='#ffffff';g.fillRect(0,0,c.width,c.height);addImage(c,nameStamp())};
+$('#newBtn').onclick=()=>{const c=document.createElement('canvas');c.width=1280;c.height=720;const g=c.getContext('2d');g.fillStyle='#ffffff';g.fillRect(0,0,c.width,c.height);addImage(c,nameStamp(),{flat:true})};
 
 // ---------- tools rail ----------
 function setTool(t){commitText();S.tool=t;S.fxOpen=false;S.grp=[];S.simp=null;S.cutRect=null;if(t!=='select'&&S.sel){S.sel=null}const pg=$('#gpage');if(pg)pg.classList.toggle('drawing',t!=='select');if(t!=='crop')S.cropRect=null;document.querySelectorAll('.tool').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));renderProps();render()}
@@ -1721,7 +1731,7 @@ function sample(){
   g.font='14px Segoe UI, sans-serif';
   rows.forEach((r,i)=>{const y=140+i*64;if(i%2){g.fillStyle='#f8fafb';g.fillRect(230,y-30,1030,64)}g.fillStyle='#263238';
     r.forEach((v,j)=>{if(j===4){const col={'In process':'#1971c2','Waiting on material':'#e8590c','Complete':'#2f9e44','Queued':'#868e96','Quote':'#7048e8'}[v];g.fillStyle=col+'22';g.beginPath();g.roundRect?g.roundRect(cols[j][1]-6,y-17,g.measureText(v).width+14,24,12):g.rect(cols[j][1]-6,y-17,g.measureText(v).width+14,24);g.fill();g.fillStyle=col;g.fillText(v,cols[j][1]+1,y);g.fillStyle='#263238'}else g.fillText(String(v),cols[j][1],y)})});
-  const it=addImage(c,'Sample capture');
+  const it=addImage(c,'Sample capture',{flat:true});
   it.shapes=[
     {id:uid++,t:'rect',x1:226,y1:166,x2:1264,y2:230,c:'#e5372a',fill:'none',w:5,fs:28,op:1,sh:true},
     {id:uid++,t:'callout',x1:760,y1:330,x2:1090,y2:430,tx:860,ty:222,c:'#e5372a',fill:'#ffffff',w:5,fs:24,op:1,sh:true,txt:'Material is late. Follow up with purchasing.'},
@@ -2198,7 +2208,7 @@ const drawUIbefore86=drawUI;drawUI=function(c,it){drawUIbefore86(c,it);if(!rzOn8
   c.lineWidth=1.2*k;const hs=5*k;for(const [,x,y] of rzHandles80(rz)){c.fillStyle='#ffffff';c.fillRect(x-hs,y-hs,hs*2,hs*2);c.strokeRect(x-hs,y-hs,hs*2,hs*2)}c.restore()};
 // opening the tab keeps the picture you had selected as the one to work on; leaving it clears that
 const setTool86=setTool;setTool=function(t){const sel0=S.sel;if(t==='image'&&sel0&&sel0.t==='img'){S.rzTarget=sel0.id;S.rz=null}setTool86(t);if(t!=='image'){S.rzTarget=null;S.rz=null;S.rzHide=null}};
-function syncWs80(){const on=rzOn80(),it=S.cur;
+function syncWs80(){const on=rzOn80(),it=S.cur;const pm=picMargin();if(pm!==lastPm813){lastPm813=pm;layoutStage();render()}
   if(S.ws&&(!on||S.ws.it!==it||S.ws.bw!==it.base.width||S.ws.bh!==it.base.height)){S.ws=null;if(S.wsZoom!=null&&S.zoom===S.wsZoomSet)S.zoom=S.wsZoom;S.wsZoom=null;layoutStage();render()}
   if(on&&!S.ws){const p0=padFor(S.fx),M=Math.round(Math.max(it.base.width,it.base.height)*.25)+8;
     S.ws={it,ox:p0+M,oy:p0+M,sw:it.base.width+2*(p0+M),sh:it.base.height+2*(p0+M),bw:it.base.width,bh:it.base.height};S.wsZoom=S.zoom;layoutStage();
