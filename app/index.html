@@ -18,7 +18,7 @@ button{font:inherit;color:inherit}
 .devsel{max-width:180px}
 .top .btn.camgear{width:28px;min-width:28px;padding:0!important;justify-content:center;font-size:13px!important}
 .props .btn[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent)}.props .tfmt{gap:4px;flex-wrap:nowrap}.props .tfmt .btn{min-width:0;flex:1;padding:6px 4px;justify-content:center}.props .tfmt [data-talign=left]{margin-left:8px}
-.rail>.tool[data-t=select]{min-width:82px!important;flex-basis:82px}.rail>.tool[data-t=selection]{min-width:64px!important;flex-basis:64px}
+.rail>.tool[data-t=select]{min-width:82px!important;flex-basis:82px}.rail>.tool[data-t=select] svg{width:46px}.rail>.tool[data-t=selection]{min-width:64px!important;flex-basis:64px}
 .app{height:100%;display:grid;grid-template-columns:1fr 288px;grid-template-rows:auto auto 1fr auto auto;grid-template-areas:"top top" "rail rail" "stage props" "tray tray" "status status"}
 .tleft{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1;min-width:0}.top .acts{display:grid!important;grid-template-columns:repeat(4,auto);grid-auto-flow:row;gap:6px 8px;align-items:center;justify-items:stretch;flex:none}.top .acts .btn,.top .acts select{width:100%}.top{padding-top:5px!important;padding-bottom:5px!important}
 .top{grid-area:top;display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--chrome);border-bottom:1px solid var(--line);flex-wrap:wrap}
@@ -270,7 +270,8 @@ const ICON={
  erase:'<path d="M4 16l8-9 7 6-6 6H8z"/><path d="M9 20h11"/>',
  cutout:'<path d="M4 8h16M4 16h16"/><path d="M9 4l6 4M9 20l6-4" /><circle cx="6" cy="4.5" r="1.5"/><circle cx="6" cy="19.5" r="1.5"/>',
  simplify:'<path d="M4 7h16M4 12h10M4 17h6"/><path d="M17 14l3 3-3 3"/>',
- select:'<path d="M3.5 3.5l5.2 13 1.9-5.4 5.4-1.9z" stroke-linejoin="round"/><path d="M17.5 13.5v8M13.5 17.5h8M16 15l1.5-1.5L19 15M16 20l1.5 1.5L19 20M15 16l-1.5 1.5L15 19M20 16l1.5 1.5L20 19"/>',
+ // Wide icon (see ICON_VB): cursor / move, filling the extra width the Move / Select button already has.
+ select:'<path d="M4 3l6.2 16 2.3-6.6 6.6-2.3z" stroke-linejoin="round"/><path d="M23 20.5l4-17"/><path d="M40 3v18M31 12h18M37.5 5.5L40 3l2.5 2.5M37.5 18.5L40 21l2.5-2.5M33.5 9.5L31 12l2.5 2.5M46.5 9.5L49 12l-2.5 2.5"/>',
  selection:'<rect x="3" y="3" width="12" height="12" stroke-dasharray="3 2.5"/><path d="M13 21l8-8"/><path d="M19 8.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z"/>',
  arrow:'<path d="M5 19 19 5"/><path d="M10 5h9v9"/>',
  line:'<path d="M5 19 19 5"/>',
@@ -288,6 +289,7 @@ const ICON={
  ocr:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8.5 9h7M12 9v7"/>',
  stamp:'<path d="M9.5 3h5v5.5l3.5 3.5H6l3.5-3.5z"/><path d="M5 15h14v3H5zM8 21h8"/>',
 };
+const ICON_VB={select:'0 0 50 24'};
 const TOOLS=[['select','Move / Select: select, move and resize objects','V','Move / Select'],['selection','Magic Cut: lift part of the image off and move it','G','Magic Cut'],null,['arrow','Arrow','A','Arrow'],['callout','Callout','C','Callout'],['text','Text','T','Text'],['rect','Rectangle','R','Shape'],['ellipse','Ellipse','E','Ellipse'],['line','Line','L','Line'],['step','Step number','N','Step'],['stamp','Stamp','J','Stamp'],['highlight','Highlighter','H','Highlight'],['pen','Pen','P','Pen'],null,['blur','Blur / pixelate','B','Blur'],['spotlight','Spotlight','S','Spotlight'],['magnify','Magnify','M','Magnify'],null,['fill','Fill: pour colour into an area','F','Fill'],['erase','Erase: rub out part of the picture','X','Erase'],['cutout','Cut out: remove a strip and close the gap','U','Cut out'],['simplify','Simplify: reduce detail and resolution','Y','Simplify'],null,['crop','Crop','K','Crop'],['ocr','Grab Text: drag around text to copy it','O','Grab Text']];
 const PRESETS=[{c:'#e5372a',fill:'none',w:6,sh:true},{c:'#f08c00',fill:'none',w:6,sh:true},{c:'#f5c400',fill:'none',w:6,sh:true},{c:'#2f9e44',fill:'none',w:6,sh:true},{c:'#1971c2',fill:'none',w:6,sh:true},{c:'#111111',fill:'none',w:3,sh:false},{c:'#e5372a',fill:'#ffffff',w:4,sh:true},{c:'#111111',fill:'#f5c400',w:3,sh:true}];
 const COLORS=['#e5372a','#f08c00','#f5c400','#2f9e44','#0e8577','#1971c2','#7048e8','#111111','#ffffff'];
@@ -984,7 +986,7 @@ $('#newBtn').onclick=()=>{const c=document.createElement('canvas');c.width=1280;
 function setTool(t){commitText();S.tool=t;S.fxOpen=false;S.grp=[];S.simp=null;S.cutRect=null;if(t!=='select'&&S.sel){S.sel=null}const pg=$('#gpage');if(pg)pg.classList.toggle('drawing',t!=='select');if(t!=='crop')S.cropRect=null;document.querySelectorAll('.tool').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));renderProps();render()}
 function buildRail(){const r=$('#rail');r.innerHTML='';for(const t of TOOLS){if(!t){r.appendChild(document.createElement('hr'));continue}
   const b=document.createElement('button');b.className='tool';b.dataset.t=t[0];b.title=`${t[1]} (${t[2]})`;b.setAttribute('aria-label',t[1]);b.setAttribute('aria-pressed',t[0]===S.tool);
-  b.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON[t[0]]}</svg><span>${t[3]}</span>`;b.onclick=()=>setTool(t[0]);r.appendChild(b)}
+  b.innerHTML=`<svg viewBox="${ICON_VB[t[0]]||'0 0 24 24'}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON[t[0]]}</svg><span>${t[3]}</span>`;b.onclick=()=>setTool(t[0]);r.appendChild(b)}
   const sp=document.createElement('span');sp.style.flex='1';r.appendChild(sp);
   const e=document.createElement('button');e.className='tool';e.id='fxBtn';e.title='Effects: filters, adjustments, frames and edges for this image';e.setAttribute('aria-pressed','false');
   e.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><span>Effects</span>';
