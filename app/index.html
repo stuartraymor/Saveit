@@ -27,6 +27,7 @@ button{font:inherit;color:inherit}
 .leadrow{display:flex;align-items:center;gap:10px}
 .lead .cap{width:100%}.lead .cap button{width:100%;justify-content:center}
 .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;margin-right:4px}
+.brand .ver{font-weight:600;font-size:11px;color:var(--muted);font-family:var(--f-mono)}
 .brand i{width:22px;height:22px;border-radius:6px;background:var(--accent);display:grid;place-items:center}
 .brand i::after{content:"";width:10px;height:10px;border:2px dashed var(--accent-fg);border-radius:2px}
 .cap{display:flex;border-radius:999px;overflow:hidden}
@@ -1996,6 +1997,8 @@ if(window.bench){$('#widgetBtn').hidden=false;$('#widgetBtn').onclick=()=>window
   window.bench.onStepShot(onStepShot);if(window.bench.onStepInfo)window.bench.onStepInfo(onStepInfo);window.bench.onStepsDone(onStepsDone);
   window.bench.onRecCmd(c=>{if(!rec)return;if(c==='stop')rec.stop();if(c==='pause')rec.togglePause()});
   window.bench.onShortcutFailed(keys=>{if(keys.includes('PrintScreen'))toast('Windows is using the Print Screen key for Snipping Tool. Use Ctrl+Shift+X, or turn off "Use the Print screen key to open screen capture" in Windows Settings > Accessibility > Keyboard, then restart Saveit.',9000)});}
+// The version comes from package.json, so it follows each release automatically.
+window.bench?.appVersion?.().then(v=>{if(!v)return;const b=document.querySelector('.brand');const s=document.createElement('span');s.className='ver';s.textContent=v;b.append(' ',s);b.title='Saveit version '+v;document.title='Saveit '+v}).catch(()=>{});
 bootLibrary().catch(storageError);
 })();
 </script>

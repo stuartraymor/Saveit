@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('bench', {
   workflowSaveFile: (folder,name,data) => ipcRenderer.invoke('workflow-file',folder,name,data),
   ocrLayout: url => ipcRenderer.invoke('ocr-layout',url),
   printImage: url => ipcRenderer.invoke('print-image',url),
+  appVersion: () => ipcRenderer.invoke('app-version'),
   readClipboard: () => ipcRenderer.invoke('clipboard-read'),
   copyEditable: (url, text) => ipcRenderer.invoke('clipboard-editable', url, text),
   capture: (mode, delay, opts, pre) => ipcRenderer.invoke('capture', mode, delay, opts, pre),

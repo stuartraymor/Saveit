@@ -495,6 +495,7 @@ ipcMain.handle('copy-file', async (e, name, buf) => {
   });
 });
 
+ipcMain.handle('app-version', () => app.getVersion());
 ipcMain.handle('clipboard-read', e => {
   if (!win || e.sender !== win.webContents) throw new Error('Invalid clipboard sender');
   const image = clipboard.readImage();
