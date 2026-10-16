@@ -184,7 +184,7 @@ function css(){if(document.getElementById('vedCss2'))return;const s=document.cre
 .vprog{height:6px;background:var(--check);border-radius:3px;overflow:hidden}.vprog i{display:block;height:100%;width:0;background:var(--accent)}
 .vh{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .vtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);padding-bottom:6px;flex-wrap:wrap}.vtabs button{border:1px solid var(--line);background:var(--panel-2);color:var(--fg);padding:5px 11px;border-radius:7px;cursor:pointer;font-weight:600;font-size:12px}.vtabs button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
-.vsec{display:flex;flex-direction:column;gap:8px}.vtr{grid-template-columns:repeat(2,1fr)!important}.vsec[hidden]{display:none}.vnote{color:var(--muted);font-size:12px;margin:0}
+.vsec{display:flex;flex-direction:column;gap:8px}.vpane{display:flex;flex-direction:column;gap:9px}.vpane>*{flex-shrink:0}.vpane[hidden]{display:none}.vtr{grid-template-columns:repeat(2,1fr)!important}.vsec[hidden]{display:none}.vnote{color:var(--muted);font-size:12px;margin:0}
 .veq{display:flex;gap:6px;align-items:flex-end;background:var(--panel-2);padding:8px 10px;border-radius:8px}
 .veq div{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--muted);width:34px}
 .veq input[type=range]{writing-mode:vertical-lr;direction:rtl;height:92px;width:22px;margin:0}
@@ -200,13 +200,14 @@ function mount(host,it,api){css();HK=api;
    <div class="vtlwrap"><canvas class="vtl" aria-label="Timeline"></canvas></div>
   </div></div>
   <div class="vside">
+  <div class="vpane" data-pane="video">
    <div class="vrow"><span class="vnote" data-r="hint">Drag the circles on a bar to trim it. Drag the middle of a clip to move it, and slide it over another clip to overlap them.</span><span class="sp"></span>
      <label>In <input type="number" step="0.1" min="0" data-r="in"></label><button class="btn" data-a="setin" title="Mark In at playhead (I)">Set In</button><label>Out <input type="number" step="0.1" min="0" data-r="out"></label><button class="btn" data-a="setout" title="Mark Out at playhead (O)">Set Out</button></div>
    <div class="vrow"><button class="btn" data-a="split" title="Split at playhead (S)">Split</button><button class="btn" data-a="del" title="Delete the selected item (Del). Video clips close the gap.">Delete</button><button class="btn" data-a="delgap" title="Delete but leave a gap">Delete, keep gap</button>
      <button class="btn" data-a="cut" title="Remove the In–Out part from everything and close the gap">Cut out In–Out</button><button class="btn" data-a="trim" title="Keep only the In–Out part">Trim to In–Out</button>
      <button class="btn" data-a="addvid">Add videos…</button><span class="sp"></span><button class="btn" data-a="undo">Undo</button><button class="btn" data-a="reset">Reset</button></div>
 
-   <div class="vtabs">${[['clip','Clip'],['audio','Audio'],['trans','Transitions'],['screen','On-screen'],['caps','Captions'],['export','Export']].map(([k,l])=>`<button data-tab="${k}" aria-pressed="${k==='clip'}">${l}</button>`).join('')}</div>
+   <div class="vtabs">${[['clip','Clip'],['audio','Audio'],['caps','Captions'],['export','Export']].map(([k,l])=>`<button data-tab="${k}" aria-pressed="${k==='clip'}">${l}</button>`).join('')}</div>
    <div class="vsec" data-sec="clip">
      <p class="vnote" data-r="clipnote">Click a clip on the timeline to edit it here.</p>
      <div class="vrow" data-r="cprops"><label>Start at <input type="number" step="0.1" min="0" data-c="start"> s</label><label>Source in <input type="number" step="0.1" min="0" data-c="a"></label><label>out <input type="number" step="0.1" min="0" data-c="b"></label>
@@ -218,26 +219,33 @@ function mount(host,it,api){css();HK=api;
      <div class="vrow"><button class="btn pri" data-a="addaud">Add audio file…</button><button class="btn" data-a="rec">● Record voice-over</button><input type="file" accept="audio/*,video/*" data-r="audfile" hidden>
        <label><input type="checkbox" data-r="muteall"> Mute the video's own sound</label><span class="vnote" data-r="recnote">Voice-over starts at the playhead and plays the video as you talk. Use headphones to avoid echo.</span></div>
      <div class="vrow"><label>Selected clip volume <input type="range" min="0" max="300" data-c="vol" style="width:150px"></label><label><input type="checkbox" data-c="mute"> Mute this clip</label><label>Fade in <input type="number" min="0" step="0.1" data-c="afi"> s</label><label>Fade out <input type="number" min="0" step="0.1" data-c="afo"> s</label></div>
+</div>
+   <div class="vsec" data-sec="caps" hidden><div class="vrow"><button class="btn" data-a="addcap">Add caption at playhead</button></div><div class="vcaps" data-r="caps"></div></div>
+   <div class="vsec" data-sec="export" hidden>
+     <div class="vrow"><span class="vh">Video</span><label>Quality <select data-r="osize"><option value="project">Full size</option><option value="720">720p</option><option value="480">480p</option></select></label><button class="btn pri" data-a="apply">Save edited video</button></div>
+     <div class="vrow"><span class="vh">GIF</span><label>frames/sec <input type="number" min="1" max="30" value="10" data-r="fps"></label><label>width <input type="number" min="64" max="1920" step="20" value="480" data-r="gw"></label><button class="btn pri" data-a="gif">Save GIF</button><button class="btn" data-a="stop" hidden>Cancel</button></div>
+     <p class="vnote">Saving plays your edit once in real time (a 1-minute edit takes about a minute) and adds the result to your library.</p></div>
+  </div>
+  <div class="vpane" data-pane="effects" hidden>
+   <div class="vsec"><span class="vh">Transitions</span>
+     <p class="vnote" data-r="trnote">Click a video clip (not the first one), then choose how the picture changes into it. Slide a clip over the one before it to set how long the change takes.</p>
+     <div class="vtr" data-r="trgrid">${TRANS.map(([k,l])=>`<button class="btn" data-tr="${k}" aria-pressed="false">${l}</button>`).join('')}</div>
+     <div class="vrow"><label>Length <input type="number" min="0.1" max="10" step="0.1" data-r="trlen" value="1"> s</label><button class="btn" data-a="trlen">Set length</button><button class="btn" data-a="trall">Use this transition on every clip</button></div></div>
+   <div class="vsec"><span class="vh">Sound effects</span>
      <div class="vrow"><span class="vh">Sound effects for</span><label><select data-r="atarget"><option value="master">Everything (master)</option><option value="sel">Selected clip only</option></select></label>
        <label>Preset <select data-r="eqpre">${Object.keys(EQ_PRESETS).map(k=>`<option>${k}</option>`).join('')}</select></label><button class="btn" data-a="fxreset">Reset sound</button></div>
      <div class="veq" data-r="eq">${EQ_L.map((l,i)=>`<div><span data-r="eqv${i}">0</span><input type="range" min="-12" max="12" step="1" value="0" data-eq="${i}" aria-label="${l} Hz"><span>${l}</span></div>`).join('')}<span class="vnote" style="align-self:center;padding-left:8px">Equalizer: pull a band down to cut it, push up to boost.</span></div>
      <div class="vrow"><label>Low cut <input type="number" min="0" max="600" step="10" data-fx="lc"> Hz</label><label>High cut <input type="number" min="0" max="20000" step="500" data-fx="hc"> Hz</label>
        <label>Boost <input type="range" min="50" max="300" data-fx="gain" style="width:90px"></label><label>Level control <input type="range" min="0" max="100" data-fx="comp" style="width:90px"></label>
        <label>Reverb <input type="range" min="0" max="100" data-fx="rev" style="width:90px"></label><label>Echo <input type="range" min="0" max="100" data-fx="echo" style="width:90px"></label><label>Echo time <input type="range" min="5" max="140" data-fx="echoT" style="width:80px"></label></div></div>
-   <div class="vsec" data-sec="trans" hidden>
-     <p class="vnote" data-r="trnote">Click a video clip (not the first one), then choose how the picture changes into it. Slide a clip over the one before it to set how long the change takes.</p>
-     <div class="vtr" data-r="trgrid">${TRANS.map(([k,l])=>`<button class="btn" data-tr="${k}" aria-pressed="false">${l}</button>`).join('')}</div>
-     <div class="vrow"><label>Length <input type="number" min="0.1" max="10" step="0.1" data-r="trlen" value="1"> s</label><button class="btn" data-a="trlen">Set length</button><button class="btn" data-a="trall">Use this transition on every clip</button></div></div>
-   <div class="vsec" data-sec="screen" hidden>
+  </div>
+  <div class="vpane" data-pane="tools" hidden>
+   <div class="vsec">
      <div class="vrow"><span class="vh">Draw on video</span>${[['select','Select'],['arrow','Arrow'],['rect','Box'],['ellipse','Circle'],['line','Line'],['highlight','Highlight'],['text','Text'],['step','Step #'],['stamp','Stamp'],['blur','Blur']].map(([k,l])=>`<button class="btn" data-ot="${k}" aria-pressed="false">${l}</button>`).join('')}
        <label>Colour <input type="color" data-r="ocol" value="#e5483b"></label><label>Width <input type="number" min="1" max="40" data-r="owid" value="6"></label></div>
      <div class="vrow" data-r="osel" hidden><b data-r="olbl">Selected</b><label>shows from <input type="number" step="0.1" min="0" data-r="of"></label><label>to <input type="number" step="0.1" min="0" data-r="ot2"></label><button class="btn" data-a="ostart">Start here</button><button class="btn" data-a="oend">End here</button><button class="btn" data-a="odup">Duplicate</button><button class="btn" data-a="odel">Remove</button></div>
      <p class="vnote">Pick a tool, drag on the picture. The red bars on the timeline show when each item appears. Drag the circles to change that.</p></div>
-   <div class="vsec" data-sec="caps" hidden><div class="vrow"><button class="btn" data-a="addcap">Add caption at playhead</button></div><div class="vcaps" data-r="caps"></div></div>
-   <div class="vsec" data-sec="export" hidden>
-     <div class="vrow"><span class="vh">Video</span><label>Quality <select data-r="osize"><option value="project">Full size</option><option value="720">720p</option><option value="480">480p</option></select></label><button class="btn pri" data-a="apply">Save edited video</button></div>
-     <div class="vrow"><span class="vh">GIF</span><label>frames/sec <input type="number" min="1" max="30" value="10" data-r="fps"></label><label>width <input type="number" min="64" max="1920" step="20" value="480" data-r="gw"></label><button class="btn pri" data-a="gif">Save GIF</button><button class="btn" data-a="stop" hidden>Cancel</button></div>
-     <p class="vnote">Saving plays your edit once in real time (a 1-minute edit takes about a minute) and adds the result to your library.</p></div>
+  </div>
    <div class="vprog" data-r="prog" hidden><i></i></div><div class="vinfo"></div>
   </div>`;
   const q=s=>host.querySelector(s),qa=s=>[...host.querySelectorAll(s)],R=n=>q(`[data-r="${n}"]`),prev=q('.vprev'),ov=q('.vov'),tl=q('.vtl');
@@ -383,7 +391,7 @@ function mount(host,it,api){css();HK=api;
     const hasPrev=isV&&prevOf(c);R('trnote').textContent=isV?(hasPrev?'Transition into: '+srcName(c.src):'This is the first clip, so it has no transition into it. Click a later clip.'):'Click a video clip (not the first one), then choose how the picture changes into it. Slide a clip over the one before it to set how long the change takes.';
     qa('[data-tr]').forEach(b=>{b.setAttribute('aria-pressed',!!(isV&&c.trans&&c.trans.type===b.dataset.tr));b.disabled=!hasPrev});
     if(hasPrev){const p=prevOf(c);R('trlen').value=Math.max(.1,clipEnd(p)-c.start).toFixed(1)}
-    if(tab==='audio')showFx()}
+    if(e)showFx()}
   qa('[data-c]').forEach(i=>i.addEventListener('change',()=>{const c=selClip();if(!c)return;snap();const k=i.dataset.c,v=i.type==='checkbox'?i.checked:+i.value;const sd=(rt.src[c.src]&&rt.src[c.src].dur)||c.b;
     if(k==='vol')c.vol=clamp(v/100,0,3);else if(k==='mute')c.mute=v;else if(k==='speed')c.speed=v||1;else if(k==='start')c.start=Math.max(0,v);else if(k==='a')c.a=clamp(v,0,c.b-MIN);else if(k==='b')c.b=clamp(v,c.a+MIN,sd);else c[k]=Math.max(0,v);
     redraw();refreshProps();changed()}));
@@ -496,6 +504,9 @@ function mount(host,it,api){css();HK=api;
     await eng.seek(0);
   }catch(err){toast(err.message||String(err))}})();
   raf=requestAnimationFrame(tick);
-  return{info:q('.vinfo'),video:prev,destroy(){dead=true;cancelAnimationFrame(raf);document.removeEventListener('keydown',key,true);if(exp)exp.cancel=true;try{rec&&rec.mr.stop()}catch(_){}if(eng)eng.destroy()},saveGif:()=>run('gif'),grab:()=>eng?eng.snapshot(e.W,e.H):null,getProject:()=>e}}
+  // 8.0: the side panel shows one view at a time (video, effects or drawing tools); the editor's toolbar buttons pick it.
+  let pane='video';
+  const showPane=k=>{pane=k;qa('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==k);if(k==='effects'&&e)refreshProps()};
+  return{info:q('.vinfo'),video:prev,pane:k=>{if(k)showPane(k);return pane},tool:t=>{if(t!==undefined){otool=t;if(!otool&&sel&&sel.type==='ov')select(null);ovui()}return otool},destroy(){dead=true;cancelAnimationFrame(raf);document.removeEventListener('keydown',key,true);if(exp)exp.cancel=true;try{rec&&rec.mr.stop()}catch(_){}if(eng)eng.destroy()},saveGif:()=>run('gif'),grab:()=>eng?eng.snapshot(e.W,e.H):null,getProject:()=>e}}
 root.VEdit={mount,pack,Core:{clipLen,clipEnd,total,ensureProject,makeEngine}};
 })(window);

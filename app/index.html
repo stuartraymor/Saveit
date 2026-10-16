@@ -18,7 +18,7 @@ button{font:inherit;color:inherit}
 .devsel{max-width:180px}
 .top .btn.camgear{width:28px;min-width:28px;padding:0!important;justify-content:center;font-size:13px!important}
 .props .btn[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent)}.props .tfmt{gap:4px;flex-wrap:nowrap}.props .tfmt .btn{min-width:0;flex:1;padding:6px 4px;justify-content:center}.props .tfmt [data-talign=left]{margin-left:8px}
-.rail>.tool[data-t=select]{min-width:82px!important;flex-basis:82px}.rail>.tool[data-t=select] svg{width:46px}.rail>.tool[data-t=selection]{min-width:64px!important;flex-basis:64px}
+.rail>.tool[data-t=select]{min-width:82px!important;flex-basis:82px}.rail>.tool.on80{background:rgb(47 158 68/.28);color:var(--fg)}.rail>.tool.on80 svg{color:#51cf66}.rail>.tool:disabled{opacity:.38;cursor:default;background:transparent}.rail>.tool[data-t=select] svg{width:46px}.rail>.tool[data-t=selection]{min-width:64px!important;flex-basis:64px}
 .app{height:100%;display:grid;grid-template-columns:1fr 288px;grid-template-rows:auto auto 1fr auto auto;grid-template-areas:"top top" "rail rail" "stage props" "tray tray" "status status"}
 .tleft{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1;min-width:0}.top .acts{display:grid!important;grid-template-columns:repeat(4,auto);grid-auto-flow:row;gap:6px 8px;align-items:center;justify-items:stretch;flex:none}.top .acts .btn,.top .acts select{width:100%}.top{padding-top:5px!important;padding-bottom:5px!important}
 .top{grid-area:top;display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--chrome);border-bottom:1px solid var(--line);flex-wrap:wrap}
@@ -2080,6 +2080,42 @@ $('.tleft').classList.add('capbar');
 // New step guides are made from the New menu; the tray button stays only as that menu's hidden target.
 $('#newGuideBtn').hidden=true;{const l=document.createElement('link');l.rel='stylesheet';l.href='capbar.css';document.head.append(l)}
 bootLibrary().catch(storageError);
+// ---------- 8.0: Image, Video and Effects buttons switch the right-hand panel ----------
+// Each turns green while its panel is showing; clicking it again goes back to the usual panel (tool
+// settings for an image). In a video, the drawing tools show the draw-on-video controls, Effects shows
+// transitions and sound effects, and Video brings back the video panel.
+const VIDEO_TOOLS80=['select','arrow','rect','ellipse','line','highlight','text','step','stamp','blur'];
+const fxBtn80=$('#fxBtn'),vidBtn80=document.createElement('button');let prevTool80='select';
+vidBtn80.className='tool';vidBtn80.id='videoBtn80';vidBtn80.title='Video: clip, audio, captions and export settings for this video';vidBtn80.setAttribute('aria-pressed','false');
+vidBtn80.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10.5 5-3v9l-5-3z"/></svg><span>Video</span>';
+image34.after(vidBtn80);
+fxBtn80.title='Effects: filters, adjustments, frames and edges for an image; transitions and sound effects for a video';
+const vctl80=()=>S.cur?.kind==='video'&&vid&&vid._ctl&&vid._ctl.pane?vid._ctl:null;
+function sync80(){const c=vctl80(),pane=c?c.pane():null,img=S.cur?.kind==='image';
+  const on=[[fxBtn80,img?!!S.fxOpen:pane==='effects'],[image34,img&&S.tool==='image'&&!S.fxOpen],[vidBtn80,pane==='video']];
+  for(const [b,v] of on){b.classList.toggle('on80',v);b.setAttribute('aria-pressed',v)}
+  // Grey out whichever of Image / Video doesn't match what is open in the viewer.
+  image34.disabled=!img;vidBtn80.disabled=!c;
+  const cur=c?(pane==='tools'?c.tool():null):S.tool;document.querySelectorAll('#rail .tool[data-t]').forEach(b=>{if(b!==image34)b.setAttribute('aria-pressed',b.dataset.t===cur)})}
+function videoPane80(k){const c=vctl80();if(!c)return;c.pane(k);sync80()}
+const setTool79=setTool;
+setTool=function(t){const c=vctl80();
+  if(c){if(t==='image'){toast('Open an image first.');return}
+    if(!VIDEO_TOOLS80.includes(t)){toast(`${label(t)} works on images. On a video you can draw arrows, boxes, circles, lines, highlights, text, steps, stamps and blur.`,5000);return}
+    S.tool=t;c.tool(t);videoPane80('tools');return}
+  if(t==='image'&&S.tool!=='image')prevTool80=S.tool;
+  setTool79(t)};
+image34.onclick=()=>{if(S.cur?.kind!=='image'){toast(vctl80()?'Open an image first. This is a video.':'Open an image first.');return}
+  if(S.tool==='image'&&!S.fxOpen){setTool(prevTool80==='image'?'select':prevTool80);return}
+  setTool('image')};
+vidBtn80.onclick=()=>{if(!vctl80()){toast('Open a video first.');return}videoPane80('video')};
+fxBtn80.onclick=()=>{const it=S.cur;if(vctl80()){videoPane80(vctl80().pane()==='effects'?'video':'effects');return}
+  if(!it||it.kind!=='image'){toast(it&&it.kind==='guide'?'Open a step with Edit image to use effects.':'Open an image or video first.');return}
+  const open=!S.fxOpen;if(S.tool==='image')setTool79(prevTool80==='image'?'select':prevTool80);S.fxOpen=open;if(open){S.sel=null;S.cropRect=null}renderProps();render()};
+const props80=renderProps;renderProps=function(){props80();
+  const w=vid&&vid._wrap;if(vctl80()&&w&&!w._sync80){w._sync80=true;w.addEventListener('click',e=>{if(e.target.closest('[data-ot]'))sync80()})}
+  sync80()};
+sync80();
 })();
 </script>
 
