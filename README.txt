@@ -1,4 +1,4 @@
-SAVEIT 8.1.0 - WINDOWS SETUP
+SAVEIT 8.2.0 - WINDOWS SETUP
 ============================
 
 INSTALL

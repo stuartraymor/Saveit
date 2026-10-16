@@ -1153,7 +1153,6 @@ function imagePanel(it){const f=S.fx,radii=f.radii,rounded=(+f.radius||0)>0||!!r
   <div class="grp"><h3>Corners</h3><div class="row"><button class="btn" id="cnSquare" aria-pressed="${!rounded}">Square</button><button class="btn" id="cnRound" aria-pressed="${rounded}">Rounded</button></div>
     ${radii?`<div class="crop-grid">${[['Top left',0],['Top right',1],['Bottom right',2],['Bottom left',3]].map(([l,i])=>`<label>${l}<input type="number" min="0" max="500" data-cn="${i}" aria-label="${l} radius" value="${radii[i]}"></label>`).join('')}</div>`:rngFx('radius','Radius',0,120,+f.radius||0)}
     <label class="chk"><input type="checkbox" id="cnEach" ${radii?'checked':''}> Set each corner separately</label></div>
-  <div class="grp"><h3>Look</h3><p class="hint">Filters, brightness, contrast, drop shadow and torn edges.</p><div class="row"><button class="btn" id="imFx">Effects and adjustments…</button></div></div>
   <div class="grp"><h3>Annotations</h3><div class="row"><button class="btn" id="flat" title="Burn annotations into the image">Flatten</button><button class="btn" id="clr">Clear annotations</button></div></div>
   ${nameGrp(it)}<div class="grp"><h3>Organization</h3><label>Tags <input type="text" id="tags33" value="${escH((it.tags||[]).join(', '))}" placeholder="project, review"></label><label class="chk"><input type="checkbox" id="pin33" ${it.pinned?'checked':''}> Pin in recent captures</label></div>`}
 // Binds the controls that only some panels contain; each one is looked up and skipped when absent.
@@ -1184,7 +1183,6 @@ function bindPanel(P,it,t){const on=(id,f)=>{const e=$('#'+id);if(e)e.onclick=f}
   on('cnRound',()=>{if(!S.fx.radii&&!(+S.fx.radius>0))fxSet('radius',16)});
   ch('cnEach',e=>{const r=+S.fx.radius||0;fxSet('radii',e.target.checked?[r,r,r,r]:null)});
   P.querySelectorAll('[data-cn]').forEach(i=>i.oninput=()=>{if(!S.fx.radii)return;fxSnap();S.fx.radii[+i.dataset.cn]=Math.max(0,+i.value||0);render();changed()});
-  on('imFx',()=>{S.fxOpen=true;$('#fxBtn')?.setAttribute('aria-pressed','true');renderProps()});
   const tg=$('#tags33');if(tg)tg.onchange=e=>{it.tags=[...new Set(e.target.value.split(',').map(t=>t.trim()).filter(Boolean))].slice(0,30);persist(it)};
   ch('pin33',e=>{it.pinned=e.target.checked;persist(it);renderTray()})}
 function isPreset(q,s){const c=s?s.c:S.p.stroke,f=s?s.fill:S.p.fill;return c===q.c&&(f||'none')===q.fill}
@@ -1292,7 +1290,7 @@ const folders=new Set();try{JSON.parse(localStorage.getItem('saveit.folders')||'
 function saveFolders(){try{localStorage.setItem('saveit.folders',JSON.stringify([...folders]))}catch(e){}}
 let libFolder='all',libRename=null,libRenFolder=null;
 function askText(title,val,okLabel){return new Promise(res=>{const m=document.createElement('div');m.className='modal';m.style.zIndex=150;m.innerHTML=`<div class="box" style="width:min(380px,100%)"><h2>${title}</h2><input type="text" style="width:100%" value="${escH(val||'')}"><div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>${okLabel||'OK'}</button></div></div>`;document.body.appendChild(m);const inp=m.querySelector('input');inp.focus();inp.select();const done=v=>{m.remove();res(v)};m.onclick=e=>{if(e.target===m||e.target.closest('[data-x]'))done(null);if(e.target.closest('[data-ok]'))done(inp.value.trim()||null)};inp.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter')done(inp.value.trim()||null);if(e.key==='Escape')done(null)}})}
-let libFilter='all',libQuery='';const libSel=new Set();let libLast=null,libDrag=null,libClip=[];const libFx={id:'none',p:{}};
+let libFilter='all',libQuery='';const libSel=new Set();let libLast=null,libDrag=null,libClip=[];
 const kindOf=it=>it.kind==='video'?'video':it.kind==='guide'?'guide':'image';
 const itemName=it=>String(it.kind==='guide'?it.title:it.name);
 // What is shown: the current folder (or the top level), or every match when searching
@@ -1318,12 +1316,11 @@ function openLibrary(){if($('#libModal'))return;const m=document.createElement('
     <button class="btn" id="libOpen">Open</button><button class="btn" id="libRen" title="Rename the selected item">Rename</button>
     <button class="btn" id="libCopy" title="Copy the selected items (Ctrl+C)">Copy</button><button class="btn" id="libPaste" title="Paste copies here (Ctrl+V)">Paste</button><button class="btn" id="libToFolder" title="Move the selected items into a folder">Move to folder…</button>
     <span class="lsep"></span><button class="btn" id="libSave" title="Save copies to a folder on your computer">Save…</button><button class="btn" id="libMove" title="Save copies to a folder on your computer, then remove them from the library">Move out…</button><button class="btn" id="libGuide" title="Turn the selected images into a step guide">Make guide</button>
-    <span class="lsep"></span><label class="sel">Effect <select id="libFxSel"></select><button class="btn" id="libFxGear" aria-label="Effect settings" style="padding:5px 8px">⚙</button></label><button class="btn" id="libFxGo" title="Apply this effect to every selected image">Apply</button>
+
     <span class="lsep"></span><button class="btn" id="libDel" title="Delete the selected items (Delete key)">Delete</button><button class="btn" id="libUndo">Undo delete</button></div>
   <div class="grid" id="libGrid"></div></div>`;
   document.body.appendChild(m);
-  const ui=FXUI.mount(m.querySelector('#libFxSel'),m.querySelector('#libFxGear'),libFx,()=>{});ui.set(libFx);
-  const close=()=>{ui.popEl.remove();m.remove();document.removeEventListener('keydown',key,true)};
+  const close=()=>{m.remove();document.removeEventListener('keydown',key,true)};
   const key=e=>{if(captureMenu||document.querySelector('.modal:not(#libModal)'))return;const t=e.target.tagName,mod=e.ctrlKey||e.metaKey,k=e.key.toLowerCase();
     if(e.key==='Escape'){e.stopPropagation();close();return}
     if(/INPUT|SELECT|TEXTAREA/.test(t)&&!(t==='INPUT'&&e.target.type==='checkbox'))return;
@@ -1344,8 +1341,6 @@ function openLibrary(){if($('#libModal'))return;const m=document.createElement('
   m.querySelector('#libSave').onclick=()=>libBatch(false);m.querySelector('#libMove').onclick=()=>libBatch(true);
   m.querySelector('#libGuide').onclick=()=>{const l=libChosen().filter(i=>i.kind==='image'&&!i.guide);if(!l.length){toast('Select some images first.');return}
     const g=newGuide();l.slice().sort((a,b)=>(a.created||0)-(b.created||0)).forEach(i=>{const st=makeStep(g,canvasFrom(i.base));st.shapes=clone(i.shapes);st.fx=clone(i.fx)});if(libFolder!=='all')g.folder=libFolder;persist(g);libSel.clear();close();openItem(g);toast(`Guide made from ${l.length} image${l.length>1?'s':''}`)};
-  m.querySelector('#libFxGo').onclick=()=>{const l=libChosen().filter(i=>i.kind==='image'&&!i.guide);if(!l.length){toast('Select some images first.');return}if(libFx.id==='none'){toast('Choose an effect first.');return}
-    l.forEach(i=>{i.fx=FXAPPLY(Object.assign(FXBLANK(),i.fx),libFx.id,libFx.p);persist(i)});if(S.cur&&l.includes(S.cur)){S.fx=S.cur.fx;layoutStage();render()}renderTray();toast(`Effect applied to ${l.length} image${l.length>1?'s':''}`)};
   m._close=close;renderLib();m.querySelector('#libQ').focus()}
 function renameItem(it,v){if(it.kind==='guide')it.title=v;else it.name=v;persist(it);renderTray();status();if(S.cur===it){const n=$('#nm');if(n)n.value=v}}
 async function libMoveToFolder(){const l=libChosen();if(!l.length||$('#folPick'))return;
@@ -1384,7 +1379,7 @@ function renderLib(){const m=$('#libModal');if(!m)return;
   const list=libVisible(),vis=list.filter(i=>libSel.has(i.id)).length,n=libSel.size;
   const all=m.querySelector('#libAll');all.checked=list.length>0&&vis===list.length;all.indeterminate=vis>0&&vis<list.length;all.disabled=!list.length;
   m.querySelector('#libCount').textContent=n?`${n} selected`:'Select all';
-  for(const id of['libOpen','libSave','libMove','libGuide','libFxGo','libDel','libToFolder','libCopy'])m.querySelector('#'+id).disabled=!n;
+  for(const id of['libOpen','libSave','libMove','libGuide','libDel','libToFolder','libCopy'])m.querySelector('#'+id).disabled=!n;
   m.querySelector('#libRen').disabled=n!==1;m.querySelector('#libUndo').disabled=!trash.length;
   const pb=m.querySelector('#libPaste');pb.disabled=!libClip.length||searching||libFolder==='__folders';pb.textContent=libClip.length?`Paste (${libClip.length})`:'Paste';
   const G=m.querySelector('#libGrid');G.innerHTML='';G.onclick=e=>{if(e.target===G&&libSel.size){libSel.clear();renderLib()}};
@@ -1910,7 +1905,7 @@ const oldMenu33=menuAt;menuAt=function(x,y,title,rows,keyboard){const it=S.items
 const oldLibScope33=libScope;let tagQuery33='',dateAfter33='';libScope=function(){let list=oldLibScope33();if(tagQuery33)list=list.filter(i=>(i.tags||[]).some(t=>t.toLowerCase().includes(tagQuery33.toLowerCase())));if(dateAfter33){const t=new Date(dateAfter33+'T00:00:00').getTime();list=list.filter(i=>i.created>=t)}return list};
 const lib33=renderLib;renderLib=function(){lib33();const m=$('#libModal');if(!m)return;const G=$('#libGrid'),list=libVisible();const pages=Math.max(1,Math.ceil(list.length/LIB_PAGE));const p=document.createElement('div');p.className='v33-pages';p.innerHTML=`<button class="btn" data-prev ${libraryPage<=0?'disabled':''}>Previous</button><span>Page ${libraryPage+1} / ${pages} · ${list.length} captures</span><button class="btn" data-next ${libraryPage>=pages-1?'disabled':''}>Next</button>`;p.querySelector('[data-prev]').onclick=()=>{libraryPage--;renderLib()};p.querySelector('[data-next]').onclick=()=>{libraryPage++;renderLib()};G.append(p);
  if(!$('#tagFilter33')){const filters=document.createElement('div');filters.className='row';filters.style.padding='4px 16px';filters.innerHTML='<input id="tagFilter33" type="text" placeholder="Filter tags" aria-label="Filter tags"><label>Since <input id="dateFilter33" type="date" aria-label="Created since"></label><button class="btn" id="batch33">Batch resize / name</button><button class="btn" id="backup33">Backup library</button><button class="btn" id="restore33">Restore backup</button>';$('#libTb').after(filters);$('#tagFilter33').value=tagQuery33;$('#dateFilter33').value=dateAfter33;$('#tagFilter33').oninput=e=>{tagQuery33=e.target.value;libraryPage=0;renderLib()};$('#dateFilter33').onchange=e=>{dateAfter33=e.target.value;libraryPage=0;renderLib()};$('#batch33').onclick=batchImages;$('#backup33').onclick=()=>backupLibrary().catch(actionError);$('#restore33').onclick=restoreLibrary}
- for(const id of ['libGuide','libFxGo']){const b=$('#'+id);if(b&&!b._hydrate33){const fn=b.onclick;b.onclick=async()=>{try{await Promise.all(libChosen().map(hydrate));fn()}catch(e){actionError(e)}};b._hydrate33=true}}
+ for(const id of ['libGuide']){const b=$('#'+id);if(b&&!b._hydrate33){const fn=b.onclick;b.onclick=async()=>{try{await Promise.all(libChosen().map(hydrate));fn()}catch(e){actionError(e)}};b._hydrate33=true}}
 };
 // Persisted groups select and move as a unit; Shift continues to edit a temporary selection.
 cv.addEventListener('pointerdown',e=>{if(S.tool!=='select'||e.button!==0||e.shiftKey||S.cur?.kind!=='image')return;const p=pt(e),s=hit(p.x,p.y);if(s?.groupId){S.grp=S.cur.shapes.filter(q=>q.groupId===s.groupId);S.sel=null}},true);
