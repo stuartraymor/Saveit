@@ -486,8 +486,19 @@ ipcMain.handle('print-pdf', async (e, html, name) => {
   } finally { pw.destroy(); try { fs.unlinkSync(tmp); } catch (_) { } }
 });
 
-const FILTERS = { pptx:'PowerPoint presentation',saveitbackup:'Saveit library backup',png: 'PNG image', jpg: 'JPEG image', webm: 'WebM video', mp4: 'MP4 video', docx: 'Word document', pdf: 'PDF document', saveit: 'Saveit file', webp: 'WebP image', bmp: 'BMP image', ico: 'Icon', svg: 'SVG picture', html: 'Web page' };
-ipcMain.handle('save', async (e, name, buf) => {
+const FILTERS = { pptx:'PowerPoint presentation',saveitbackup:'Saveit library backup',png: 'PNG image', jpg: 'JPEG image', webm: 'WebM video', mp4: 'MP4 video', docx: 'Word document', pdf: 'PDF document', saveit: 'Saveit file', webp: 'WebP image', bmp: 'BMP image', ico: 'Icon', svg: 'SVG picture', html: 'Web page', gif: 'Animated GIF' };
+// 9.01: pick a file path with every file type offered (first one is the default)
+ipcMain.handle('save-pick', async (e, name, exts) => {
+  const ext = (exts && exts[0]) || 'png';
+  const dir = ['webm', 'mp4', 'gif'].includes(ext) ? app.getPath('videos') : ['docx', 'pdf', 'saveit','pptx','saveitbackup'].includes(ext) ? app.getPath('documents') : app.getPath('pictures');
+  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(dir, name + '.' + ext), filters: exts.map(x => ({ name: FILTERS[x] || x.toUpperCase(), extensions: [x] })) });
+  if (r.canceled || !r.filePath) return null;
+  let fp = r.filePath; const got = path.extname(fp).slice(1).toLowerCase();
+  if (!exts.includes(got)) fp += '.' + ext;
+  return fp;
+});
+ipcMain.handle('save', async (e, name, buf, target) => {
+  if (target) { await fs.promises.writeFile(target, Buffer.from(buf)); return target; }
   const ext = (name.split('.').pop() || 'png').toLowerCase();
   const dir = ['webm', 'mp4'].includes(ext) ? app.getPath('videos') : ['docx', 'pdf', 'saveit','pptx','saveitbackup'].includes(ext) ? app.getPath('documents') : app.getPath('pictures');
   const r = await dialog.showSaveDialog(win, { defaultPath: path.join(dir, name), filters: [{ name: FILTERS[ext] || ext.toUpperCase(), extensions: [ext] }] });

@@ -317,16 +317,16 @@ async function dbPut(rec){if(deletedItemIds.has(rec.id))return;const it=S.items.
 async function dbDel(id){deletedItemIds.add(id);try{const db=await idb();await new Promise((resolve,reject)=>{const t=db.transaction(['items','catalog'],'readwrite');for(const s of ['items','catalog'])t.objectStore(s).delete(id);t.oncomplete=resolve;t.onerror=()=>reject(t.error)})}catch(e){storageError(e)}}
 async function dbAll(){const db=await idb();return new Promise((resolve,reject)=>{const r=db.transaction('items').objectStore('items').getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error)})}
 const saveTimers={},dirtyItems33=new Set();
-async function recordItem(it){if(it._lazy){const rec=await dbRead(it.id);if(!rec)throw Error('Capture data is missing');return Object.assign(rec,{name:it.name,title:it.title||rec.title,folder:it.folder||'',tags:it.tags||[],pinned:!!it.pinned,hiddenRecent:!!it.hiddenRecent})}
- if(it.kind==='guide'){const steps=[];for(const st of it.steps)steps.push({id:st.id,title:st.title||'',text:st.text||'',png:await new Promise(r=>st.base.toBlob(r,'image/png')),shapes:clone(st.shapes),fx:clone(st.fx)});return{id:it.id,kind:'guide',name:it.name,title:it.title,numColor:it.numColor,created:it.created,folder:it.folder||'',steps,pageShapes:clone(it.pageShapes||[])}}
- if(it.kind==='video')return{id:it.id,kind:'video',name:it.name,created:it.created,folder:it.folder||'',blob:it.blob,mp4:it.mp4||null,webm:it.webm||null,thumb:it.thumb,edit:it.edit?clone(it.edit):null,editBlobs:it._edBlobs||null};
- const png=await new Promise((resolve,reject)=>it.base.toBlob(b=>b?resolve(b):reject(Error('Image encoding failed')),'image/png'));return{id:it.id,kind:'image',name:it.name,created:it.created,folder:it.folder||'',png,shapes:clone(it.shapes),fx:clone(it.fx)}
+async function recordItem(it){if(it._lazy){const rec=await dbRead(it.id);if(!rec)throw Error('Capture data is missing');return Object.assign(rec,{name:it.name,title:it.title||rec.title,folder:it.folder||'',tags:it.tags||[],pinned:!!it.pinned,hiddenRecent:!!it.hiddenRecent,savedPath:it.savedPath||rec.savedPath||null})}
+ if(it.kind==='guide'){const steps=[];for(const st of it.steps)steps.push({id:st.id,title:st.title||'',text:st.text||'',png:await new Promise(r=>st.base.toBlob(r,'image/png')),shapes:clone(st.shapes),fx:clone(st.fx)});return{id:it.id,kind:'guide',name:it.name,title:it.title,numColor:it.numColor,created:it.created,folder:it.folder||'',steps,pageShapes:clone(it.pageShapes||[]),savedPath:it.savedPath||null}}
+ if(it.kind==='video')return{id:it.id,kind:'video',name:it.name,created:it.created,folder:it.folder||'',blob:it.blob,mp4:it.mp4||null,webm:it.webm||null,thumb:it.thumb,edit:it.edit?clone(it.edit):null,editBlobs:it._edBlobs||null,savedPath:it.savedPath||null};
+ const png=await new Promise((resolve,reject)=>it.base.toBlob(b=>b?resolve(b):reject(Error('Image encoding failed')),'image/png'));return{id:it.id,kind:'image',name:it.name,created:it.created,folder:it.folder||'',png,shapes:clone(it.shapes),fx:clone(it.fx),savedPath:it.savedPath||null}
 }
 function persist(it){if(it.guide)return persist(it.guide);dirtyItems33.add(it.id);it._saveRevision=(it._saveRevision||0)+1;clearTimeout(saveTimers[it.id]);saveTimers[it.id]=setTimeout(()=>{delete saveTimers[it.id];persistNow(it).catch(storageError)},350)}
 async function persistNow(it){if(deletedItemIds.has(it.id)){dirtyItems33.delete(it.id);return}const revision=it._saveRevision||0;clearTimeout(saveTimers[it.id]);delete saveTimers[it.id];const job=(async()=>{const rec=await recordItem(it);await dbPut(rec)})();pendingWrites.add(job);try{await job;if(revision===(it._saveRevision||0))dirtyItems33.delete(it.id)}finally{pendingWrites.delete(job)}}
 async function flushLibrary(){storageFailed=false;await Promise.all([...pendingWrites]);for(const id of [...dirtyItems33]){const it=S.items.find(i=>i.id===id);if(it)await persistNow(it);else dirtyItems33.delete(id)}await Promise.all([...pendingWrites]);if(storageFailed||dirtyItems33.size)throw Error('Saving did not finish. Retry closing after exporting your work.');document.querySelector('#saveAlert33')?.remove();document.querySelector('.brand')?.removeAttribute('data-save-error')}
 async function imageFromBlob(blob){const u=URL.createObjectURL(blob);try{const im=new Image();im.src=u;await im.decode();return canvasFrom(im)}finally{URL.revokeObjectURL(u)}}
-async function hydrate(it){if(!it||!it._lazy)return it;if(it._loading)return it._loading;it._loading=(async()=>{const r=await dbRead(it.id);if(!r)throw Error('The saved capture could not be found.');if(r.kind==='image'){it.base=await imageFromBlob(r.png);it.width=it.base.width;it.height=it.base.height;it.shapes=r.shapes||[];it.fx=r.fx||FXBLANK();it.undo=[];it.redo=[]}else if(r.kind==='video'){Object.assign(it,{blob:r.blob,mp4:r.mp4,webm:r.webm,edit:r.edit,_edBlobs:r.editBlobs||{},url:URL.createObjectURL(r.blob)})}else{it.steps=[];it.pageShapes=r.pageShapes||[];it.numColor=r.numColor;for(const st of r.steps||[])it.steps.push({id:st.id,kind:'image',name:'Step',title:st.title,text:st.text,base:await imageFromBlob(st.png),shapes:st.shapes||[],fx:st.fx||FXBLANK(),undo:[],redo:[],guide:it})}it._lazy=false;return it})();try{return await it._loading}finally{delete it._loading}}
+async function hydrate(it){if(!it||!it._lazy)return it;if(it._loading)return it._loading;it._loading=(async()=>{const r=await dbRead(it.id);if(!r)throw Error('The saved capture could not be found.');if(r.savedPath)it.savedPath=r.savedPath;if(r.kind==='image'){it.base=await imageFromBlob(r.png);it.width=it.base.width;it.height=it.base.height;it.shapes=r.shapes||[];it.fx=r.fx||FXBLANK();it.undo=[];it.redo=[]}else if(r.kind==='video'){Object.assign(it,{blob:r.blob,mp4:r.mp4,webm:r.webm,edit:r.edit,_edBlobs:r.editBlobs||{},url:URL.createObjectURL(r.blob)})}else{it.steps=[];it.pageShapes=r.pageShapes||[];it.numColor=r.numColor;for(const st of r.steps||[])it.steps.push({id:st.id,kind:'image',name:'Step',title:st.title,text:st.text,base:await imageFromBlob(st.png),shapes:st.shapes||[],fx:st.fx||FXBLANK(),undo:[],redo:[],guide:it})}it._lazy=false;return it})();try{return await it._loading}finally{delete it._loading}}
 function metaItem(r){return{...r,_catalogThumb:r.thumb||null,_lazy:true,base:null,shapes:[],fx:FXBLANK(),undo:[],redo:[],steps:r.kind==='guide'?Array.from({length:r.stepCount||0},()=>({})):undefined,blob:r.kind==='video'?{size:r.bytes||0}:undefined}}
 async function bootLibrary(){const db=await idb();let metas=await new Promise((resolve,reject)=>{const q=db.transaction('catalog').objectStore('catalog').getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});if(!metas.length){const old=await dbAll();if(old.length){await new Promise((resolve,reject)=>{const t=db.transaction('catalog','readwrite');for(const r of old)t.objectStore('catalog').put(catalogOf(r));t.oncomplete=resolve;t.onerror=()=>reject(t.error)});metas=old.map(r=>catalogOf(r))}}
  if(metas.length){metas.sort((a,b)=>(b.created||0)-(a.created||0));S.items=metas.map(metaItem);S.items.forEach(i=>{if(i.folder)folders.add(i.folder)});saveFolders();renderTray();await openItem(S.items[0])}else sample();document.body.dataset.catalogCount=S.items.length;
@@ -444,6 +444,7 @@ function edgePath(c,x,y,w,h,e){const d=+e.depth||10,step=Math.max(6,Math.round(d
   for(let i=0;i<nx;i++)pts.push([x+w-w*i/nx,y+h-off(i)]);
   for(let i=0;i<ny;i++)pts.push([x+off(i),y+h-h*i/ny]);
   c.beginPath();pts.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]));c.closePath()}
+let U9=null;function under9(W,H){if(!U9)U9=document.createElement('canvas');if(U9.width!==W||U9.height!==H){U9.width=W;U9.height=H}else{const g=U9.getContext('2d');g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,W,H)}return U9}
 function drawComposite(c,it,p,ui){
   const f=it.fx,W=it.base.width,H=it.base.height,b=+f.border||0,E=f.edge,inside=f.bPlace==='inside',ob=inside?0:b,bs=f.bStyle||'solid';
   const o=p-ob; // outer frame origin
@@ -459,7 +460,11 @@ function drawComposite(c,it,p,ui){
   if(!(ui&&S.rzHide==='base'))c.drawImage(ui&&S.simp&&S.simp.prev&&it===S.cur?S.simp.prev:it.base,0,0);
   c.filter='none';
   if(f.vig){const g=c.createRadialGradient(W/2,H/2,Math.min(W,H)*.25,W/2,H/2,Math.hypot(W,H)/2);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,`rgba(0,0,0,${f.vig/100*.85})`);c.fillStyle=g;c.fillRect(0,0,W,H)}
-  for(const s of it.shapes){if(ui&&S.rzHide!=null&&S.rzHide===s.id)continue;if(s.t==='img'&&flt!=='none'){c.save();c.filter=flt;drawShape(c,s,it.base);c.restore()}else drawShape(c,s,it.base)}
+  // 9.06: Blur and Magnify use everything drawn beneath them (pictures and annotations), not only the base layer
+  {const sh=it.shapes,baseSrc=ui&&S.simp&&S.simp.prev&&it===S.cur?S.simp.prev:it.base;let last=-1;sh.forEach((s,i)=>{if(s.t==='blur'||s.t==='magnify')last=i});let acc=null,ag=null;
+   if(last>=0){acc=under9(W,H);ag=acc.getContext('2d');if(f.bg){ag.fillStyle=f.bg;ag.fillRect(0,0,W,H)}if(flt!=='none')ag.filter=flt;ag.drawImage(baseSrc,0,0);ag.filter='none'}
+   const one=(g,s,src)=>{if(s.t==='img'&&flt!=='none'){g.save();g.filter=flt;drawShape(g,s,src);g.restore()}else drawShape(g,s,src)};
+   for(let i=0;i<sh.length;i++){const s=sh[i];if(s._editing9)continue;if(!(ui&&S.rzHide!=null&&S.rzHide===s.id))one(c,s,acc||it.base);if(acc&&i<last)one(ag,s,acc)}}
   if(ui && S.drag && S.drag.preview) drawShape(c,S.drag.preview,it.base);
   c.restore();
   if(b&&!E&&(inside||bs!=='solid'))strokeBorder(c,f,p,W,H,b,inside,bs);
@@ -656,7 +661,7 @@ cv.addEventListener('pointerdown',e=>{
   const {x,y}=pt(e);cv.setPointerCapture(e.pointerId);
   const t=S.tool;
   if(t==='ocr'){S.sel=null;S.drag={mode:'pix',ocr:true};S.pixRect={x1:x,y1:y,x2:x,y2:y};render();return}
-  if(t==='image')return;
+  if(t==='image'){imageTabDown9(e,x,y);return}
   if(t==='selection'&&!(S.sel&&S.sel.t==='img'&&(hitHandle(x,y)||hit(x,y)===S.sel))){S.sel=null;S.drag={mode:'pix'};S.pixRect={x1:x,y1:y,x2:x,y2:y};render();return}
   if(t==='crop'){S.drag={mode:'crop',x0:x,y0:y};S.cropRect={x1:x,y1:y,x2:x,y2:y};render();return}
   if(t==='fill'){const col=S.p.fillTransparent?'none':S.p.stroke,r=ImgTools.fill(it.base,x,y,col,+(S.p.tol??20),S.p.contig!==false,+(S.p.grow??1));if(r){snap();it.base=r.canvas;render();changed();toast(`Filled ${r.count.toLocaleString()} pixels. Ctrl+Z to undo.`)}return}
@@ -673,7 +678,7 @@ cv.addEventListener('pointerdown',e=>{
     if(!hs){S.sel=null;S.grp=[];S.drag={mode:'marq'};S.marq={x1:x,y1:y,x2:x,y2:y};renderProps();render();return}
     S.grp=[]}
   if(t==='select'||(S.sel&&hit(x,y)===S.sel)){
-    const s=hit(x,y);S.sel=s;renderProps();
+    const s=hit(x,y),gm9=s&&s.groupId!=null?S.cur.shapes.filter(q=>q.groupId===s.groupId):null;if(gm9&&gm9.length>1){S.sel=null;S.grp=gm9;renderProps();snap();S.drag={mode:'move',s,list:gm9,lx:x,ly:y,moved:false};render();return}S.sel=s;renderProps();
     if(s){snap();S.drag={mode:'move',s,lx:x,ly:y,moved:false};}
     render();return}
   if(t==='text'){S.drag={mode:'text',x,y};return}
@@ -682,7 +687,7 @@ cv.addEventListener('pointerdown',e=>{
 });
 cv.addEventListener('pointermove',e=>{
   const it=S.cur;if(!it||it.kind!=='image')return;const {x,y}=pt(e);const d=S.drag;cursor={x,y};if(!d)status();
-  if(!d){const hk=hitHandle(x,y);cv.style.cursor=hk?(HANDLE_CURSOR[hk]||'grab'):S.tool==='image'?'default':(S.tool==='select'?(hit(x,y)?'move':'default'):(S.tool==='text'?'text':'crosshair'));return}
+  if(!d){const hk=hitHandle(x,y);cv.style.cursor=hk?(HANDLE_CURSOR[hk]||'grab'):S.tool==='image'?(hit(x,y)?'move':'default'):(S.tool==='select'?(hit(x,y)?'move':'default'):(S.tool==='text'?'text':'crosshair'));return}
   if(d.mode==='erase'){eraseSeg(d.lx,d.ly,x,y);d.lx=x;d.ly=y;render();return}
   if(d.mode==='cut'){S.cutRect.x2=Math.max(0,Math.min(it.base.width,x));S.cutRect.y2=Math.max(0,Math.min(it.base.height,y));render();return}
   if(d.mode==='marq'){S.marq.x2=x;S.marq.y2=y;render();return}
@@ -703,7 +708,7 @@ cv.addEventListener('pointerup',e=>{
   if(d.mode==='cut'){const q=S.cutRect;S.cutRect=null;const dx=Math.abs(q.x2-q.x1),dy=Math.abs(q.y2-q.y1);if(dx<3&&dy<3){render();return}
     if(dx>=dy)applyCut('x',Math.min(q.x1,q.x2),Math.max(q.x1,q.x2));else applyCut('y',Math.min(q.y1,q.y2),Math.max(q.y1,q.y2));return}
   if(d.mode==='text'){const s=newShape('text',d.x,d.y);s.txt='';startText(s,true);return}
-  if(d.mode==='marq'){const r=norm(S.marq);S.marq=null;if(r.w>3||r.h>3){const pk=it.shapes.filter(q=>{const b=bbox(q);return b.x<r.x+r.w&&b.x+b.w>r.x&&b.y<r.y+r.h&&b.y+b.h>r.y});if(pk.length===1){S.sel=pk[0];S.grp=[]}else if(pk.length>1){S.sel=null;S.grp=pk}}renderProps();render();return}
+  if(d.mode==='marq'){const r=norm(S.marq);S.marq=null;if(r.w>3||r.h>3){const pk=it.shapes.filter(q=>{const b=bbox(q);return b.x<r.x+r.w&&b.x+b.w>r.x&&b.y<r.y+r.h&&b.y+b.h>r.y});{const gids=new Set(pk.map(q=>q.groupId).filter(v=>v!=null));if(gids.size)it.shapes.forEach(q=>{if(gids.has(q.groupId)&&!pk.includes(q))pk.push(q)})}if(pk.length===1){S.sel=pk[0];S.grp=[]}else if(pk.length>1){S.sel=null;S.grp=pk}}renderProps();render();return}
   if(d.mode==='pix'){const pr=S.pixRect,r=norm(pr);S.pixRect=null;render();if(r.w>4&&r.h>4){if(d.ocr)grabTextFrom(r);else liftPixels(r)}
     else if(!d.ocr){const sm=ImgTools.smart(it.base,pr.x1,pr.y1);if(sm&&sm.w>3&&sm.h>3){const m=sm.kind==='content'?3:0,x0=Math.max(0,sm.x-m),y0=Math.max(0,sm.y-m);liftPixels({x:x0,y:y0,w:Math.min(it.base.width-x0,sm.w+m*2),h:Math.min(it.base.height-y0,sm.h+m*2)});toast(sm.kind==='shape'?'Picked up the whole box. Drag it to move it.':'Picked up that text or picture. Drag it to move it.')}else toast('Nothing to pick up there. Drag a box around the area instead.')}return}
   if(d.mode==='crop'){const r=norm(S.cropRect);if(r.w<4||r.h<4)S.cropRect=null;renderProps();render();return}
@@ -776,7 +781,7 @@ function resizeImg(pct,skipSnap){const it=S.cur,k=pct/100;if(!k||k===1)return;if
 function exportCanvas(){const it=S.cur,p=padFor(it.fx),c=document.createElement('canvas');c.width=it.base.width+p*2;c.height=it.base.height+p*2;drawComposite(c.getContext('2d'),it,p,false);return c}
 let dl=null;(async()=>{try{dl=await window.claude?.use?.('downloads')}catch(e){dl=null}})();
 async function saveBlob(blob,name){
-  if(window.bench){try{const r=await window.bench.save(name,await blob.arrayBuffer());if(r)toast('Saved to '+r)}catch(e){toast('Could not save the file.')}return}
+  if(window.bench){const tgt=saveTarget9,owner=saveOwner9;saveTarget9=null;saveOwner9=null;try{const r=await window.bench.save(name,await blob.arrayBuffer(),tgt);if(r){toast('Saved to '+r);if(owner&&r===tgt&&owner.savedPath!==r){owner.savedPath=r;persist(owner)}}}catch(e){toast('Could not save the file.')}return}
   if(dl){try{const r=await dl.save({filename:name,data:blob});toast('Saved '+name);return}catch(e){if(e&&e.code==='declined')return;if(e&&e.code==='rate_limited'){toast('A save prompt is already open.');return}}}
   try{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);}catch(e){toast('Saving is not available in this view.')}
 }
@@ -791,8 +796,12 @@ async function icoBlob(c){const k=Math.min(1,256/Math.max(c.width,c.height)),w=M
   const png=new Uint8Array(await (await new Promise(r=>t.toBlob(r,'image/png'))).arrayBuffer()),hd=new Uint8Array(22),v=new DataView(hd.buffer);
   v.setUint16(2,1,true);v.setUint16(4,1,true);hd[6]=w>=256?0:w;hd[7]=h>=256?0:h;v.setUint16(10,1,true);v.setUint16(12,32,true);v.setUint32(14,png.length,true);v.setUint32(18,22,true);
   return new Blob([hd,png],{type:'image/x-icon'})}
-async function save(fmtArg){const it=S.cur;if(!it)return;commitText();const fmt=typeof fmtArg==='string'?fmtArg:$('#fmt').value;
-  if(it.kind==='video'){if(fmt==='gif'){if(vid&&vid._ctl)vid._ctl.saveGif();return}const b=fmt==='mp4'?it.mp4:it.webm;if(!b){toast(fmt==='mp4'?'This recording was made without MP4. Choose WebM, or record again in this version to get both.':'This recording only has MP4. Choose MP4.',6000);return}saveBlob(b,fileName(fmt));return}
+// 9.01: the first Save opens the Windows dialog with every file type (Saveit file first); after that Save writes over the same file.
+let saveTarget9=null,saveOwner9=null;
+function saveExts9(it){const k=it.kind==='image'&&it.guide?'image':it.kind,l=(FORMATS[k]||FORMATS.image).map(x=>x[0]);if(it.kind==='video')return l.filter(x=>x==='mp4'?it.mp4:x==='webm'?it.webm:false);return['saveit',...l.filter(x=>x!=='saveit')]}
+async function save(fmtArg){const it=S.cur;if(!it)return;commitText();saveTarget9=null;saveOwner9=null;let fmt=typeof fmtArg==='string'?fmtArg:$('#fmt').value;
+  if(typeof fmtArg!=='string'&&window.bench?.savePick){let p=it.savedPath;if(!p){p=await window.bench.savePick(baseName(it),saveExts9(it));if(!p)return}fmt=p.split('.').pop().toLowerCase();saveTarget9=p;saveOwner9=it}
+  if(it.kind==='video'){if(fmt==='gif'){saveTarget9=null;saveOwner9=null;if(vid&&vid._ctl)vid._ctl.saveGif();return}const b=fmt==='mp4'?it.mp4:it.webm;if(!b){toast(fmt==='mp4'?'This recording was made without MP4. Choose WebM, or record again in this version to get both.':'This recording only has MP4. Choose MP4.',6000);return}saveBlob(b,fileName(fmt));return}
   if(fmt==='saveit')return saveSaveit(it.guide&&false?it.guide:it);
   if(it.kind==='guide'){if(fmt==='docx')return exportDocx(it);if(fmt==='pdf')return exportPdf(it);if(fmt==='jpg')return exportGuideJpg(it);if(fmt==='png'){const pc=renderPageCanvas(it,2);pc.canvas.toBlob(b=>saveBlob(b,safeName(it.title)+'.png'),'image/png');return}return}
   const c=exportCanvas();
@@ -1018,7 +1027,9 @@ function buildRail(){const r=$('#rail');r.innerHTML='';for(const t of TOOLS){if(
 // ---------- properties ----------
 function swatches(key,allowNone){const cur=S.sel?(key==='stroke'?S.sel.c:S.sel.fill):S.p[key];
   return `<div class="sw">${allowNone?`<button class="none" data-k="${key}" data-v="none" aria-label="No fill" aria-pressed="${cur==='none'||!cur}"></button>`:''}${COLORS.map(c=>`<button style="background:${c}" data-k="${key}" data-v="${c}" aria-label="${c}" aria-pressed="${cur===c}"></button>`).join('')}<input type="color" id="pc-${key}" data-k="${key}" value="${cur&&cur!=='none'?cur:'#ffffff'}" aria-label="Custom color"></div>`}
-function renderProps(){
+// 9.02: the Image tab keeps its own panel while a picture or annotation is selected in it
+function renderProps(){if(S.tool==='image'&&!S.fxOpen&&S.cur?.kind==='image'&&!S.cur.guide&&(S.sel||(S.grp||[]).length)){const a=S.sel,g=S.grp;S.sel=null;S.grp=[];try{return renderProps0()}finally{S.sel=a;S.grp=g}}return renderProps0()}
+function renderProps0(){
   const P=$('#props'),it=S.cur,s=S.sel,t=s?s.t:S.tool,p=S.p;
   document.querySelector('.app').classList.toggle('vmode',!!(it&&it.kind==='video'));
   if(!it){P.innerHTML=`<div class="grp"><h3>Get started</h3><p class="hint">Capture the screen, paste with <span class="kbd">Ctrl</span>+<span class="kbd">V</span>, open a file, or start a blank canvas.</p></div>${captureHelp()}`;return}
@@ -1201,7 +1212,7 @@ function imagePanel(it){const f=S.fx,radii=f.radii,rounded=(+f.radius||0)>0||!!r
     <div class="row"><button class="btn" id="imCanvas">Canvas size…</button><button class="btn" id="imCrop">Crop</button></div>
     <div class="row"><button class="btn" id="imAddPic" title="Put another picture on this canvas. Each picture moves and resizes on its own.">Add picture…</button></div>
     <div class="row"><label>Canvas background <select id="imBg89" aria-label="Canvas background"><option value="">Transparent</option><option value="#ffffff">White</option><option value="#000000">Black</option><option value="custom">Colour…</option></select></label><input type="color" id="imBgc89" aria-label="Background colour" value="${/^#[0-9a-f]{6}$/i.test(f.bg||'')?f.bg:'#ffffff'}"></div>
-    <p class="hint">Rotating and flipping turn annotations into pixels. Undo restores them.</p></div>
+    <p class="hint">Rotate and Flip turn the selected item only. With nothing selected they turn the whole canvas. Nothing is flattened.</p></div>
   <div class="grp"><h3>Border</h3>${rngFx('border','Thickness',0,40,+f.border||0)}
     <div class="row"><span>Color</span><input type="color" id="fxBc" value="${f.borderColor}" aria-label="Border color"></div>
     <div class="row"><span>Style</span><select id="fxBs" aria-label="Border style">${[['solid','Solid'],['dashed','Dashed'],['dotted','Dotted'],['double','Double']].map(([v,l])=>`<option value="${v}" ${(f.bStyle||'solid')===v?'selected':''}>${l}</option>`).join('')}</select></div>
@@ -1209,7 +1220,7 @@ function imagePanel(it){const f=S.fx,radii=f.radii,rounded=(+f.radius||0)>0||!!r
   <div class="grp"><h3>Corners</h3><div class="row"><button class="btn" id="cnSquare" aria-pressed="${!rounded}">Square</button><button class="btn" id="cnRound" aria-pressed="${rounded}">Rounded</button></div>
     ${radii?`<div class="crop-grid">${[['Top left',0],['Top right',1],['Bottom right',2],['Bottom left',3]].map(([l,i])=>`<label>${l}<input type="number" min="0" max="500" data-cn="${i}" aria-label="${l} radius" value="${radii[i]}"></label>`).join('')}</div>`:rngFx('radius','Radius',0,120,+f.radius||0)}
     <label class="chk"><input type="checkbox" id="cnEach" ${radii?'checked':''}> Set each corner separately</label></div>
-  <div class="grp"><h3>Annotations</h3><div class="row"><button class="btn" id="flat" title="Burn annotations into the image">Flatten</button><button class="btn" id="clr">Clear annotations</button></div></div>
+  <div class="grp"><h3>Layers</h3><div class="row"><button class="btn" id="lyFwd9" title="Bring forward one layer (Ctrl+])">Bring forward</button><button class="btn" id="lyBack9" title="Send back one layer (Ctrl+[)">Send backward</button></div><div class="row"><button class="btn" id="lyFront9" title="Bring to front (Ctrl+Shift+])">Bring to front</button><button class="btn" id="lyBot9" title="Send to back (Ctrl+Shift+[)">Send to back</button></div><div class="row"><button class="btn" id="lyGrp9" title="Group the selected items (Ctrl+G)">Group</button><button class="btn" id="lyUngrp9" title="Ungroup (Ctrl+Shift+G)">Ungroup</button></div><div class="row"><button class="btn" id="lyFlatSel9" title="Merge only the selected items into one picture">Flatten selected</button><button class="btn" id="flat" title="Merge everything into one picture">Flatten all</button></div><div class="row"><button class="btn" id="clr">Clear annotations</button></div></div>
   ${nameGrp(it)}<div class="grp"><h3>Organization</h3><label>Tags <input type="text" id="tags33" value="${escH((it.tags||[]).join(', '))}" placeholder="project, review"></label><label class="chk"><input type="checkbox" id="pin33" ${it.pinned?'checked':''}> Pin in recent captures</label></div>`}
 // Binds the controls that only some panels contain; each one is looked up and skipped when absent.
 function bindPanel(P,it,t){const on=(id,f)=>{const e=$('#'+id);if(e)e.onclick=f},ch=(id,f)=>{const e=$('#'+id);if(e)e.onchange=f},fxSet=(k,v)=>{snap();S.fx[k]=v;layoutStage();render();renderProps();changed()};
@@ -1587,7 +1598,7 @@ addEventListener('resize',()=>closeCaptureMenu());addEventListener('blur',()=>cl
 function selectedShapes(){const a=grpList();return a.length>1?a:S.sel?[S.sel]:[]}
 function finishEdit(){S.sel=null;S.grp=[];S.cropRect=null;S.drag=null;S.simp=null;S.fx=S.cur.fx;layoutStage();render();renderProps();changed()}
 async function readyShapes(shapes){await Promise.all(shapes.filter(s=>s.t==='img').map(s=>new Promise((resolve,reject)=>{const i=imgFor(s.src);if(i.complete){i.naturalWidth?resolve():reject(Error('Image layer did not load'));return}i.addEventListener('load',resolve,{once:true});i.addEventListener('error',reject,{once:true})})))}
-function flatCanvas(it){const c=canvasFrom(it.base),g=c.getContext('2d');it.shapes.forEach(s=>drawShape(g,s,it.base));return c}
+function flatCanvas(it){const c=canvasFrom(it.base),g=c.getContext('2d');it.shapes.forEach(s=>drawShape(g,s,c));return c}
 async function flattenImage(){const it=S.cur;if(it?.kind!=='image'||!it.shapes.length)return;commitText();await readyShapes(it.shapes);const c=flatCanvas(it);snap();it.base=c;it.shapes=[];finishEdit();toast('Annotations flattened. Ctrl+Z restores editable objects.')}
 async function transformImage(kind){const it=S.cur;if(it?.kind!=='image')return;commitText();await readyShapes(it.shapes);const src=flatCanvas(it),w=src.width,h=src.height,c=document.createElement('canvas');c.width=/^(left|right)$/.test(kind)?h:w;c.height=/^(left|right)$/.test(kind)?w:h;const g=c.getContext('2d');
   if(kind==='right'){g.translate(h,0);g.rotate(Math.PI/2)}else if(kind==='left'){g.translate(0,w);g.rotate(-Math.PI/2)}else if(kind==='horizontal'){g.translate(w,0);g.scale(-1,1)}else if(kind==='vertical'){g.translate(0,h);g.scale(1,-1)}else if(kind==='half'){g.translate(w,h);g.rotate(Math.PI)}else return;
@@ -1667,7 +1678,7 @@ function showImageMenu(e,it=S.cur,fromTray=false,keyboard=false){if(!it)return;c
   menuAt(e.clientX,e.clientY,itemName(it),rows,keyboard)
 }
 function editorMenu(e,keyboard=false){const it=S.cur;if(it?.kind!=='image'){if(it)showImageMenu(e,it,false,keyboard);return}commitText();const a=selectedShapes();if(a.length){menuAt(e.clientX,e.clientY,`${a.length} annotation${a.length===1?'':'s'} selected`,[
-  ['Cut',()=>copySelection(true),'Ctrl+X'],['Copy',()=>copySelection(),'Ctrl+C'],['Paste',()=>pasteClipboard(),'Ctrl+V'],['Add picture…',addPictures88],null,['Duplicate',dupSel,'Ctrl+D'],['Bring to front',()=>orderSelection(true)],['Send to back',()=>orderSelection(false)],['Delete',delSel,'Delete']],keyboard)}else if(S.cropRect){menuAt(e.clientX,e.clientY,'Crop region',[
+  ['Cut',()=>copySelection(true),'Ctrl+X'],['Copy',()=>copySelection(),'Ctrl+C'],['Paste',()=>pasteClipboard(),'Ctrl+V'],['Add picture…',addPictures88],null,['Duplicate',dupSel,'Ctrl+D'],['Bring to front',()=>orderSelection(true)],['Send to back',()=>orderSelection(false)],['Bring forward',()=>orderStep9(1),'Ctrl+]'],['Send backward',()=>orderStep9(-1),'Ctrl+['],['Group',group9,'Ctrl+G'],['Ungroup',ungroup9,'Ctrl+Shift+G'],['Flatten selected',()=>flattenSel9().catch(actionError)],['Delete',delSel,'Delete']],keyboard)}else if(S.cropRect){menuAt(e.clientX,e.clientY,'Crop region',[
   ['Apply crop',applyCrop,'Enter'],['Copy region',copyCropRegion],['New capture from region',()=>copyCropRegion(true)],['Cancel crop',()=>{S.cropRect=null;setTool('select')},'Esc']
 ],keyboard)}else showImageMenu(e,it,false,keyboard)}
 async function copyCropRegion(asNew=false){if(!S.cropRect||S.cur?.kind!=='image')return;const it=S.cur,r=cropBounds(norm(S.cropRect));await readyShapes(it.shapes);const src=flatCanvas(it),c=document.createElement('canvas');c.width=r.w;c.height=r.h;c.getContext('2d').drawImage(src,r.x,r.y,r.w,r.h,0,0,r.w,r.h);if(asNew)addImage(c,itemName(it)+' (region)');else{await window.bench.copyImage(c.toDataURL());toast('Region copied')}}
@@ -2170,7 +2181,7 @@ async function setPictureBox88(L,T,R,B){const it=S.cur;L=Math.round(L);T=Math.ro
     snap();if(!s)s=await liftBase88(it);s.x1=L;s.y1=T;s.x2=R;s.y2=B;s._w=null;S.rzTarget=s.id;S.rz=null;render();renderProps();changed();toast(`Picture is now ${w} × ${h}. Ctrl+Z to undo.`)}
   catch(e){console.error(e);actionError(e)}}
 cv.addEventListener('pointerdown',e=>{if(!rzOn80()||e.button!==0)return;const rz=rzState80(),p=pt(e),h=rzHit80(p,rz);
-  if(!h){const hit=rzPick88(p);if(hit!==undefined){const id=hit?hit.id:null;if(id!==S.rzTarget||hit===null&&S.rzTarget!=null){S.rzTarget=id;S.rz=null;e.stopImmediatePropagation();render();renderProps()}}return}
+  if(!h)return; // 9.02: clicks that miss the handles select and move (imageTabDown9)
   e.preventDefault();e.stopImmediatePropagation();
   if(S.zoom==='fit'){S.zoom=scale();applyZoom()}
   const s=rzTargetShape88();S.rzHide=s?s.id:'base';
@@ -2316,6 +2327,146 @@ const props80=renderProps;renderProps=function(){props80();
   const w=vid&&vid._wrap;if(vctl80()&&w&&!w._sync80){w._sync80=true;w.addEventListener('click',e=>{if(e.target.closest('[data-ot]'))sync80()})}
   sync80()};
 sync80();
+// Saveit 9.0: editor workflow. Selecting and moving in the Image tab, rotate/flip/crop that keep objects separate,
+// groups and layer order, and pixel tools that work on the picture you see. Loaded after the main editor script.
+(()=>{
+const ROT9=['text','step','stamp'];
+const groupOf9=s=>s&&s.groupId!=null&&S.cur?S.cur.shapes.filter(q=>q.groupId===s.groupId):s?[s]:[];
+function expand9(a){const it=S.cur,out=new Set();a.forEach(s=>groupOf9(s).forEach(q=>out.add(q)));return it.shapes.filter(q=>out.has(q))}
+function setSel9(a){if(a.length===1){S.sel=a[0];S.grp=[]}else if(a.length){S.sel=null;S.grp=a}else{S.sel=null;S.grp=[]}}
+window.groupOf9=groupOf9;
+
+// ---------- rotation for text, step numbers and stamps ----------
+const bbox0=bbox;
+bbox=function(s){const b=bbox0(s);if(s.rot&&ROT9.includes(s.t)&&s.rot%180){const cx=b.x+b.w/2,cy=b.y+b.h/2;return{x:cx-b.h/2,y:cy-b.w/2,w:b.h,h:b.w}}return b};
+const drawShape0=drawShape;
+drawShape=function(c,s,base){if(!s.rot||!ROT9.includes(s.t))return drawShape0(c,s,base);const b=bbox0(s),cx=b.x+b.w/2,cy=b.y+b.h/2;c.save();c.translate(cx,cy);c.rotate(s.rot*Math.PI/180);c.translate(-cx,-cy);drawShape0(c,s,base);c.restore()};
+
+// ---------- undo is skipped while a picture is being edited in place ----------
+const snap0=snap;snap=function(){if(S.noSnap9)return;return snap0()};
+const hit0=hit;hit=function(x,y){const s=hit0(x,y);if(s&&s._editing9){const keep=S.cur.shapes;const i=keep.indexOf(s);keep.splice(i,1);try{return hit0(x,y)}finally{keep.splice(i,0,s)}}return s};
+
+// ---------- 9.02: select and move in the Image tab ----------
+window.imageTabDown9=function(e,x,y){const it=S.cur;
+  const hk=hitHandle(x,y);if(hk&&S.sel&&S.sel.t!=='img'){snap();S.drag={mode:'handle',k:hk,s:S.sel,b0:selBox(S.sel),s0:clone(S.sel)};return}
+  const hs=hit(x,y);
+  if(e.shiftKey&&hs){const cur=grpList().length>1?grpList():S.sel?[S.sel]:[],g=groupOf9(hs),has=cur.includes(hs);const L=has?cur.filter(q=>!g.includes(q)):[...cur,...g.filter(q=>!cur.includes(q))];setSel9(L);render();renderProps();return}
+  if(!hs){S.sel=null;S.grp=[];if(!it.base._blank&&x>=0&&y>=0&&x<=it.base.width&&y<=it.base.height)S.rzTarget=null;S.rz=null;render();renderProps();return}
+  const G=grpList();let list;
+  if(G.length>1&&G.includes(hs))list=G;else{const g=groupOf9(hs);setSel9(g);list=g.length>1?g:null}
+  if(hs.t==='img'&&!list){S.rzTarget=hs.id}S.rz=null;
+  snap();S.drag={mode:'move',s:hs,list,lx:x,ly:y,moved:false};render();renderProps()};
+
+// ---------- 9.03: rotate and flip what is selected ----------
+const isRot=k=>k==='left'||k==='right';
+async function picXform9(s,kind){const im=imgFor(s.src);await readyShapes([s]);const w=im.naturalWidth,h=im.naturalHeight,c=document.createElement('canvas');c.width=isRot(kind)?h:w;c.height=isRot(kind)?w:h;const g=c.getContext('2d');
+  if(kind==='right'){g.translate(h,0);g.rotate(Math.PI/2)}else if(kind==='left'){g.translate(0,w);g.rotate(-Math.PI/2)}else if(kind==='horizontal'){g.translate(w,0);g.scale(-1,1)}else{g.translate(0,h);g.scale(1,-1)}
+  g.drawImage(im,0,0);const u=c.toDataURL('image/png');await readyShapes([{t:'img',src:u}]);s.src=u}
+function around9(kind,cx,cy){return kind==='right'?(x,y)=>[cx-(y-cy),cy+(x-cx)]:kind==='left'?(x,y)=>[cx+(y-cy),cy-(x-cx)]:kind==='horizontal'?(x,y)=>[2*cx-x,y]:(x,y)=>[x,2*cy-y]}
+async function xformShape9(s,f,kind){
+  if(ROT9.includes(s.t)){const b=bbox0(s),cx=b.x+b.w/2,cy=b.y+b.h/2,[nx,ny]=f(cx,cy);moveShape(s,nx-cx,ny-cy);const r=s.rot||0;s.rot=kind==='right'?(r+90)%360:kind==='left'?(r+270)%360:(360-r)%360;s._w=null;return}
+  if(s.t==='arrow'&&s.style==='curved'&&s.cx==null){const q=ctrlPt(s);s.cx=q.x;s.cy=q.y}
+  for(const [a,b] of [['x1','y1'],['x2','y2'],['tx','ty'],['cx','cy']])if(s[a]!=null&&s[b]!=null)[s[a],s[b]]=f(s[a],s[b]);
+  if(s.pts)s.pts=s.pts.map(p=>f(p[0],p[1]));
+  if(BOXY.includes(s.t)){const r=norm(s);s.x1=r.x;s.y1=r.y;s.x2=r.x+r.w;s.y2=r.y+r.h}
+  if(s.t==='img')await picXform9(s,kind)}
+const transformImage0=transformImage;
+transformImage=async function(kind){const it=S.cur;if(it?.kind!=='image')return;commitText();await readyShapes(it.shapes);
+  let sel=expand9(selectedShapes());
+  if(!sel.length&&S.tool==='image'&&S.rzTarget!=null){const t=it.shapes.find(q=>q.id===S.rzTarget);if(t)sel=expand9([t])}
+  if(sel.length){snap();const units=[],seen=new Map();for(const s of sel){if(s.groupId!=null){if(!seen.has(s.groupId)){const u=[];seen.set(s.groupId,u);units.push(u)}seen.get(s.groupId).push(s)}else units.push([s])}
+    for(const u of units){const bs=u.map(bbox),x0=Math.min(...bs.map(b=>b.x)),y0=Math.min(...bs.map(b=>b.y)),x1=Math.max(...bs.map(b=>b.x+b.w)),y1=Math.max(...bs.map(b=>b.y+b.h)),f=around9(kind,(x0+x1)/2,(y0+y1)/2);for(const s of u)await xformShape9(s,f,kind)}
+    S.rz=null;render();renderProps();changed();return}
+  const src=it.base,W=src.width,H=src.height,c=document.createElement('canvas');c.width=isRot(kind)?H:W;c.height=isRot(kind)?W:H;if(src._blank)c._blank=true;const g=c.getContext('2d');
+  if(kind==='right'){g.translate(H,0);g.rotate(Math.PI/2)}else if(kind==='left'){g.translate(0,W);g.rotate(-Math.PI/2)}else if(kind==='horizontal'){g.translate(W,0);g.scale(-1,1)}else if(kind==='vertical'){g.translate(0,H);g.scale(1,-1)}else if(kind==='half'){return transformImage0(kind)}else return;
+  g.drawImage(src,0,0);snap();
+  const f=kind==='right'?(x,y)=>[H-y,x]:kind==='left'?(x,y)=>[y,W-x]:kind==='horizontal'?(x,y)=>[W-x,y]:(x,y)=>[x,H-y];
+  for(const s of it.shapes)await xformShape9(s,f,kind);
+  it.base=c;finishEdit()};
+rotate=()=>transformImage('right');
+
+// opening the Image tab keeps what was selected, so Rotate and Flip act on it
+const setTool9=setTool;setTool=function(t){const a=S.sel,g=grpList().slice();setTool9(t);if(t==='image'&&S.cur?.kind==='image'){if(a&&S.cur.shapes.includes(a))S.sel=a;else if(g.length>1)S.grp=g;render();renderProps()}};
+
+// ---------- groups ----------
+window.group9=function(){const it=S.cur;if(it?.kind!=='image')return;const a=expand9(selectedShapes());if(a.length<2){toast('Select two or more items to group. Shift-click them or drag a box around them.');return}
+  snap();const g=uid++;a.forEach(s=>s.groupId=g);setSel9(a);render();renderProps();changed();toast(`Grouped ${a.length} items. They now move, rotate and flip together.`)};
+window.ungroup9=function(){const it=S.cur;if(it?.kind!=='image')return;const a=expand9(selectedShapes()).filter(s=>s.groupId!=null);if(!a.length){toast('Select a group to ungroup.');return}
+  snap();a.forEach(s=>delete s.groupId);setSel9(a);render();renderProps();changed();toast('Ungrouped.')};
+// copies of a group (Duplicate, Paste) form a new group instead of joining the old one
+function regroup9(fresh){const m=new Map();fresh.forEach(s=>{if(s.groupId!=null){if(!m.has(s.groupId))m.set(s.groupId,uid++);s.groupId=m.get(s.groupId)}})}
+const dupSel0=dupSel;dupSel=function(){const it=S.cur,before=new Set(it?.shapes||[]);const r=dupSel0.apply(this,arguments);if(it?.shapes)regroup9(it.shapes.filter(s=>!before.has(s)));return r};
+const paste0=pasteAnnotations;pasteAnnotations=async function(sh){const it=S.cur,before=new Set(it?.shapes||[]);const r=await paste0(sh);if(it?.shapes)regroup9(it.shapes.filter(s=>!before.has(s)));return r};
+
+// ---------- 9.05: layer order and Flatten selected ----------
+window.orderStep9=function(dir){const it=S.cur;if(it?.kind!=='image')return;const sel=new Set(expand9(selectedShapes()));if(!sel.size){toast('Select something first.');return}
+  const a=it.shapes.slice();let moved=false;
+  if(dir>0){for(let i=a.length-2;i>=0;i--)if(sel.has(a[i])&&!sel.has(a[i+1])){[a[i],a[i+1]]=[a[i+1],a[i]];moved=true}}
+  else{for(let i=1;i<a.length;i++)if(sel.has(a[i])&&!sel.has(a[i-1])){[a[i],a[i-1]]=[a[i-1],a[i]];moved=true}}
+  if(!moved){toast(dir>0?'Already at the front.':'Already at the back.');return}snap();it.shapes.splice(0,it.shapes.length,...a);render();changed()};
+const order0=orderSelection;orderSelection=function(front){const a=expand9(selectedShapes());if(a.length>1&&S.sel){S.grp=a;S.sel=null}return order0(front)};
+window.flattenSel9=async function(){const it=S.cur;if(it?.kind!=='image')return;commitText();const a=expand9(selectedShapes());if(!a.length){toast('Select the items to flatten.');return}
+  await readyShapes(a);const m=Math.ceil(Math.max(4,...a.map(s=>+s.w||0)))+16,bs=a.map(bbox);
+  const x=Math.floor(Math.min(...bs.map(b=>b.x))-m),y=Math.floor(Math.min(...bs.map(b=>b.y))-m),w=Math.ceil(Math.max(...bs.map(b=>b.x+b.w))+m)-x,h=Math.ceil(Math.max(...bs.map(b=>b.y+b.h))+m)-y;
+  if(w*h>64000000||w>16384||h>16384){toast('The selection is too large to flatten.');return}
+  const c=document.createElement('canvas');c.width=Math.max(1,w);c.height=Math.max(1,h);const g=c.getContext('2d');
+  for(const s of a){const q=clone(s);q.src=s.src;moveShape(q,-x,-y);drawShape(g,q,c)}
+  const u=c.toDataURL('image/png'),n={id:uid++,t:'img',x1:x,y1:y,x2:x+c.width,y2:y+c.height,src:u,op:1,sh:false,c:'#000',w:1,fs:20};await readyShapes([n]);
+  snap();const top=Math.max(...a.map(s=>it.shapes.indexOf(s)));it.shapes.splice(top+1,0,n);it.shapes=it.shapes.filter(s=>!a.includes(s));S.sel=n;S.grp=[];if(S.tool==='image'){S.rzTarget=n.id;S.rz=null}
+  render();renderProps();changed();toast(`Flattened ${a.length} item${a.length>1?'s':''} into one picture. Ctrl+Z to undo.`)};
+
+// ---------- 9.04: crop keeps objects separate ----------
+applyCrop=async function(){const it=S.cur;if(it?.kind!=='image'||!S.cropRect)return;const r=cropBounds(norm(S.cropRect));if(!r||r.w<1||r.h<1)return;await readyShapes(it.shapes);snap();
+  const c=document.createElement('canvas');c.width=r.w;c.height=r.h;if(it.base._blank)c._blank=true;c.getContext('2d').drawImage(it.base,r.x,r.y,r.w,r.h,0,0,r.w,r.h);it.base=c;
+  const keep=[];
+  for(const s of it.shapes){moveShape(s,-r.x,-r.y);const b=bbox(s);if(b.x>=r.w||b.y>=r.h||b.x+b.w<=0||b.y+b.h<=0)continue;
+    if(s.t==='img'){const q=norm(s),x0=Math.max(0,q.x),y0=Math.max(0,q.y),x1=Math.min(r.w,q.x+q.w),y1=Math.min(r.h,q.y+q.h);
+      if(x0>q.x||y0>q.y||x1<q.x+q.w||y1<q.y+q.h){const im=imgFor(s.src),kx=im.naturalWidth/q.w,ky=im.naturalHeight/q.h,o=document.createElement('canvas');o.width=Math.max(1,Math.round((x1-x0)*kx));o.height=Math.max(1,Math.round((y1-y0)*ky));
+        o.getContext('2d').drawImage(im,(x0-q.x)*kx,(y0-q.y)*ky,o.width,o.height,0,0,o.width,o.height);s.src=o.toDataURL('image/png');s.x1=x0;s.y1=y0;s.x2=x1;s.y2=y1}}
+    keep.push(s)}
+  it.shapes=keep;await readyShapes(keep).catch(()=>{});setTool('select');finishEdit();toast(`Cropped to ${r.w} × ${r.h}. Pictures and annotations stay separate. Ctrl+Z to undo.`)};
+
+// ---------- 9.06: Fill, Erase and Selection work on the picture under the pointer ----------
+function picUnder9(x,y){const a=S.cur.shapes;for(let i=a.length-1;i>=0;i--){const s=a[i];if(s.t!=='img')continue;const r=norm(s);if(x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h)return s}return null}
+function picBegin9(s){const it=S.cur,im=imgFor(s.src);if(!im.complete||!im.naturalWidth)return false;
+  s.x1=Math.round(Math.min(s.x1,s.x2));s.y1=Math.round(Math.min(s.y1,s.y2));const r0=norm(s);s.x2=s.x1+Math.max(1,Math.round(r0.w));s.y2=s.y1+Math.max(1,Math.round(r0.h));
+  const r=norm(s),t=document.createElement('canvas');t.width=it.base.width;t.height=it.base.height;t.getContext('2d').drawImage(im,r.x,r.y,r.w,r.h);
+  S.picEdit={s,r,orig:it.base,tmp:t,undoN:it.undo.length};it.base=t;s._editing9=true;S.noSnap9=true;return true}
+function picEnd9(){const pe=S.picEdit;if(!pe)return;const it=S.cur,{s,r,orig,tmp}=pe,ed=it.base;S.picEdit=null;S.noSnap9=false;delete s._editing9;it.base=orig;
+  if(ed===tmp&&pe.untouched){it.undo.pop();render();return}
+  const im=imgFor(s.src),o=document.createElement('canvas');o.width=r.w;o.height=r.h;const g=o.getContext('2d');g.drawImage(im,0,0,r.w,r.h);
+  const x0=Math.max(0,r.x),y0=Math.max(0,r.y),x1=Math.min(ed.width,r.x+r.w),y1=Math.min(ed.height,r.y+r.h);
+  if(x1>x0&&y1>y0){g.clearRect(x0-r.x,y0-r.y,x1-x0,y1-y0);g.drawImage(ed,x0,y0,x1-x0,y1-y0,x0-r.x,y0-r.y,x1-x0,y1-y0)}
+  const u=o.toDataURL('image/png');IMGS[u]=IMGS[u]||(()=>{const i=new Image();i.onload=()=>render();i.src=u;return i})();s.src=u;render();changed()}
+const pixTool=()=>S.tool==='fill'||(S.tool==='erase'&&(S.p.eraseWhat||'pixels')!=='objects');
+cv.addEventListener('pointerdown',e=>{const it=S.cur;if(!it||it.kind!=='image'||e.button!==0||S.picEdit||!pixTool())return;const {x,y}=pt(e),s=picUnder9(x,y);if(!s)return;
+  snap0();if(!picBegin9(s)){it.undo.pop()}},true);
+cv.addEventListener('pointerdown',e=>{if(S.picEdit&&S.tool==='fill'){if(S.cur.base===S.picEdit.tmp)S.picEdit.untouched=true;picEnd9()}});
+cv.addEventListener('pointerup',e=>{const it=S.cur,d=S.drag;if(!it||it.kind!=='image'||S.picEdit||!d||d.mode!=='pix'||d.ocr||!S.pixRect)return;const r=norm(S.pixRect),big=r.w>4&&r.h>4,cx=big?r.x+r.w/2:S.pixRect.x1,cy=big?r.y+r.h/2:S.pixRect.y1,s=picUnder9(cx,cy);if(!s)return;
+  snap0();if(!picBegin9(s))it.undo.pop();else S.picEdit.lift=true},true);
+const endPix=()=>{if(!S.picEdit)return;if(S.picEdit.lift&&S.cur.base===S.picEdit.tmp)S.picEdit.untouched=true;picEnd9()};
+cv.addEventListener('pointerup',endPix);cv.addEventListener('pointercancel',endPix);
+
+// Magic Cut also cuts the strip out of every picture it crosses
+const applyCut0=applyCut;applyCut=function(axis,a,b){const it=S.cur;a=Math.round(Math.max(0,a));b=Math.round(b);
+  const pics=it.shapes.filter(s=>s.t==='img').map(s=>{const r=norm(s),lo=axis==='x'?r.x:r.y,len=axis==='x'?r.w:r.h,la=Math.max(0,a-lo),lb=Math.min(len,b-lo);return lb>la&&!(la<=0&&lb>=len)?{s,r,la,lb}:null}).filter(Boolean);
+  const b0=it.base;const out=applyCut0(axis,a,b);if(it.base===b0)return out;
+  for(const {s,r,la,lb} of pics){if(!it.shapes.includes(s))continue;const im=imgFor(s.src);if(!im.naturalWidth)continue;const pc=document.createElement('canvas');pc.width=Math.max(1,Math.round(r.w));pc.height=Math.max(1,Math.round(r.h));pc.getContext('2d').drawImage(im,0,0,pc.width,pc.height);
+    const cut=ImgTools.cut(pc,axis,Math.round(la),Math.round(lb));if(cut){const u=cut.toDataURL('image/png');imgFor(u);s.src=u}}
+  render();return out};
+
+// ---------- panel buttons and shortcuts ----------
+const props9=renderProps;renderProps=function(){props9();const b=(id,f)=>{const el=document.getElementById(id);if(el)el.onclick=f};
+  b('lyFwd9',()=>orderStep9(1));b('lyBack9',()=>orderStep9(-1));b('lyFront9',()=>orderSelection(true));b('lyBot9',()=>orderSelection(false));
+  b('lyGrp9',group9);b('lyUngrp9',ungroup9);b('lyFlatSel9',()=>flattenSel9().catch(actionError))};
+document.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey)||e.altKey||editing||textTarget(e.target)||S.cur?.kind!=='image'||document.querySelector('.modal'))return;
+  const k=e.code;let f=null;
+  if(k==='KeyG')f=e.shiftKey?ungroup9:group9;
+  else if(k==='BracketRight')f=e.shiftKey?()=>orderSelection(true):()=>orderStep9(1);
+  else if(k==='BracketLeft')f=e.shiftKey?()=>orderSelection(false):()=>orderStep9(-1);
+  if(!f)return;e.preventDefault();e.stopImmediatePropagation();f()},true);
+renderProps();
+})();
 })();
 </script>
 
