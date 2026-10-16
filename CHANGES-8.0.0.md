@@ -33,7 +33,25 @@ Development branch `v8.0-dev`. 3.7.0 is kept as the stable baseline: git tag `v3
 - Playing, picking another clip, switching to Effects or a drawing tool, or any other editor button ends crop mode first and keeps the crop.
 - Fixed: on smaller windows the timeline covered the bottom of the video preview. The preview now fits its area.
 
+## 8.06 — Webcam recording crop repair
+The live "see yourself" webcam window shown while recording didn't match what was recorded. It now uses the same maths as the recording (`camdraw.js`):
+- **Size:** a 120 px minimum made the preview bigger than the recorded webcam on small regions. The minimum is removed.
+- **Mirror:** the preview was always mirrored. It now follows the Mirror setting.
+- **Border:** the preview was always a 2 px white border. It now uses the chosen colour and thickness, scaled like the recording.
+- **Rounded corners:** the preview used a % radius, so the Rectangle shape's corners didn't match. It now uses the same radius as the recording.
+- **Framing:** the preview opened the camera at 640×360 while the recorder used 1280×720. On 4:3 webcams that gave different framing. Both now use 1280×720.
+- **Full-screen recording on a second monitor:** the preview appeared on the monitor the pointer was on. It now appears on the recorded monitor.
+- **Region crop:** the region was scaled from screen points to video pixels with one factor taken from the width. It now scales across and down separately and stays inside the frame, so the crop can't slip up or down if the captured frame's shape differs from the display's.
+
+Tested in the dev build with a real 640×400-point region recording on a 2× display:
+- With a test camera (rectangle, rounded, 30%, magenta 6 px border, mirror off), the preview window sat at the same position and size, with the same corners, border and mirroring, as the webcam in the saved video.
+- With the real screen, the recorded frame lines up with a screenshot of the same region at zero offset, and the length (3.6 s) is right.
+- The saved recording reopens from the library with the same 1280×800 cropped frame.
+
 ## Known issues
 - In a video, the Sound effects controls are wider than the side panel, so it scrolls sideways. 3.7.0's Audio sub-tab does the same.
 - In a video, the Video panel is the default, so clicking Video while it is showing does nothing.
+- Window recordings: the webcam preview still sits in the screen's corner, but the webcam is recorded in the window's corner. Saveit doesn't know where the chosen window is on screen, so fixing this needs the window's position from Windows.
+- Not tested: two monitors with different scaling, and changing webcam settings during a recording (the recording keeps the settings it started with, as before).
+- When no clip is selected, the Video panel's Speed box shows "0.25×" (the first option), not a blank. This is from 3.7.0 and is left for 8.07.
 - A drawing tool picked for a video stays active after you switch back to the Video panel, as it did in 3.7.0 when you changed sub-tabs.

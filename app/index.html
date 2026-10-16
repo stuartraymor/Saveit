@@ -875,11 +875,13 @@ function camSetup(){return new Promise(async res=>{let o=camSettings(),cam=null,
     if(b.hasAttribute('data-go')){if(!cam){toast('The camera is not ready yet.');return}close(true);res({cam:{stream:cam,video:vEl,o:{...o}}})}};
 })}
 // Screen (optionally cropped) + webcam drawn onto one canvas that gets recorded
-async function compose(stream,rect,displayW,cam){if(!rect&&!cam)return{recStream:stream,cleanup:null};
+async function compose(stream,rect,displayW,cam,displayH){if(!rect&&!cam)return{recStream:stream,cleanup:null};
   const v=document.createElement('video');v.srcObject=stream;v.muted=true;await v.play();
-  const k=v.videoWidth/(displayW||v.videoWidth),r=rect||{x:0,y:0,w:v.videoWidth/k,h:v.videoHeight/k};
-  const c=document.createElement('canvas');c.width=Math.max(2,Math.round(r.w*k)&~1);c.height=Math.max(2,Math.round(r.h*k)&~1);const g=c.getContext('2d');
-  const draw=()=>{g.drawImage(v,r.x*k,r.y*k,c.width,c.height,0,0,c.width,c.height);if(cam)drawCam(g,cam.video,c.width,c.height,cam.o)};draw();const iv=setInterval(draw,1000/30);
+  // Video pixels per screen point, across and down (8.06: one factor for both put the crop too high or low when they differ).
+  const kx=v.videoWidth/(displayW||v.videoWidth),ky=displayH?v.videoHeight/displayH:kx,r=rect||{x:0,y:0,w:v.videoWidth/kx,h:v.videoHeight/ky};
+  const sx=Math.min(Math.max(0,r.x*kx),v.videoWidth-2),sy=Math.min(Math.max(0,r.y*ky),v.videoHeight-2),sw=Math.min(r.w*kx,v.videoWidth-sx),sh=Math.min(r.h*ky,v.videoHeight-sy);
+  const c=document.createElement('canvas');c.width=Math.max(2,Math.round(sw)&~1);c.height=Math.max(2,Math.round(sh)&~1);const g=c.getContext('2d');
+  const draw=()=>{g.drawImage(v,sx,sy,sw,sh,0,0,c.width,c.height);if(cam)drawCam(g,cam.video,c.width,c.height,cam.o)};draw();const iv=setInterval(draw,1000/30);
   const out=c.captureStream(30);stream.getAudioTracks().forEach(t=>out.addTrack(t));
   return{recStream:out,cleanup:()=>{clearInterval(iv);v.srcObject=null;if(cam){cam.stream.getTracks().forEach(t=>t.stop());cam.video.srcObject=null}}}}
 async function autoCam(){const o=camSettings();try{const {stream,fellBack}=await DEVICES.open('cam',devPick.cam,{width:{ideal:1280},height:{ideal:720}});if(fellBack)toast('The chosen webcam was not found, so the default webcam is used.',5000);const vEl=document.createElement('video');vEl.muted=true;vEl.playsInline=true;vEl.srcObject=stream;await vEl.play();return{stream,video:vEl,o}}catch(e){toast(e.message+' Recording without the webcam.',7000);return null}}
@@ -904,7 +906,7 @@ async function startRecDesktop(pre){
   if(!$('#camOn').checked)drop();else if(!cam)cam=await autoCam();
   const sys=$('#sysAudio').checked;
   let stream;try{stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:30,cursor:$('#cursorOn').checked?'always':'never'},audio:sys})}catch(e){drop();window.bench.recUI(false);toast('Could not start recording: '+(e.message||e));return}
-  const {recStream,cleanup}=await compose(stream,prep.rect,prep.display.w,cam);
+  const {recStream,cleanup}=await compose(stream,prep.rect,prep.display.w,cam,prep.display.h);
   const r=prep.rect,screenRect=r?{x:prep.display.x+r.x,y:prep.display.y+r.y,w:r.w,h:r.h}:null;
   beginRecording(stream,recStream,cleanup,screenRect||{display:prep.display},{cam:cam?{o:cam.o}:null,cursor:$('#cursorOn').checked,mic:$('#mic').checked,sys});
 }

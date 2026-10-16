@@ -316,7 +316,8 @@ ipcMain.on('rec-ui', (e, on, info, extra) => {
   if (!on) { showWindow(); return; }
   const d = activeDisplay();
   const region = info && info.w ? info : null;
-  const area = region || { x: d.bounds.x, y: d.bounds.y, w: d.bounds.width, h: d.bounds.height };
+  // Full-screen recordings say which display they record; use it rather than the display the pointer is on.
+  const area = region || (info && info.display && info.display.w ? info.display : { x: d.bounds.x, y: d.bounds.y, w: d.bounds.width, h: d.bounds.height });
   // One thin (1px) red outline: a single transparent, click-through window just outside the recorded area.
   // It is excluded from screen capture, so it never shows in the video.
   if (region) {
@@ -329,16 +330,18 @@ ipcMain.on('rec-ui', (e, on, info, extra) => {
     bw.once('ready-to-show', () => { bw.setBounds({ x: X, y: Y, width: W2, height: H2 }); bw.showInactive(); });
     recWins.push(bw);
   }
-  // Live webcam preview ("see yourself") where the webcam sits in the video
+  // Live webcam preview ("see yourself") exactly where, and as big as, the webcam sits in the video.
+  // Same maths as CAMDRAW.rect / CAMDRAW.draw in camdraw.js, in screen points instead of video pixels.
   const cam = extra && extra.cam;
   if (cam && cam.o) {
-    const o = cam.o, m = Math.round(area.w * 0.025), sw = Math.max(120, Math.round(area.w * o.size / 100)), h = o.shape === 'rect' ? Math.round(sw * 9 / 16) : sw;
+    const o = cam.o, m = Math.round(area.w * 0.025), sw = Math.max(16, Math.round(area.w * o.size / 100)), h = o.shape === 'rect' ? Math.round(sw * 9 / 16) : sw;
+    const radius = o.shape === 'circle' ? 'circle' : o.corners === 'rounded' ? (Math.min(sw, h) * .14).toFixed(1) : '0', bw = o.border ? Math.max(1, (+o.borderWidth || 3) * area.w / 1280).toFixed(1) : '0';
     const x = o.pos[1] === 'l' ? area.x + m : area.x + area.w - m - sw, y = o.pos[0] === 't' ? area.y + m : area.y + area.h - m - h;
     const cw = new BrowserWindow({ x: Math.round(x), y: Math.round(y), width: sw, height: h, frame: false, transparent: true, backgroundColor: '#00000000', alwaysOnTop: true, skipTaskbar: true, focusable: false, resizable: false, movable: false, hasShadow: false, show: false, thickFrame: false });
     cw.setIgnoreMouseEvents(true);
     cw.setContentProtection(true);
     cw.setAlwaysOnTop(true, 'screen-saver');
-    cw.loadFile(asset('campreview.html'), { query: { shape: o.shape, corners: o.corners, border: o.border ? '1' : '0', dev: o.deviceId || '' } });
+    cw.loadFile(asset('campreview.html'), { query: { radius, bw, bc: o.borderColor || '#ffffff', mirror: o.mirror !== false ? '1' : '0', dev: o.deviceId || '' } });
     cw.once('ready-to-show', () => cw.showInactive());
     recWins.push(cw);
   }
