@@ -1296,6 +1296,18 @@ const itemName=it=>String(it.kind==='guide'?it.title:it.name);
 // What is shown: the current folder (or the top level), or every match when searching
 function libScope(){const q=libQuery.trim().toLowerCase();return S.items.filter(it=>q?itemName(it).toLowerCase().includes(q)||(it.folder||'').toLowerCase().includes(q):(libFolder==='all'?!it.folder:it.folder===libFolder))}
 function libVisible(){if(libFolder==='__folders')return [];return libScope().filter(it=>libFilter==='all'||kindOf(it)===libFilter).sort((a,b)=>(b.created||0)-(a.created||0))}
+// 8.3: folders nest. A folder is stored by its full path, e.g. "Project/Subfolder"; names can't contain "/".
+const folderParent=f=>f.includes('/')?f.slice(0,f.lastIndexOf('/')):'';
+const folderLeaf=f=>f.slice(f.lastIndexOf('/')+1);
+const cleanFolderName=n=>n.replace(/\//g,'-').trim();
+const childFolders=f=>[...folders].filter(g=>folderParent(g)===f).sort((a,b)=>a.localeCompare(b));
+const newFolderPath=nm=>(libFolder!=='all'&&libFolder!=='__folders'?libFolder+'/':'')+cleanFolderName(nm);
+// Where a folder path (or an item's folder) ends up when `from` is renamed or moved to `to`
+const remapFolder=(g,from,to)=>{if(g===from)return to;if(!g.startsWith(from+'/'))return g;const rest=g.slice(from.length+1);return to?to+'/'+rest:rest};
+// Rename or move a folder and everything under it. drop=true removes the folder itself (its items go to `to`).
+function moveFolderTree(from,to,drop){const old=[...folders];folders.clear();old.forEach(g=>{if(g===from&&drop)return;const n=remapFolder(g,from,to);if(n)folders.add(n)});
+  S.items.forEach(i=>{if(i.folder){const n=remapFolder(i.folder,from,to);if(n!==i.folder){i.folder=n;persist(i)}}});saveFolders()}
+function libUp(){if(libFolder==='__folders')libFolder='all';else if(libFolder!=='all')libFolder=folderParent(libFolder)||'all';libSel.clear();renderLib()}
 const fmtDate=t=>t?new Date(t).toLocaleString([],{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):'';
 function dupItem(it,folder){const now=Date.now(),id=p=>p+now+'-'+(uid++);let c;
   if(it.kind==='image')c={id:id('c'),kind:'image',name:it.name,created:now,base:canvasFrom(it.base),shapes:clone(it.shapes),fx:clone(it.fx),undo:[],redo:[]};
@@ -1310,7 +1322,7 @@ function libPaste(){const src=libClip.map(id=>S.items.find(i=>i.id===id)).filter
   renderTray();renderLib();toast(`Pasted ${src.length} item${src.length>1?'s':''} ${dest?'into '+dest:'at the top level'}`)}
 function libMoveIds(ids,f){const l=S.items.filter(i=>ids.includes(i.id));if(!l.length)return;l.forEach(i=>{i.folder=f;persist(i)});libSel.clear();renderTray();renderLib();toast(f?`Moved ${l.length} item${l.length>1?'s':''} to ${f}`:`Moved ${l.length} item${l.length>1?'s':''} out of the folder`)}
 function openLibrary(){if($('#libModal'))return;const m=document.createElement('div');m.className='modal';m.id='libModal';
-  m.innerHTML=`<div class="box lib" role="dialog" aria-label="Library"><div class="lh"><h2>Library</h2><button class="btn" id="libFoldersBtn" title="See all your folders">Folders</button><div class="chips" id="libChips" role="group" aria-label="Filter"></div><input type="search" id="libQ" placeholder="Search names" aria-label="Search the library" style="width:170px"><button class="btn" data-x>Close</button></div>
+  m.innerHTML=`<div class="box lib" role="dialog" aria-label="Library"><div class="lh"><button class="btn" id="libUp" title="Up one folder" aria-label="Up one folder" style="padding:5px 8px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button><h2>Library</h2><button class="btn" id="libFoldersBtn" title="See all your folders">Folders</button><div class="chips" id="libChips" role="group" aria-label="Filter"></div><input type="search" id="libQ" placeholder="Search names" aria-label="Search the library" style="width:170px"><button class="btn" data-x>Close</button></div>
   <div class="lfold" id="libCrumb" aria-label="Location"></div>
   <div class="ltb" id="libTb"><label class="chk" title="Select every item shown (Ctrl+A)"><input type="checkbox" id="libAll"> <span id="libCount">Select all</span></label>
     <button class="btn" id="libOpen">Open</button><button class="btn" id="libRen" title="Rename the selected item">Rename</button>
@@ -1334,6 +1346,7 @@ function openLibrary(){if($('#libModal'))return;const m=document.createElement('
   m.querySelector('#libAll').onchange=e=>{const v=libVisible();if(e.target.checked)v.forEach(i=>libSel.add(i.id));else v.forEach(i=>libSel.delete(i.id));renderLib()};
   m.querySelector('#libOpen').onclick=()=>{const l=libChosen();if(!l.length)return;close();openItem(l[0])};
   m.querySelector('#libRen').onclick=()=>{const l=libChosen();if(l.length===1){libRename=l[0].id;renderLib()}};
+  m.querySelector('#libUp').onclick=libUp;
   m.querySelector('#libFoldersBtn').onclick=()=>{libFolder='__folders';libQuery='';m.querySelector('#libQ').value='';libSel.clear();renderLib()};
   m.querySelector('#libCopy').onclick=libCopy;m.querySelector('#libPaste').onclick=libPaste;
   m.querySelector('#libToFolder').onclick=libMoveToFolder;
@@ -1358,6 +1371,7 @@ function renderLib(){const m=$('#libModal');if(!m)return;
   [...libSel].forEach(id=>{if(!S.items.some(i=>i.id===id))libSel.delete(id)});
   if(libFolder!=='all'&&libFolder!=='__folders'&&!folders.has(libFolder))libFolder='all';
   m.querySelector('#libFoldersBtn').setAttribute('aria-pressed',libFolder!=='all');
+  m.querySelector('#libUp').disabled=libFolder==='all';
   const searching=!!libQuery.trim(),scope=libScope(),cnt={all:scope.length,image:0,video:0,guide:0};scope.forEach(i=>cnt[kindOf(i)]++);
   const F=[['all','All'],['image','Images'],['video','Videos'],['guide','Guides']];
   const ch=m.querySelector('#libChips');ch.innerHTML=F.map(([k,l])=>`<button class="btn" data-f="${k}" aria-pressed="${libFilter===k}">${l} · ${cnt[k]}</button>`).join('');
@@ -1367,12 +1381,12 @@ function renderLib(){const m=$('#libModal');if(!m)return;
   cr.innerHTML=(searching?`<span class="crumb">Search results from every folder</span>`:
     libFolder==='all'?`<span class="crumb"><b>Library</b> · captures not in a folder, and your folders</span><button class="btn" data-newfo title="Make a new folder">+ New folder</button>`
     :libFolder==='__folders'?`<button class="btn" data-fo="all" data-drop="">‹ Library</button><span class="crumb">/ <b>Folders</b></span><button class="btn" data-newfo title="Make a new folder">+ New folder</button>`
-    :`<button class="btn" data-fo="all" data-drop="" title="Back to the library (drop items here to take them out of the folder)">‹ Library</button><button class="btn" data-fo="__folders">Folders</button><span class="crumb">/ ${FI} <b>${escH(libFolder)}</b></span><button class="btn" data-renfo>Rename folder</button><button class="btn" data-delfo title="Items inside are kept, just not in a folder">Delete folder</button>`)+`<span style="flex:1"></span><span class="hint">${libClip.length?libClip.length+' copied':''}</span>`;
-  const delFolder=f=>{folders.delete(f);S.items.forEach(i=>{if(i.folder===f){i.folder='';persist(i)}});saveFolders();if(libFolder===f)libFolder='all';renderLib();toast('Folder deleted. Its items are back in the main library.')};
-  const renFolder=async old=>{const nm=await askText('Rename folder',old,'Rename');if(!nm||nm===old)return;folders.delete(old);folders.add(nm);S.items.forEach(i=>{if(i.folder===old){i.folder=nm;persist(i)}});saveFolders();if(libFolder===old)libFolder=nm;renderLib()};
+    :`<button class="btn" data-fo="all" data-drop="" title="Back to the library (drop items here to take them out of the folder)">‹ Library</button><button class="btn" data-fo="__folders">Folders</button><button class="btn" data-newfo title="Make a folder inside this one">+ New folder</button><span class="crumb">/ ${FI} <b>${libFolder.split('/').map(escH).join(' / ')}</b></span><button class="btn" data-renfo>Rename folder</button><button class="btn" data-delfo title="Items inside are kept, just not in a folder">Delete folder</button>`)+`<span style="flex:1"></span><span class="hint">${libClip.length?libClip.length+' copied':''}</span>`;
+  const delFolder=f=>{const parent=folderParent(f);moveFolderTree(f,parent,true);if(libFolder===f||libFolder.startsWith(f+'/'))libFolder=parent||'all';renderLib();toast(parent?`Folder deleted. Its items are now in ${parent}.`:'Folder deleted. Its items are back in the main library.')};
+  const renFolder=async old=>{const leaf=folderLeaf(old),nm=await askText('Rename folder',leaf,'Rename');const v=nm&&cleanFolderName(nm);if(!v||v===leaf)return;const to=(folderParent(old)?folderParent(old)+'/':'')+v;if(folders.has(to)){toast('A folder with that name already exists here.');return}moveFolderTree(old,to,false);libFolder=remapFolder(libFolder,old,to);renderLib()};
   cr.onclick=async e=>{const b=e.target.closest('button');if(!b)return;
     if(b.dataset.fo!=null){libFolder=b.dataset.fo;libSel.clear();renderLib();return}
-    if('newfo' in b.dataset){const nm=await askText('New folder','','Create');if(!nm)return;folders.add(nm);saveFolders();libFolder=nm;libSel.clear();renderLib();return}
+    if('newfo' in b.dataset){const nm=await askText('New folder','','Create');if(!nm)return;const p=newFolderPath(nm);if(folders.has(p)){toast('That folder already exists here.');return}folders.add(p);saveFolders();libFolder=p;libSel.clear();renderLib();return}
     if('renfo' in b.dataset){renFolder(libFolder);return}
     if('delfo' in b.dataset)delFolder(libFolder)};
   const bk=cr.querySelector('[data-drop]');if(bk){bk.ondragover=e=>{if(libDrag){e.preventDefault();bk.classList.add('over')}};bk.ondragleave=()=>bk.classList.remove('over');bk.ondrop=e=>{e.preventDefault();if(libDrag)libMoveIds(libDrag,'')}}
@@ -1385,21 +1399,21 @@ function renderLib(){const m=$('#libModal');if(!m)return;
   const G=m.querySelector('#libGrid');G.innerHTML='';G.onclick=e=>{if(e.target===G&&libSel.size){libSel.clear();renderLib()}};
   const label=(nameHtml,l2,l3)=>`<div class="lab">${nameHtml}<span>${l2}</span>${l3?`<span>${l3}</span>`:''}</div>`;
   // folders: shown first in the library, and alone in the Folders view
-  const fl=(!searching&&(libFolder==='all'||libFolder==='__folders'))?[...folders].sort((a,b)=>a.localeCompare(b)):[];
+  const fl=searching?[]:libFolder==='__folders'?[...folders].sort((a,b)=>a.localeCompare(b)):childFolders(libFolder==='all'?'':libFolder);
   for(const f of fl){const items=S.items.filter(i=>i.folder===f),cell=document.createElement('div'),c=document.createElement('div');cell.className='cell';c.className='card fold';c.tabIndex=0;c.setAttribute('role','button');
     const th=items.slice(0,4).map(i=>thumbSrc(i,120));
     c.innerHTML=`<div class="im mos">${th.length?th.map(t=>`<i style="background-image:url(${t})"></i>`).join(''):`<span class="emp">Empty</span>`}</div><span class="tag">FOLDER</span><button class="x" aria-label="Delete folder ${escH(f)}" title="Delete folder (items are kept)">✕</button>`;
     const renaming=libRenFolder===f;
-    cell.innerHTML=label(renaming?`<input type="text" class="rn" value="${escH(f)}" aria-label="Folder name">`:`<b class="nm" title="Double-click to rename">${escH(f)}</b>`,`${items.length} item${items.length===1?'':'s'}`,'');
+    cell.innerHTML=label(renaming?`<input type="text" class="rn" value="${escH(folderLeaf(f))}" aria-label="Folder name">`:`<b class="nm" title="${escH(f)} (double-click to rename)">${escH(libFolder==='__folders'?f:folderLeaf(f))}</b>`,`${items.length} item${items.length===1?'':'s'}`,'');
     cell.prepend(c);
-    const rn=cell.querySelector('.rn');if(rn){const fin=ok=>{if(libRenFolder!==f)return;libRenFolder=null;const v=rn.value.trim();if(ok&&v&&v!==f){folders.delete(f);folders.add(v);S.items.forEach(i=>{if(i.folder===f){i.folder=v;persist(i)}});saveFolders()}renderLib()};rn.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter')fin(true);if(e.key==='Escape')fin(false)};rn.onblur=()=>fin(true);setTimeout(()=>{rn.focus();rn.select()},0)}
+    const rn=cell.querySelector('.rn');if(rn){const fin=ok=>{if(libRenFolder!==f)return;libRenFolder=null;const v=cleanFolderName(rn.value);if(ok&&v&&v!==folderLeaf(f)){const to=(folderParent(f)?folderParent(f)+'/':'')+v;if(folders.has(to))toast('A folder with that name already exists here.');else{moveFolderTree(f,to,false);if(libFolder===f||libFolder.startsWith(f+'/'))libFolder=remapFolder(libFolder,f,to)}}renderLib()};rn.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter')fin(true);if(e.key==='Escape')fin(false)};rn.onblur=()=>fin(true);setTimeout(()=>{rn.focus();rn.select()},0)}
     const nb=cell.querySelector('.nm');if(nb)nb.ondblclick=e=>{libRenFolder=f;renderLib()};
     const go=()=>{libFolder=f;libSel.clear();renderLib()};
     c.onclick=e=>{if(e.target.classList.contains('x')){e.stopPropagation();delFolder(f);return}go()};
     c.onkeydown=e=>{if(e.key==='Enter')go()};
     c.ondragover=e=>{if(libDrag){e.preventDefault();c.classList.add('over')}};c.ondragleave=()=>c.classList.remove('over');c.ondrop=e=>{e.preventDefault();if(libDrag)libMoveIds(libDrag,f)};
     G.appendChild(cell)}
-  if(libFolder==='__folders'){const nc=document.createElement('div');nc.className='cell';nc.innerHTML=`<div class="card newfo" tabindex="0" role="button"><div class="im" style="display:grid;place-items:center;font-size:30px;color:var(--muted)">+</div></div><div class="lab"><b>New folder</b><span>Click to create</span></div>`;nc.firstChild.onclick=async()=>{const nm=await askText('New folder','','Create');if(!nm)return;folders.add(nm);saveFolders();libFolder=nm;renderLib()};G.appendChild(nc);return}
+  if(libFolder==='__folders'){const nc=document.createElement('div');nc.className='cell';nc.innerHTML=`<div class="card newfo" tabindex="0" role="button"><div class="im" style="display:grid;place-items:center;font-size:30px;color:var(--muted)">+</div></div><div class="lab"><b>New folder</b><span>Click to create</span></div>`;nc.firstChild.onclick=async()=>{const nm=await askText('New folder','','Create');if(!nm)return;const p=cleanFolderName(nm);if(folders.has(p)){toast('That folder already exists.');return}folders.add(p);saveFolders();libFolder=p;renderLib()};G.appendChild(nc);return}
   if(!list.length&&!fl.length){G.innerHTML=`<div class="empty">${S.items.length?(libFolder!=='all'&&!searching?'This folder is empty. Select items in the library and use Move to folder, or Paste copies here.':'Nothing matches this filter.'):'Nothing captured yet.'}</div>`;return}
   libraryPage=Math.min(libraryPage,Math.max(0,Math.ceil(list.length/LIB_PAGE)-1));for(const it of list.slice(libraryPage*LIB_PAGE,(libraryPage+1)*LIB_PAGE)){const cell=document.createElement('div'),c=document.createElement('div');cell.className='cell';c.className='card';c.dataset.itemId=it.id;c.tabIndex=0;c.setAttribute('role','button');c.setAttribute('aria-pressed',libSel.has(it.id));c.draggable=true;
     const src=thumbSrc(it,320),nm=escH(itemName(it)),kind=it.kind==='video'?'VIDEO':it.kind==='guide'?'GUIDE':'IMAGE';
