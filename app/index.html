@@ -2111,7 +2111,7 @@ window.bench?.appVersion?.().then(v=>{if(!v)return;const b=document.querySelecto
 // While the tab is open the canvas gets room around the picture, so the handles can be dragged outward.
 let rzDrag=null,lastRzM80=0;
 function rzOn80(){return S.tool==='image'&&!S.fxOpen&&S.cur?.kind==='image'&&!S.cur.guide}
-function rzMargin80(){if(!rzOn80())return 0;const it=S.cur;return Math.round(Math.max(it.base.width,it.base.height)*.35)+8}
+function rzMargin80(){if(!rzOn80())return 0;const it=S.cur;return Math.round(Math.max(it.base.width,it.base.height)*.25)+8}
 function rzState80(){const it=S.cur;if(!S.rz||S.rz.it!==it||S.rz.W!==it.base.width||S.rz.H!==it.base.height)S.rz={it,W:it.base.width,H:it.base.height,L:0,T:0,R:it.base.width,B:it.base.height};return S.rz}
 function rzHandles80(rz){const mx=(rz.L+rz.R)/2,my=(rz.T+rz.B)/2;return[['nw',rz.L,rz.T],['n',mx,rz.T],['ne',rz.R,rz.T],['e',rz.R,my],['se',rz.R,rz.B],['s',mx,rz.B],['sw',rz.L,rz.B],['w',rz.L,my]]}
 const RZ_CUR80={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize'};
@@ -2120,7 +2120,8 @@ async function commitResize80(w,h){const it=S.cur;if(!Number.isInteger(w)||!Numb
   try{await readyShapes(it.shapes);const src=flatCanvas(it),c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(src,0,0,w,h);snap();it.shapes=[];it.base=c;S.rz=null;finishEdit();toast(`Resized image to ${w} × ${h}. Ctrl+Z to undo.`)}
   catch(e){console.error(e);actionError(e)}}
 cv.addEventListener('pointerdown',e=>{if(!rzOn80()||e.button!==0)return;const rz=rzState80(),p=pt(e),h=rzHit80(p,rz);if(!h)return;e.preventDefault();e.stopImmediatePropagation();
-  rzDrag={h,x:p.x,y:p.y,b:{L:rz.L,T:rz.T,R:rz.R,B:rz.B}};cv.setPointerCapture(e.pointerId)},true);
+  if(S.zoom==='fit'){S.zoom=scale();applyZoom()}
+  rzDrag={h,x:p.x,y:p.y,b:{L:rz.L,T:rz.T,R:rz.R,B:rz.B},src:flatCanvas(S.cur)};cv.setPointerCapture(e.pointerId)},true);
 cv.addEventListener('pointermove',e=>{if(!rzOn80())return;const rz=rzState80();
   if(!rzDrag){const h=rzHit80(pt(e),rz);cv.style.cursor=h?RZ_CUR80[h]:'default';return}
   e.stopImmediatePropagation();const p=pt(e),b=rzDrag.b,h=rzDrag.h,dx=p.x-rzDrag.x,dy=p.y-rzDrag.y;
@@ -2143,8 +2144,10 @@ const endResize80=e=>{if(!rzDrag)return;e.stopImmediatePropagation();const rz=rz
   commitResize80(w,h)};
 cv.addEventListener('pointerup',endResize80,true);cv.addEventListener('pointercancel',endResize80,true);
 // the dashed box and handles, drawn over the picture (sizes stay the same on screen at any zoom)
-const drawUIbefore86=drawUI;drawUI=function(c,it){drawUIbefore86(c,it);if(!rzOn80()||it!==S.cur)return;
-  const rz=rzState80(),k=1/scale();c.save();c.strokeStyle='#2fb8a6';c.lineWidth=1.5*k;c.setLineDash([6*k,4*k]);c.strokeRect(rz.L,rz.T,rz.R-rz.L,rz.B-rz.T);c.setLineDash([]);
+const drawUIbefore86=drawUI;drawUI=function(c,it){if(!rzOn80()||it!==S.cur){drawUIbefore86(c,it);return}
+  const rz=rzState80(),k=1/scale();
+  if(rzDrag&&rzDrag.src){c.clearRect(0,0,it.base.width,it.base.height);c.imageSmoothingQuality='high';c.drawImage(rzDrag.src,rz.L,rz.T,rz.R-rz.L,rz.B-rz.T)}else drawUIbefore86(c,it);
+  c.save();c.strokeStyle='#2fb8a6';c.lineWidth=1.5*k;c.setLineDash([6*k,4*k]);c.strokeRect(rz.L,rz.T,rz.R-rz.L,rz.B-rz.T);c.setLineDash([]);
   c.lineWidth=1.2*k;const hs=5*k;for(const [,x,y] of rzHandles80(rz)){c.fillStyle='#ffffff';c.fillRect(x-hs,y-hs,hs*2,hs*2);c.strokeRect(x-hs,y-hs,hs*2,hs*2)}c.restore()};
 // the canvas needs room when the Image tab opens or closes; renderProps runs after every tool change
 const setTool86=setTool;setTool=function(t){setTool86(t);if(t!=='image')S.rz=null};
