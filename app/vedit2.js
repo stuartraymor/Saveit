@@ -118,7 +118,7 @@ function makeEngine(P){
   async function prepare(t){await Promise.all(active(t).map(c=>seekEl(ensureEl(c,false).el,wantTime(c,t))))}
   // --- drawing (all in project space W x H, scaled onto each target) ---
   function offs(cw,ch){for(const k of ['offA','offB']){let c=S[k];if(!c){c=S[k]=document.createElement('canvas')}if(c.width!==cw||c.height!==ch){c.width=cw;c.height=ch}}return[S.offA,S.offB]}
-  function drawClip(g,c){const o=S.els[c.id];if(!o)return;const el=o.el;if(el.readyState<2||!el.videoWidth)return;const W=e.W,H=e.H,cr=c.crop||{},l=Math.round(el.videoWidth*(cr.l||0)/100),tp=Math.round(el.videoHeight*(cr.t||0)/100),r=Math.round(el.videoWidth*(cr.r||0)/100),b=Math.round(el.videoHeight*(cr.b||0)/100),sw=Math.max(2,el.videoWidth-l-r),sh=Math.max(2,el.videoHeight-tp-b),k=Math.min(W/sw,H/sh),dw=sw*k,dh=sh*k;
+  function drawClip(g,c){const o=S.els[c.id];if(!o)return;const el=o.el;if(el.readyState<2||!el.videoWidth)return;const W=e.W,H=e.H,cr=(S.cropEdit===c&&S.mode!=='export'?null:c.crop)||{},l=Math.round(el.videoWidth*(cr.l||0)/100),tp=Math.round(el.videoHeight*(cr.t||0)/100),r=Math.round(el.videoWidth*(cr.r||0)/100),b=Math.round(el.videoHeight*(cr.b||0)/100),sw=Math.max(2,el.videoWidth-l-r),sh=Math.max(2,el.videoHeight-tp-b),k=Math.min(W/sw,H/sh),dw=sw*k,dh=sh*k;
     g.drawImage(el,l,tp,sw,sh,(W-dw)/2,(H-dh)/2,dw,dh)}
   function drawFrame(g,t,cw,ch){const W=e.W,H=e.H;g.save();g.setTransform(1,0,0,1,0,0);g.fillStyle='#000';g.fillRect(0,0,cw,ch);g.scale(cw/W,ch/H);
     const act=active(t);
@@ -213,6 +213,8 @@ function mount(host,it,api){css();HK=api;
      <div class="vrow" data-r="cprops"><label>Start at <input type="number" step="0.1" min="0" data-c="start"> s</label><label>Source in <input type="number" step="0.1" min="0" data-c="a"></label><label>out <input type="number" step="0.1" min="0" data-c="b"></label>
        <label>Speed <select data-c="speed">${[.25,.5,.75,1,1.25,1.5,2,3,4].map(s=>`<option value="${s}">${s}×</option>`).join('')}</select></label>
        <span class="vh">Crop %</span><label>L <input type="number" min="0" max="90" data-cr="l"></label><label>T <input type="number" min="0" max="90" data-cr="t"></label><label>R <input type="number" min="0" max="90" data-cr="r"></label><label>B <input type="number" min="0" max="90" data-cr="b"></label></div>
+     <div class="vrow" data-r="croprow"><span class="vh">Crop</span><button class="btn pri" data-a="cropstart" title="Show the whole frame and drag a box to choose the part to keep">Start crop</button><button class="btn pri" data-a="cropstop" title="Keep this crop (Enter)" hidden>Stop crop</button><button class="btn" data-a="cropcancel" title="Go back to the crop you had (Esc)" hidden>Cancel</button><button class="btn" data-a="cropreset" title="Show the whole frame of this clip">Reset crop</button></div>
+     <p class="vnote" data-r="cropnote" hidden>Drag the box on the picture, or its handles, to choose what to keep. Stop crop keeps it.</p>
      <div class="vrow"><span class="vh">Whole video</span><label>Size <select data-r="canvas"><option value="auto">Same as first clip</option><option value="1920x1080">1920 × 1080</option><option value="1280x720">1280 × 720</option><option value="854x480">854 × 480</option><option value="1080x1080">Square 1080</option><option value="1080x1920">Vertical 1080 × 1920</option></select></label>
        <label><input type="checkbox" data-r="fi"> Fade in from black</label><label><input type="checkbox" data-r="fo"> Fade out to black</label></div></div>
    <div class="vsec" data-sec="audio" hidden>
@@ -250,15 +252,18 @@ function mount(host,it,api){css();HK=api;
   </div>`;
   const q=s=>host.querySelector(s),qa=s=>[...host.querySelectorAll(s)],R=n=>q(`[data-r="${n}"]`),prev=q('.vprev'),ov=q('.vov'),tl=q('.vtl');
   const pg=prev.getContext('2d');
-  let eng=null,e=null,rt={src:{}},sel=null,inT=0,outT=0,hist=[],zoom=1,L=[],tdrag=null,tsnap=false,otool=null,odrag=null,playRange=null,dead=false,raf=0,exp=null,tab='clip',rec=null,ready=false;
+  let eng=null,e=null,rt={src:{}},sel=null,inT=0,outT=0,hist=[],zoom=1,L=[],tdrag=null,tsnap=false,otool=null,crop=null,pane='video',odrag=null,playRange=null,dead=false,raf=0,exp=null,tab='clip',rec=null,ready=false;
   const toast=api.toast;
   const D=()=>Math.max(total(e||{clips:[],aud:[]}),0.1);
   const selOv=()=>sel&&sel.type==='ov'?sel.ref:null,selCap=()=>sel&&sel.type==='cap'?sel.ref:null,selClip=()=>sel&&(sel.type==='clip'||sel.type==='aud')?sel.ref:null;
   const snap=()=>{hist.push(JSON.stringify(e));if(hist.length>60)hist.shift()};
   const changed=()=>{try{api.changed&&api.changed()}catch(_){}};
   const redraw=()=>{if(eng)eng.seek(eng.t)};
+  // 8.04: keep the whole preview inside its area (the CSS cap alone let the timeline cover the bottom on smaller windows).
+  const stageEl=q('.vstage'),fitPrev=()=>{const h=stageEl.clientHeight-16;if(h>0)prev.style.maxHeight=Math.max(120,h)+'px'};
+  const fitObs=new ResizeObserver(fitPrev);fitObs.observe(stageEl);
   function sizePrev(){const cw=Math.min(960,e.W),ch=Math.round(cw*e.H/e.W);prev.width=cw;prev.height=ch;ov.width=e.W;ov.height=e.H;prev.style.aspectRatio=cw+'/'+ch;eng.setTargets([{g:pg,cw,ch}]);redraw()}
-  function select(type,ref){sel=type?{type,ref}:null;refreshProps();ovui()}
+  function select(type,ref){if(crop&&ref!==crop.c)cropStop(true);sel=type?{type,ref}:null;refreshProps();ovui()}
 
   // ----- timeline -----
   const PAD=11,LANE=18,CL=28;
@@ -342,6 +347,7 @@ function mount(host,it,api){css();HK=api;
     for(const key of ['caps','ovs']){const out=[];for(const c of e[key]){if(c.t1<=a)out.push(c);else if(c.t0>=b){c.t0-=gap;c.t1-=gap;out.push(c)}
       else if(c.t0<a&&c.t1>b){c.t1-=gap;out.push(c)}else if(c.t0<a){c.t1=a;if(c.t1-c.t0>.1)out.push(c)}else if(c.t1>b){c.t0=a;c.t1-=gap;out.push(c)}}e[key]=out}}
   const act={
+    cropstart(){cropStart()},cropstop(){cropStop(true)},cropcancel(){cropStop(false)},cropreset(){cropReset()},
     tog(){host.classList.toggle('vmin');q('[data-a="tog"]').textContent=host.classList.contains('vmin')?'▴ Show timeline':'▾ Hide timeline';requestAnimationFrame(()=>{sizePrev&&sizePrev();drawTl()})},mplay(){if(eng.playing)eng.pause();else{playRange=null;eng.unlock();eng.play()}},mrestart(){eng.pause();playRange=null;eng.seek(0);eng.unlock();eng.play()},
     play(){togglePlay()},playall(){playAll()},zin(){zoom=Math.min(16,zoom*1.6);keepHead()},zout(){zoom=Math.max(1,zoom/1.6);if(zoom<1.05)zoom=1;keepHead()},
     setin(){select(null);inT=Math.min(eng.t,outT-.1)},setout(){select(null);outT=Math.max(eng.t,inT+.1)},
@@ -371,7 +377,7 @@ function mount(host,it,api){css();HK=api;
   function setOverlap(c,len){const p=prevOf(c);if(!p){toast('This is the first clip, so there is nothing to change from.');return false}
     len=clamp(len,.1,Math.max(.1,Math.min(clipLen(p),clipLen(c))));const delta=(clipEnd(p)-len)-c.start;for(const x of e.clips)if(x===c||x.start>=c.start)x.start=Math.max(0,x.start+delta);return true}
   const keepHead=()=>requestAnimationFrame(()=>{const w=tl.parentElement;w.scrollLeft=Math.max(0,xOf(eng.t)-w.clientWidth/2)});
-  host.addEventListener('click',ev=>{const b=ev.target.closest('[data-a]');if(!b||!ready)return;const f=act[b.dataset.a];if(f)f()});
+  host.addEventListener('click',ev=>{const b=ev.target.closest('[data-a]');if(!b||!ready)return;const a=b.dataset.a;if(crop&&!/^(crop|tog|zin|zout)/.test(a))cropStop(true);const f=act[a];if(f)f()});
 
   // ----- playback -----
   function curRange(){if(sel){if(sel.type==='clip'||sel.type==='aud')return[sel.ref.start,clipEnd(sel.ref),sel.type==='aud'?'audio':'clip'];if(sel.type==='cap')return[sel.ref.t0,sel.ref.t1,'caption'];return[sel.ref.t0,sel.ref.t1,'item']}if(inT>.05||outT<D()-.05)return[inT,outT,'In–Out'];return null}
@@ -442,17 +448,49 @@ function mount(host,it,api){css();HK=api;
     const chg=()=>{snap();c.text=iT.value;c.t0=Math.max(0,+iF.value||0);c.t1=Math.max(c.t0+.1,+iTo.value||0);c.pos=sP.value;c.fs=+iS.value||6;c.c=iC.value;c.bg=iB.checked;redraw();changed()};
     ins.forEach(x=>x.addEventListener('change',chg));iT.addEventListener('input',()=>{c.text=iT.value;redraw()});
     r.querySelector('button').onclick=()=>{snap();e.caps.splice(i,1);if(selCap()===c)sel=null;caplist();redraw();changed()};r.addEventListener('focusin',()=>{if(selCap()!==c){sel={type:'cap',ref:c};qa('.vcaps .vrow').forEach((x,j)=>x.classList.toggle('vsel',e.caps[j]===c))}});r.classList.toggle('vsel',c===selCap());box.appendChild(r)})}
+  // ----- crop (8.04) -----
+  // Start crop shows the clip's whole frame with a box over it; dragging the box or its handles sets the
+  // clip's L/T/R/B crop %, which the number boxes follow. Stop crop keeps it, Cancel goes back.
+  const r1=v=>Math.round(v*10)/10;
+  function cropGeom(c){const o=eng.S.els[c.id],el=o&&o.el;if(!el||!el.videoWidth)return null;const vw=el.videoWidth,vh=el.videoHeight,k=Math.min(e.W/vw,e.H/vh),fw=vw*k,fh=vh*k,fx=(e.W-fw)/2,fy=(e.H-fh)/2,cr=c.crop;
+    return{fx,fy,fw,fh,x0:fx+fw*cr.l/100,x1:fx+fw*(1-cr.r/100),y0:fy+fh*cr.t/100,y1:fy+fh*(1-cr.b/100)}}
+  const cropHandles=G=>{const mx=(G.x0+G.x1)/2,my=(G.y0+G.y1)/2;return[['nw',G.x0,G.y0],['n',mx,G.y0],['ne',G.x1,G.y0],['e',G.x1,my],['se',G.x1,G.y1],['s',mx,G.y1],['sw',G.x0,G.y1],['w',G.x0,my]]};
+  const CROP_CUR={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',move:'move'};
+  function cropHit(G,x,y,k){for(const [h,hx,hy] of cropHandles(G))if(Math.abs(x-hx)<=10*k&&Math.abs(y-hy)<=10*k)return h;if(x>G.x0&&x<G.x1&&y>G.y0&&y<G.y1)return'move';return null}
+  function cropUi(){const on=!!crop;q('[data-a="cropstart"]').hidden=on;q('[data-a="cropstop"]').hidden=!on;q('[data-a="cropcancel"]').hidden=!on;R('cropnote').hidden=!on;ovui();redraw()}
+  function cropInputs(){const c=crop&&crop.c;if(c)qa('[data-cr]').forEach(i=>{i.value=c.crop[i.dataset.cr]||0})}
+  function cropStart(){if(crop)return;let c=sel&&sel.type==='clip'?sel.ref:null;
+    if(!c){const at=e.clips.filter(x=>eng.t>=x.start&&eng.t<clipEnd(x));c=at[at.length-1]||e.clips[0]}
+    if(!c){toast('Add a video clip first.');return}
+    eng.pause();otool=null;select('clip',c);if(eng.t<c.start||eng.t>=clipEnd(c))eng.seek(c.start+.01);
+    snap();c.crop=Object.assign({l:0,t:0,r:0,b:0},c.crop);crop={c,c0:clone(c.crop),drag:null};eng.S.cropEdit=c;
+    if(pane!=='video')showPane('video');setTab('clip');HK.paneChanged&&HK.paneChanged();cropUi();R('croprow').scrollIntoView({block:'nearest'})}
+  function cropStop(keep){if(!crop)return;const {c,c0}=crop,same=JSON.stringify(c.crop)===JSON.stringify(c0);if(!keep)Object.assign(c.crop,c0);if(!keep||same)hist.pop();
+    crop=null;eng.S.cropEdit=null;cropUi();refreshProps();if(keep&&!same){changed();toast('Crop kept.')}}
+  function cropReset(){const c=crop?crop.c:(sel&&sel.type==='clip'?sel.ref:null);if(!c){toast('Click a video clip on the timeline first.');return}
+    if(!crop)snap();c.crop={l:0,t:0,r:0,b:0};if(crop)cropInputs();else{refreshProps();changed()}redraw()}
+  function cropDown(ev){const G=cropGeom(crop.c);if(!G)return;ev.preventDefault();const p=ovPt(ev),h=cropHit(G,p.x,p.y,p.k);if(!h)return;ov.setPointerCapture(ev.pointerId);crop.drag={h,x:p.x,y:p.y,cr:clone(crop.c.crop),G}}
+  function cropMove(ev){const p=ovPt(ev);if(!crop.drag){const G=cropGeom(crop.c),h=G&&cropHit(G,p.x,p.y,p.k);ov.style.cursor=h?CROP_CUR[h]:'default';return}
+    const {h,cr,G}=crop.drag,dx=(p.x-crop.drag.x)/G.fw*100,dy=(p.y-crop.drag.y)/G.fh*100,c=crop.c.crop;
+    if(h==='move'){const mx=clamp(dx,-cr.l,cr.r),my=clamp(dy,-cr.t,cr.b);c.l=r1(cr.l+mx);c.r=r1(cr.r-mx);c.t=r1(cr.t+my);c.b=r1(cr.b-my)}
+    else{if(h.includes('w'))c.l=r1(clamp(cr.l+dx,0,90-cr.r));if(h.includes('e'))c.r=r1(clamp(cr.r-dx,0,90-cr.l));if(h.includes('n'))c.t=r1(clamp(cr.t+dy,0,90-cr.b));if(h.includes('s'))c.b=r1(clamp(cr.b-dy,0,90-cr.t))}
+    cropInputs()}
+  function cropDraw(g){const G=cropGeom(crop.c);if(!G)return;const k=ov.width/Math.max(1,ov.getBoundingClientRect().width);g.save();g.fillStyle='rgba(0,0,0,.55)';
+    g.fillRect(0,0,e.W,G.y0);g.fillRect(0,G.y1,e.W,e.H-G.y1);g.fillRect(0,G.y0,G.x0,G.y1-G.y0);g.fillRect(G.x1,G.y0,e.W-G.x1,G.y1-G.y0);
+    g.strokeStyle='#fff';g.lineWidth=1.5*k;g.strokeRect(G.x0,G.y0,G.x1-G.x0,G.y1-G.y0);g.globalAlpha=.35;g.lineWidth=1*k;g.beginPath();
+    for(let i=1;i<3;i++){const x=G.x0+(G.x1-G.x0)*i/3,y=G.y0+(G.y1-G.y0)*i/3;g.moveTo(x,G.y0);g.lineTo(x,G.y1);g.moveTo(G.x0,y);g.lineTo(G.x1,y)}g.stroke();g.globalAlpha=1;
+    const hs=5*k;for(const [,hx,hy] of cropHandles(G)){g.fillStyle='#fff';g.fillRect(hx-hs,hy-hs,hs*2,hs*2);g.strokeStyle='#5aa2ff';g.strokeRect(hx-hs,hy-hs,hs*2,hs*2)}g.restore()}
   // ----- on-screen items -----
   const ovPt=ev=>{const r=ov.getBoundingClientRect();return{x:(ev.clientX-r.left)/r.width*ov.width,y:(ev.clientY-r.top)/r.height*ov.height,k:ov.width/Math.max(1,r.width)}};
   const activeOvs=()=>e.ovs.filter(s=>eng.t>=s.t0&&eng.t<=s.t1);
-  function ovDraw(){const g=ov.getContext('2d');g.clearRect(0,0,ov.width,ov.height);if(!HK.drawShape)return;
+  function ovDraw(){const g=ov.getContext('2d');g.clearRect(0,0,ov.width,ov.height);if(crop){cropDraw(g);return}if(!HK.drawShape)return;
     if(odrag&&odrag.mode==='draw')HK.drawShape(g,odrag.s,{width:ov.width,height:ov.height});
     const o=selOv();if(o&&otool&&eng.t>=o.t0&&eng.t<=o.t1){const k=ov.width/Math.max(1,ov.getBoundingClientRect().width),line=o.t==='arrow'||o.t==='line',b=line||!HK.selBox?HK.bbox(o):HK.selBox(o),pd=line?4*k:0;g.save();g.strokeStyle='#5aa2ff';g.lineWidth=1.5*k;g.setLineDash([5*k,4*k]);g.strokeRect(b.x-pd,b.y-pd,b.w+pd*2,b.h+pd*2);g.setLineDash([]);const hs=4.5*k;for(const [,hx,hy] of HK.handles(o)){g.fillStyle='#fff';g.fillRect(hx-hs,hy-hs,hs*2,hs*2);g.strokeRect(hx-hs,hy-hs,hs*2,hs*2)}g.restore()}}
-  function ovui(){qa('[data-ot]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.ot===otool));ov.style.pointerEvents=otool?'auto':'none';ov.style.cursor=otool==='select'?'default':'crosshair';
+  function ovui(){qa('[data-ot]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.ot===otool));ov.style.pointerEvents=otool||crop?'auto':'none';ov.style.cursor=crop?'default':otool==='select'?'default':'crosshair';
     const o=selOv(),row=R('osel');row.hidden=!o;if(o){R('olbl').textContent=ovName(o);R('of').value=o.t0.toFixed(1);R('ot2').value=o.t1.toFixed(1)}}
   const hitOv=(x,y,k)=>{const tol=10*k;for(const s of activeOvs().reverse()){const b=HK.bbox(s);if(x>=b.x-tol&&x<=b.x+b.w+tol&&y>=b.y-tol&&y<=b.y+b.h+tol)return s}return null};
   const hitHandle=(s,x,y,k)=>{for(const [h,hx,hy] of HK.handles(s))if(Math.abs(x-hx)<9*k&&Math.abs(y-hy)<9*k)return h;return null};
-  ov.addEventListener('pointerdown',ev=>{if(!otool||!ready)return;ev.preventDefault();ov.setPointerCapture(ev.pointerId);const {x,y,k}=ovPt(ev),t=eng.t;eng.pause();
+  ov.addEventListener('pointerdown',ev=>{if(crop&&ready){cropDown(ev);return}if(!otool||!ready)return;ev.preventDefault();ov.setPointerCapture(ev.pointerId);const {x,y,k}=ovPt(ev),t=eng.t;eng.pause();
     const cur=selOv();if(cur&&t>=cur.t0&&t<=cur.t1){const h=hitHandle(cur,x,y,k);if(h){snap();odrag={mode:'handle',k:h,b0:HK.selBox?HK.selBox(cur):HK.norm(cur),s0:JSON.parse(JSON.stringify(cur))};return}}
     const hs=hitOv(x,y,k);
     if(otool==='select'||(hs&&hs===cur)){if(hs)select('ov',hs);else select(null);if(hs){snap();odrag={mode:'move',lx:x,ly:y}}return}
@@ -460,10 +498,10 @@ function mount(host,it,api){css();HK=api;
     if(otool==='step'||otool==='stamp'){if(otool==='step')s.n=e.ovs.filter(z=>z.t==='step').length+1;e.ovs.push(s);select('ov',s);return}
     if(otool==='text'){HK.askText('Text on the video','','Add').then(txt=>{if(txt){s.txt=txt;s._w=null;s.x2=s.x1+10;s.y2=s.y1+10;e.ovs.push(s);select('ov',s);changed()}else hist.pop()});return}
     select(null);odrag={mode:'draw',s}});
-  ov.addEventListener('pointermove',ev=>{if(!odrag){if(otool){const c=selOv(),p=ovPt(ev),h=c&&eng.t>=c.t0&&eng.t<=c.t1?hitHandle(c,p.x,p.y,p.k):null;ov.style.cursor=h?((HK.handleCursor||{})[h]||'grab'):(otool==='select'?'default':'crosshair')}return}const {x,y}=ovPt(ev),o=selOv();
+  ov.addEventListener('pointermove',ev=>{if(crop){cropMove(ev);return}if(!odrag){if(otool){const c=selOv(),p=ovPt(ev),h=c&&eng.t>=c.t0&&eng.t<=c.t1?hitHandle(c,p.x,p.y,p.k):null;ov.style.cursor=h?((HK.handleCursor||{})[h]||'grab'):(otool==='select'?'default':'crosshair')}return}const {x,y}=ovPt(ev),o=selOv();
     if(odrag.mode==='draw'){odrag.s.x2=x;odrag.s.y2=y}else if(odrag.mode==='move'&&o){HK.moveShape(o,x-odrag.lx,y-odrag.ly);odrag.lx=x;odrag.ly=y;eng.render()}
     else if(odrag.mode==='handle'&&o){const k=odrag.k;if(k==='p1'){o.x1=x;o.y1=y}else if(k==='p2'){o.x2=x;o.y2=y}else if(k==='c'){o.cx=x;o.cy=y}else if(k==='tail'){o.tx=x;o.ty=y}else if(HK.resizeByHandle)HK.resizeByHandle(o,odrag,x,y,ev.shiftKey);o._w=null;eng.render()}});
-  ov.addEventListener('pointerup',()=>{if(!odrag)return;const d=odrag;odrag=null;if(d.mode==='draw'){const s=d.s;if(Math.abs(s.x2-s.x1)<4&&Math.abs(s.y2-s.y1)<4){hist.pop();return}e.ovs.push(s);select('ov',s)}changed();eng.render()});
+  ov.addEventListener('pointerup',()=>{if(crop){crop.drag=null;return}if(!odrag)return;const d=odrag;odrag=null;if(d.mode==='draw'){const s=d.s;if(Math.abs(s.x2-s.x1)<4&&Math.abs(s.y2-s.y1)<4){hist.pop();return}e.ovs.push(s);select('ov',s)}changed();eng.render()});
   qa('[data-ot]').forEach(b=>b.onclick=()=>{otool=otool===b.dataset.ot?null:b.dataset.ot;if(!otool&&sel&&sel.type==='ov')select(null);ovui()});
   R('ocol').oninput=()=>{HK.setStyle&&HK.setStyle('stroke',R('ocol').value);const o=selOv();if(o){o.c=R('ocol').value;eng.render()}};
   R('owid').onchange=()=>{const w=Math.max(1,+R('owid').value||6);HK.setStyle&&HK.setStyle('width',w);const o=selOv();if(o){snap();o.w=w*Math.max(1,e.H/720);o._w=null;eng.render()}};
@@ -481,13 +519,13 @@ function mount(host,it,api){css();HK=api;
     }catch(err){toast('Export failed: '+(err.message||err),6000)}
     finally{exp=null;bar.hidden=true;stopB.hidden=true;try{eng.seek(0)}catch(_){}}}
   // ----- keys -----
-  const key=ev=>{if(dead||!ready)return;if(ev.target.matches&&ev.target.matches('input,select,textarea'))return;const k=ev.key.toLowerCase();
+  const key=ev=>{if(dead||!ready)return;if(ev.target.matches&&ev.target.matches('input,select,textarea'))return;const k=ev.key.toLowerCase();if(crop&&(k==='enter'||k==='escape')){cropStop(k==='enter');ev.preventDefault();ev.stopPropagation();return}
     if(k==='delete'||k==='backspace'){if(sel){ev.preventDefault();doDelete(ev.shiftKey)}else return}
     else if(k==='escape'){select(null);playRange=null}else if(k===' '){ev.preventDefault();togglePlay()}else if(k==='i')act.setin();else if(k==='o')act.setout();else if(k==='s'&&!ev.ctrlKey&&!ev.metaKey)act.split();
     else if(k==='arrowleft'){ev.preventDefault();eng.pause();eng.seek(eng.t-(ev.shiftKey?1:.1))}else if(k==='arrowright'){ev.preventDefault();eng.pause();eng.seek(eng.t+(ev.shiftKey?1:.1))}else return;ev.stopPropagation()};
   document.addEventListener('keydown',key,true);
   function refreshAll(){refreshProps();caplist();ovui();R('canvas').value=['1920x1080','1280x720','854x480','1080x1080','1080x1920'].includes(e.W+'x'+e.H)?e.W+'x'+e.H:'auto';R('fi').checked=!!e.fadeIn;R('fo').checked=!!e.fadeOut;R('muteall').checked=!!e.muteVideo;showFx()}
-  function ui(){if(!ready){return}const r=curRange();R('time').textContent=`${fmt(eng.t)} / ${fmt(D())}`;q('[data-a="play"]').textContent=eng.playing?'Pause':r?'Play '+r[2]:'Play';drawTl();ovDraw()}
+  function ui(){if(!ready){return}if(crop&&eng.playing)cropStop(true);const r=curRange();R('time').textContent=`${fmt(eng.t)} / ${fmt(D())}`;q('[data-a="play"]').textContent=eng.playing?'Pause':r?'Play '+r[2]:'Play';drawTl();ovDraw()}
   function tick(){if(dead)return;ui();raf=requestAnimationFrame(tick)}
   // ----- start up -----
   (async()=>{try{
@@ -505,8 +543,7 @@ function mount(host,it,api){css();HK=api;
   }catch(err){toast(err.message||String(err))}})();
   raf=requestAnimationFrame(tick);
   // 8.0: the side panel shows one view at a time (video, effects or drawing tools); the editor's toolbar buttons pick it.
-  let pane='video';
-  const showPane=k=>{pane=k;qa('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==k);if(k==='effects'&&e)refreshProps()};
-  return{info:q('.vinfo'),video:prev,pane:k=>{if(k)showPane(k);return pane},tool:t=>{if(t!==undefined){otool=t;if(!otool&&sel&&sel.type==='ov')select(null);ovui()}return otool},destroy(){dead=true;cancelAnimationFrame(raf);document.removeEventListener('keydown',key,true);if(exp)exp.cancel=true;try{rec&&rec.mr.stop()}catch(_){}if(eng)eng.destroy()},saveGif:()=>run('gif'),grab:()=>eng?eng.snapshot(e.W,e.H):null,getProject:()=>e}}
+  const showPane=k=>{if(crop&&k!=='video')cropStop(true);pane=k;qa('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==k);if(k==='effects'&&e)refreshProps()};
+  return{info:q('.vinfo'),video:prev,pane:k=>{if(k)showPane(k);return pane},tool:t=>{if(t!==undefined){if(crop)cropStop(true);otool=t;if(!otool&&sel&&sel.type==='ov')select(null);ovui()}return otool},destroy(){dead=true;fitObs.disconnect();cancelAnimationFrame(raf);document.removeEventListener('keydown',key,true);if(exp)exp.cancel=true;try{rec&&rec.mr.stop()}catch(_){}if(eng)eng.destroy()},saveGif:()=>run('gif'),grab:()=>eng?eng.snapshot(e.W,e.H):null,getProject:()=>e}}
 root.VEdit={mount,pack,Core:{clipLen,clipEnd,total,ensureProject,makeEngine}};
 })(window);

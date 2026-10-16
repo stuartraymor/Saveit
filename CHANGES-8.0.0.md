@@ -23,6 +23,16 @@ Development branch `v8.0-dev`. 3.7.0 is kept as the stable baseline: git tag `v3
   - **A drawing tool** (Move / Select, Arrow, Text, Shape, Ellipse, Line, Step, Stamp, Highlight, Blur): the Draw on video controls, with that tool picked. Image-only tools show a short message instead.
 - Code: `index.html` (the "8.0" block at the end of the main script) and `vedit2.js` (`data-pane` views, `pane()` / `tool()` on the editor).
 
+## 8.04 — Video crop controls
+- The Video panel's Clip section has a **Crop** row: Start crop, Stop crop, Cancel and Reset crop. Only the buttons that apply right now are shown.
+- **Start crop** picks the clip you selected (or the clip under the playhead) and fills in its clip settings. The preview shows the clip's whole frame with a crop box.
+  - Drag the box to move it, or drag a handle to resize it.
+  - The L / T / R / B % boxes follow as you drag, and typing in them moves the box.
+- **Stop crop** (or Enter) keeps the crop, and the preview shows the cropped picture. **Cancel** (or Esc) goes back to the crop you had.
+- One Undo removes a whole crop session.
+- Playing, picking another clip, switching to Effects or a drawing tool, or any other editor button ends crop mode first and keeps the crop.
+- Fixed: on smaller windows the timeline covered the bottom of the video preview. The preview now fits its area.
+
 ## Known issues
 - In a video, the Sound effects controls are wider than the side panel, so it scrolls sideways. 3.7.0's Audio sub-tab does the same.
 - In a video, the Video panel is the default, so clicking Video while it is showing does nothing.
