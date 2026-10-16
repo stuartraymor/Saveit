@@ -60,6 +60,7 @@ select,input[type=number],input[type=text]{font:inherit;background:var(--panel);
 /* stage */
 .stage{grid-area:stage;overflow:auto;background:var(--stage);position:relative;min-width:0;display:grid}
 .stage .inner{margin:auto;padding:28px;position:relative}
+.stage.panning81,.stage.panning81 *{cursor:grabbing!important}
 #cv{display:block;background-image:conic-gradient(var(--check) 25%,transparent 0 50%,var(--check) 0 75%,transparent 0);background-size:16px 16px;box-shadow:0 4px 24px rgb(0 0 0/.5);touch-action:none}
 .stage.empty .inner{display:none}
 .drop{position:absolute;inset:12px;border:2px dashed var(--accent);border-radius:12px;display:none;place-items:center;font-weight:700;background:rgb(29 61 57/.7);z-index:5}
@@ -1594,6 +1595,17 @@ function editorMenu(e,keyboard=false){const it=S.cur;if(it?.kind!=='image'){if(i
 ],keyboard)}else showImageMenu(e,it,false,keyboard)}
 async function copyCropRegion(asNew=false){if(!S.cropRect||S.cur?.kind!=='image')return;const it=S.cur,r=cropBounds(norm(S.cropRect));await readyShapes(it.shapes);const src=flatCanvas(it),c=document.createElement('canvas');c.width=r.w;c.height=r.h;c.getContext('2d').drawImage(src,r.x,r.y,r.w,r.h,0,0,r.w,r.h);if(asNew)addImage(c,itemName(it)+' (region)');else{await window.bench.copyImage(c.toDataURL());toast('Region copied')}}
 cv.addEventListener('contextmenu',e=>{e.preventDefault();const it=S.cur;if(it?.kind==='image'&&!S.cropRect){const p=pt(e),s=hit(p.x,p.y);if(s&&!selectedShapes().includes(s)){S.sel=s;S.grp=[];render();renderProps()}else if(!s){S.sel=null;S.grp=[];render();renderProps()}}editorMenu(e)});
+// 8.1: hold the middle mouse button to pan the picture. It scrolls the stage (the viewer's existing scroll
+// area), so zoom, the selected tool and the picture itself are untouched. Released, cancelled, or the window losing focus ends it.
+let panDrag81=null;
+const endPan81=()=>{if(!panDrag81)return;panDrag81=null;stage.classList.remove('panning81')};
+stage.addEventListener('pointerdown',e=>{if(e.button!==1)return;e.preventDefault();e.stopImmediatePropagation();panDrag81={x:e.clientX,y:e.clientY,l:stage.scrollLeft,t:stage.scrollTop};try{stage.setPointerCapture(e.pointerId)}catch(_){}stage.classList.add('panning81')},true);
+stage.addEventListener('pointermove',e=>{if(!panDrag81)return;e.stopImmediatePropagation();if(!(e.buttons&4)){endPan81();return}stage.scrollLeft=panDrag81.l-(e.clientX-panDrag81.x);stage.scrollTop=panDrag81.t-(e.clientY-panDrag81.y)},true);
+['pointerup','pointercancel','lostpointercapture'].forEach(t=>stage.addEventListener(t,e=>{if(!panDrag81)return;e.stopImmediatePropagation();endPan81()},true));
+window.addEventListener('blur',endPan81);
+// Stop the browser's middle-click autoscroll while panning
+stage.addEventListener('mousedown',e=>{if(e.button===1)e.preventDefault()},true);
+stage.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault()},true);
 stage.addEventListener('contextmenu',e=>{if(e.target===cv||textTarget(e.target)||e.target.closest('.vwrap,.guide'))return;e.preventDefault();if(S.cur)showImageMenu(e);else menuAt(e.clientX,e.clientY,'Capture actions',[['Paste as new capture',()=>pasteClipboard('new')],['Open…',()=>$('#file').click()],['Blank canvas',()=>$('#newBtn').click()]])});
 const originalRenderTray=renderTray;renderTray=function(){originalRenderTray();$('#thumbs').querySelectorAll('.thumb').forEach((b,i)=>{const it=S.items.find(it=>it.id===b.dataset.itemId)||S.items[i];b.oncontextmenu=e=>{e.preventDefault();showImageMenu(e,it,true)};b.addEventListener('keydown',e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){e.preventDefault();e.stopPropagation();const r=b.getBoundingClientRect();showImageMenu({clientX:r.left,clientY:r.top},it,true,true)}})})};
 const originalRenderLib=renderLib;renderLib=function(){originalRenderLib();const cards=$('#libGrid')?.querySelectorAll('.card:not(.fold):not(.newfo)');if(!cards||libFolder==='__folders')return;const list=libVisible();cards.forEach((b,i)=>{const it=S.items.find(it=>it.id===b.dataset.itemId)||list[i];if(!it)return;const context=(e,keyboard=false)=>{e.preventDefault();e.stopPropagation();if(!libSel.has(it.id)){libSel.clear();libSel.add(it.id);renderLib()}const n=libSel.size;if(n<=1){showImageMenu(e,it,true,keyboard);return}menuAt(e.clientX,e.clientY,`${n} captures selected`,[['Copy captures in library',libCopy,'Ctrl+C'],['Paste library copies',libPaste,'Ctrl+V',libClip.length>0],['Move to folder…',libMoveToFolder],['Save selected…',()=>libBatch(false)],['Duplicate selected',()=>{const all=libChosen();libSel.clear();all.forEach(a=>{const c=dupItem(a,a.folder);if(c.kind==='guide')c.title+=' (copy)';else c.name+=' (copy)';persist(c);libSel.add(c.id)});renderTray()}],null,['Delete selected',libDelete,'Delete'],['Undo delete',undoDelete,'',trash.length>0]],keyboard)};b.oncontextmenu=context;b.addEventListener('keydown',e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){const r=b.getBoundingClientRect();context({preventDefault:()=>e.preventDefault(),stopPropagation:()=>e.stopPropagation(),clientX:r.left,clientY:r.top},true)}})})};
