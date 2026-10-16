@@ -626,7 +626,7 @@ function drawUI(c,it){
     c.save();c.fillStyle='rgba(229,72,59,.3)';c.strokeStyle='#e5483b';c.lineWidth=1.5/z;c.setLineDash([6/z,4/z]);
     if(ax==='x'){c.fillRect(a,0,b-a,it.base.height);c.strokeRect(a,0,b-a,it.base.height)}else{c.fillRect(0,a,it.base.width,b-a);c.strokeRect(0,a,it.base.width,b-a)}
     c.setLineDash([]);c.fillStyle='#fff';c.font=`600 ${12/z}px sans-serif`;c.fillText(`Remove ${Math.round(b-a)} px ${ax==='x'?'wide':'tall'}`,(ax==='x'?a:6/z)+4/z,(ax==='x'?16/z:a-6/z));c.restore()}
-  {const G=grpList();if(G.length>1){c.save();c.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--sel');c.lineWidth=1.2/z;c.setLineDash([5/z,4/z]);G.forEach(q=>{const b=bbox(q);c.strokeRect(b.x-4/z,b.y-4/z,b.w+8/z,b.h+8/z)});c.restore()}}
+  {const G=grpList();if(G.length>1){c.save();c.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--sel');c.lineWidth=1.2/z;c.setLineDash([5/z,4/z]);if(!window.grpOutline9||!grpOutline9(c,G,z))G.forEach(q=>{const b=bbox(q);c.strokeRect(b.x-4/z,b.y-4/z,b.w+8/z,b.h+8/z)});c.restore()}}
   if(S.marq){const r=norm(S.marq);c.save();c.fillStyle='rgba(22,119,255,.12)';c.fillRect(r.x,r.y,r.w,r.h);c.strokeStyle='#1677ff';c.lineWidth=1/z;c.strokeRect(r.x,r.y,r.w,r.h);c.restore()}
   if(S.pixRect){const r=norm(S.pixRect);c.save();c.lineWidth=1.5/z;c.strokeStyle='#000';c.strokeRect(r.x,r.y,r.w,r.h);c.strokeStyle='#fff';c.setLineDash([5/z,5/z]);c.strokeRect(r.x,r.y,r.w,r.h);c.restore()}
   if(S.cropRect){const r=norm(S.cropRect);c.save();c.fillStyle='rgba(0,0,0,.5)';c.beginPath();c.rect(0,0,it.base.width,it.base.height);c.rect(r.x,r.y,r.w,r.h);c.fill('evenodd');
@@ -1028,7 +1028,7 @@ function buildRail(){const r=$('#rail');r.innerHTML='';for(const t of TOOLS){if(
 function swatches(key,allowNone){const cur=S.sel?(key==='stroke'?S.sel.c:S.sel.fill):S.p[key];
   return `<div class="sw">${allowNone?`<button class="none" data-k="${key}" data-v="none" aria-label="No fill" aria-pressed="${cur==='none'||!cur}"></button>`:''}${COLORS.map(c=>`<button style="background:${c}" data-k="${key}" data-v="${c}" aria-label="${c}" aria-pressed="${cur===c}"></button>`).join('')}<input type="color" id="pc-${key}" data-k="${key}" value="${cur&&cur!=='none'?cur:'#ffffff'}" aria-label="Custom color"></div>`}
 // 9.02: the Image tab keeps its own panel while a picture or annotation is selected in it
-function renderProps(){if(S.tool==='image'&&!S.fxOpen&&S.cur?.kind==='image'&&!S.cur.guide&&(S.sel||(S.grp||[]).length)){const a=S.sel,g=S.grp;S.sel=null;S.grp=[];try{return renderProps0()}finally{S.sel=a;S.grp=g}}return renderProps0()}
+function renderProps(){if(S.tool==='image'&&!S.fxOpen&&S.cur?.kind==='image'&&!S.cur.guide&&(S.sel||(S.grp||[]).length)){const a=S.sel,g=S.grp;S.sel=null;S.grp=[];S._grpHold=g;try{return renderProps0()}finally{S.sel=a;S.grp=g;S._grpHold=null}}return renderProps0()}
 function renderProps0(){
   const P=$('#props'),it=S.cur,s=S.sel,t=s?s.t:S.tool,p=S.p;
   document.querySelector('.app').classList.toggle('vmode',!!(it&&it.kind==='video'));
@@ -2469,6 +2469,45 @@ document.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey)||e.altKey||ed
   else if(k==='BracketLeft')f=e.shiftKey?()=>orderSelection(false):()=>orderStep9(-1);
   if(!f)return;e.preventDefault();e.stopImmediatePropagation();f()},true);
 renderProps();
+
+// ---------- 9.1: a group (or several selected items) resizes as one ----------
+// One dashed outline around everything selected, with 8 handles. Dragging a handle scales every item together;
+// line thickness stays the same. In the Image tab the picture box, Width / Height and presets work on the group.
+const multi91=()=>{let G=grpList();if(G.length<2&&S._grpHold)G=S._grpHold.filter(q=>S.cur?.shapes?.includes(q));return G.length>1?G:null};
+function box91(G){const bs=G.map(bbox),x=Math.min(...bs.map(b=>b.x)),y=Math.min(...bs.map(b=>b.y));return{x,y,w:Math.max(...bs.map(b=>b.x+b.w))-x,h:Math.max(...bs.map(b=>b.y+b.h))-y}}
+function hpts91(b){const mx=b.x+b.w/2,my=b.y+b.h/2,R=b.x+b.w,B=b.y+b.h;return[['nw',b.x,b.y],['n',mx,b.y],['ne',R,b.y],['e',R,my],['se',R,B],['s',mx,B],['sw',b.x,B],['w',b.x,my]]}
+function scale91(G,S0,b,nb){const sx=nb.w/(b.w||1),sy=nb.h/(b.h||1),k=Math.sqrt(Math.abs(sx*sy))||1,X=v=>nb.x+(v-b.x)*sx,Y=v=>nb.y+(v-b.y)*sy;
+  G.forEach((s,i)=>{const o=S0[i];
+    if(s.t==='text'){const q=bbox0(o),cx=q.x+q.w/2,cy=q.y+q.h/2;s.fs=Math.max(4,o.fs*k);s._w=null;const n=bbox0(s),dx=X(cx)-n.w/2-n.x,dy=Y(cy)-n.h/2-n.y;s.x1=o.x1;s.y1=o.y1;s.x2=o.x2;s.y2=o.y2;s.x1+=dx;s.y1+=dy;s.x2+=dx;s.y2+=dy;return}
+    if(s.t==='step'){s.fs=Math.max(4,o.fs*k);s.x1=s.x2=X(o.x1);s.y1=s.y2=Y(o.y1);return}
+    if(s.t==='stamp'){s.sz=Math.max(8,(o.sz||48)*k);s.x1=X(o.x1);s.y1=Y(o.y1);return}
+    if(o.pts)s.pts=o.pts.map(([px,py])=>[X(px),Y(py)]);
+    for(const [a,c] of [['x1','y1'],['x2','y2'],['tx','ty'],['cx','cy']])if(o[a]!=null){s[a]=X(o[a]);s[c]=Y(o[c])}
+    if(s.t==='callout'&&o.fs)s.fs=Math.max(4,o.fs*k);s._w=null})}
+function fit91(b,k,x,y,shift){let L=b.x,T=b.y,R=b.x+b.w,B=b.y+b.h;const corner=k.length===2;
+  if(k.includes('w'))L=Math.min(x,R-2);if(k.includes('e'))R=Math.max(x,L+2);if(k.includes('n'))T=Math.min(y,B-2);if(k.includes('s'))B=Math.max(y,T+2);
+  if(corner&&b.w>0&&b.h>0&&((S.p.lockRatio!==false)!==!!shift)){const f=Math.max((R-L)/b.w,(B-T)/b.h),w=b.w*f,h=b.h*f;if(k.includes('w'))L=R-w;else R=L+w;if(k.includes('n'))T=B-h;else B=T+h}
+  return{x:L,y:T,w:R-L,h:B-T}}
+let gdrag91=null;
+window.grpOutline9=function(c,G,z){if(rzOn80())return true;const b=gdrag91?gdrag91.nb:box91(G),hs=4.5/z;c.strokeRect(b.x,b.y,b.w,b.h);c.setLineDash([]);
+  for(const [,x,y] of hpts91(b)){c.fillStyle='#fff';c.beginPath();c.rect(x-hs,y-hs,hs*2,hs*2);c.fill();c.stroke()}
+  if(gdrag91){const t=`${Math.round(b.w)} × ${Math.round(b.h)}`;c.font=`${12/z}px sans-serif`;const tw=c.measureText(t).width+10/z,th=18/z;c.fillStyle='rgba(0,0,0,.75)';c.fillRect(b.x,b.y-th-4/z,tw,th);c.fillStyle='#fff';c.textBaseline='middle';c.fillText(t,b.x+5/z,b.y-th/2-4/z)}
+  return true};
+const hit91=(G,p)=>{const r=(rzOn80()?10:9)/scale();for(const [k,x,y] of hpts91(box91(G)))if(Math.abs(p.x-x)<=r&&Math.abs(p.y-y)<=r)return k;return null};
+// the Image tab's own picture box follows the group, and its handles hand over to the group resize
+const rzBox0=rzBox88;rzBox88=function(){const G=multi91();if(G){const b=gdrag91?gdrag91.nb:box91(G);return{L:b.x,T:b.y,R:b.x+b.w,B:b.y+b.h}}return rzBox0()};
+const rzHit0=rzHit80;rzHit80=function(p,rz){return multi91()?null:rzHit0(p,rz)};
+const rzLabel0=rzLabel88;rzLabel88=function(it){const G=multi91();return G?`the ${G.length} selected items together`:rzLabel0(it)};
+const setBox0=setPictureBox88;setPictureBox88=async function(L,T,R,B){const G=multi91();if(!G)return setBox0(L,T,R,B);const w=Math.round(R-L),h=Math.round(B-T);
+  if(!(w>=1&&h>=1&&w<=16384&&h<=16384)){toast('That size is not valid.');renderProps();return}const b=box91(G);if(Math.round(b.x)===Math.round(L)&&Math.round(b.y)===Math.round(T)&&Math.round(b.w)===w&&Math.round(b.h)===h){renderProps();return}
+  snap();scale91(G,G.map(s=>clone(s)),b,{x:L,y:T,w,h});S.rz=null;render();renderProps();changed();toast(`Resized ${G.length} items to ${w} × ${h}. Ctrl+Z to undo.`)};
+cv.addEventListener('pointerdown',e=>{const it=S.cur,G=multi91();if(!G||e.button!==0||it?.kind!=='image'||!/^(select|image)$/.test(S.tool))return;const p=pt(e),k=hit91(G,p);if(!k)return;
+  e.preventDefault();e.stopImmediatePropagation();if(S.zoom==='fit'){S.zoom=scale();applyZoom()}snap();const b=box91(G);gdrag91={k,b,nb:b,G,S0:G.map(s=>{const c=clone(s);if(s.src)c.src=s.src;return c})};cv.setPointerCapture(e.pointerId)},true);
+cv.addEventListener('pointermove',e=>{const G=multi91();if(gdrag91){e.stopImmediatePropagation();const p=pt(e),d=gdrag91;d.nb=fit91(d.b,d.k,p.x,p.y,e.shiftKey);scale91(d.G,d.S0,d.b,d.nb);
+    const fw=document.getElementById('resW87'),fh=document.getElementById('resH87');if(fw)fw.value=Math.round(d.nb.w);if(fh)fh.value=Math.round(d.nb.h);S.rz=null;render();return}
+  if(G&&/^(select|image)$/.test(S.tool)&&S.cur?.kind==='image'){const k=hit91(G,pt(e));if(k){cv.style.cursor=HANDLE_CURSOR[k];e.stopImmediatePropagation()}}},true);
+const end91=e=>{if(!gdrag91)return;e.stopImmediatePropagation();const d=gdrag91;gdrag91=null;const same=['x','y','w','h'].every(q=>Math.round(d.nb[q])===Math.round(d.b[q]));if(same)S.cur.undo.pop();else changed();S.rz=null;render();renderProps()};
+cv.addEventListener('pointerup',end91,true);cv.addEventListener('pointercancel',end91,true);
 })();
 })();
 </script>
