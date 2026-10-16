@@ -20,7 +20,7 @@ It installs for your user account only, with no admin rights. Setup downloads th
 
 See [SETUP.txt](SETUP.txt) for hotkeys and details.
 
-What's new in 3.6.0: see [CHANGES-3.6.0.md](CHANGES-3.6.0.md).
+What's new: [3.7.0](CHANGES-3.7.0.md) · [3.6.0](CHANGES-3.6.0.md).
 
 ## Run from source
 

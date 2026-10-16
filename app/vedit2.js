@@ -439,22 +439,22 @@ function mount(host,it,api){css();HK=api;
   const activeOvs=()=>e.ovs.filter(s=>eng.t>=s.t0&&eng.t<=s.t1);
   function ovDraw(){const g=ov.getContext('2d');g.clearRect(0,0,ov.width,ov.height);if(!HK.drawShape)return;
     if(odrag&&odrag.mode==='draw')HK.drawShape(g,odrag.s,{width:ov.width,height:ov.height});
-    const o=selOv();if(o&&otool&&eng.t>=o.t0&&eng.t<=o.t1){const k=ov.width/Math.max(1,ov.getBoundingClientRect().width),b=HK.bbox(o);g.save();g.strokeStyle='#5aa2ff';g.lineWidth=1.5*k;g.setLineDash([5*k,4*k]);g.strokeRect(b.x-4*k,b.y-4*k,b.w+8*k,b.h+8*k);g.setLineDash([]);const hs=6*k;for(const [,hx,hy] of HK.handles(o)){g.fillStyle='#fff';g.fillRect(hx-hs,hy-hs,hs*2,hs*2);g.strokeRect(hx-hs,hy-hs,hs*2,hs*2)}g.restore()}}
+    const o=selOv();if(o&&otool&&eng.t>=o.t0&&eng.t<=o.t1){const k=ov.width/Math.max(1,ov.getBoundingClientRect().width),line=o.t==='arrow'||o.t==='line',b=line||!HK.selBox?HK.bbox(o):HK.selBox(o),pd=line?4*k:0;g.save();g.strokeStyle='#5aa2ff';g.lineWidth=1.5*k;g.setLineDash([5*k,4*k]);g.strokeRect(b.x-pd,b.y-pd,b.w+pd*2,b.h+pd*2);g.setLineDash([]);const hs=4.5*k;for(const [,hx,hy] of HK.handles(o)){g.fillStyle='#fff';g.fillRect(hx-hs,hy-hs,hs*2,hs*2);g.strokeRect(hx-hs,hy-hs,hs*2,hs*2)}g.restore()}}
   function ovui(){qa('[data-ot]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.ot===otool));ov.style.pointerEvents=otool?'auto':'none';ov.style.cursor=otool==='select'?'default':'crosshair';
     const o=selOv(),row=R('osel');row.hidden=!o;if(o){R('olbl').textContent=ovName(o);R('of').value=o.t0.toFixed(1);R('ot2').value=o.t1.toFixed(1)}}
   const hitOv=(x,y,k)=>{const tol=10*k;for(const s of activeOvs().reverse()){const b=HK.bbox(s);if(x>=b.x-tol&&x<=b.x+b.w+tol&&y>=b.y-tol&&y<=b.y+b.h+tol)return s}return null};
   const hitHandle=(s,x,y,k)=>{for(const [h,hx,hy] of HK.handles(s))if(Math.abs(x-hx)<9*k&&Math.abs(y-hy)<9*k)return h;return null};
   ov.addEventListener('pointerdown',ev=>{if(!otool||!ready)return;ev.preventDefault();ov.setPointerCapture(ev.pointerId);const {x,y,k}=ovPt(ev),t=eng.t;eng.pause();
-    const cur=selOv();if(cur&&t>=cur.t0&&t<=cur.t1){const h=hitHandle(cur,x,y,k);if(h){snap();odrag={mode:'handle',k:h};return}}
+    const cur=selOv();if(cur&&t>=cur.t0&&t<=cur.t1){const h=hitHandle(cur,x,y,k);if(h){snap();odrag={mode:'handle',k:h,b0:HK.selBox?HK.selBox(cur):HK.norm(cur),s0:JSON.parse(JSON.stringify(cur))};return}}
     const hs=hitOv(x,y,k);
     if(otool==='select'||(hs&&hs===cur)){if(hs)select('ov',hs);else select(null);if(hs){snap();odrag={mode:'move',lx:x,ly:y}}return}
     snap();const s=HK.newShape(otool,x,y);s.t0=t;s.t1=t+3;const sc=Math.max(1,e.H/720);s.w=Math.round((+R('owid').value||6)*sc);s.fs=Math.round((s.fs||24)*sc*1.3);if(otool!=='highlight')s.c=R('ocol').value;
     if(otool==='step'||otool==='stamp'){if(otool==='step')s.n=e.ovs.filter(z=>z.t==='step').length+1;e.ovs.push(s);select('ov',s);return}
     if(otool==='text'){HK.askText('Text on the video','','Add').then(txt=>{if(txt){s.txt=txt;s._w=null;s.x2=s.x1+10;s.y2=s.y1+10;e.ovs.push(s);select('ov',s);changed()}else hist.pop()});return}
     select(null);odrag={mode:'draw',s}});
-  ov.addEventListener('pointermove',ev=>{if(!odrag)return;const {x,y}=ovPt(ev),o=selOv();
+  ov.addEventListener('pointermove',ev=>{if(!odrag){if(otool){const c=selOv(),p=ovPt(ev),h=c&&eng.t>=c.t0&&eng.t<=c.t1?hitHandle(c,p.x,p.y,p.k):null;ov.style.cursor=h?((HK.handleCursor||{})[h]||'grab'):(otool==='select'?'default':'crosshair')}return}const {x,y}=ovPt(ev),o=selOv();
     if(odrag.mode==='draw'){odrag.s.x2=x;odrag.s.y2=y}else if(odrag.mode==='move'&&o){HK.moveShape(o,x-odrag.lx,y-odrag.ly);odrag.lx=x;odrag.ly=y;eng.render()}
-    else if(odrag.mode==='handle'&&o){const k=odrag.k;if(k==='p1'){o.x1=x;o.y1=y}else if(k==='p2'){o.x2=x;o.y2=y}else if(k==='c'){o.cx=x;o.cy=y}else if(k==='tail'){o.tx=x;o.ty=y}else{const r=HK.norm(o);let l=r.x,tp=r.y,rr=r.x+r.w,bb=r.y+r.h;if(k.includes('w'))l=x;if(k.includes('e'))rr=x;if(k.includes('n'))tp=y;if(k.includes('s'))bb=y;o.x1=l;o.y1=tp;o.x2=rr;o.y2=bb}o._w=null;eng.render()}});
+    else if(odrag.mode==='handle'&&o){const k=odrag.k;if(k==='p1'){o.x1=x;o.y1=y}else if(k==='p2'){o.x2=x;o.y2=y}else if(k==='c'){o.cx=x;o.cy=y}else if(k==='tail'){o.tx=x;o.ty=y}else if(HK.resizeByHandle)HK.resizeByHandle(o,odrag,x,y,ev.shiftKey);o._w=null;eng.render()}});
   ov.addEventListener('pointerup',()=>{if(!odrag)return;const d=odrag;odrag=null;if(d.mode==='draw'){const s=d.s;if(Math.abs(s.x2-s.x1)<4&&Math.abs(s.y2-s.y1)<4){hist.pop();return}e.ovs.push(s);select('ov',s)}changed();eng.render()});
   qa('[data-ot]').forEach(b=>b.onclick=()=>{otool=otool===b.dataset.ot?null:b.dataset.ot;if(!otool&&sel&&sel.type==='ov')select(null);ovui()});
   R('ocol').oninput=()=>{HK.setStyle&&HK.setStyle('stroke',R('ocol').value);const o=selOv();if(o){o.c=R('ocol').value;eng.render()}};

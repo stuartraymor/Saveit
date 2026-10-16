@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('bench', {
   ocrLayout: url => ipcRenderer.invoke('ocr-layout',url),
   printImage: url => ipcRenderer.invoke('print-image',url),
   appVersion: () => ipcRenderer.invoke('app-version'),
+  camSettings: () => ipcRenderer.send('cam-settings'),
   readClipboard: () => ipcRenderer.invoke('clipboard-read'),
   copyEditable: (url, text) => ipcRenderer.invoke('clipboard-editable', url, text),
   capture: (mode, delay, opts, pre) => ipcRenderer.invoke('capture', mode, delay, opts, pre),
@@ -30,7 +31,7 @@ contextBridge.exposeInMainWorld('bench', {
   setRecording: on => ipcRenderer.send('recording', on),
   onHotkey: fn => ipcRenderer.on('hotkey', (e, mode) => fn(mode)),
   onRecCmd: fn => ipcRenderer.on('rec-cmd', (e, c) => fn(c)),
-  widgetOpen: opts => ipcRenderer.send('widget-open', opts),
+  widgetOpen: (opts, logo) => ipcRenderer.send('widget-open', opts, logo),
   onWidgetOpts: fn => ipcRenderer.on('widget-opts', (e, o) => fn(o)),
   onWidgetGo: fn => ipcRenderer.on('widget-go', (e, o) => fn(o)),
   onShortcutFailed: fn => ipcRenderer.on('shortcut-failed', (e, keys) => fn(keys))

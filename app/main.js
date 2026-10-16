@@ -61,16 +61,24 @@ function createWindow() {
 // ---------- floating capture widget (editor hidden) ----------
 let widgetWin = null, widgetOpts = null, reopenWidget = false;
 function closeWidget() { if (widgetWin && !widgetWin.isDestroyed()) widgetWin.destroy(); widgetWin = null; }
+// The widget and the editor share one anchor: the Saveit logo. Opening the widget puts its logo where the editor's was,
+// size changes keep the left edge still, and returning to the editor lines its logo up with the widget's.
+let widgetAnchor = null, editorLogo = null, widgetLogo = { x: 11, y: 11 };
 function openWidget(opts) {
   if (opts) widgetOpts = opts;
   if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.show(); return; }
-  const d = activeDisplay(), W = Math.min(1240, d.bounds.width - 40), H = 84;
-  widgetWin = new BrowserWindow({ x: Math.round(d.bounds.x + (d.bounds.width - W) / 2), y: d.bounds.y + 14, width: W, height: H, frame: false, resizable: false, maximizable: false, minimizable: false, skipTaskbar: false, alwaysOnTop: true, backgroundColor: '#16181a', hasShadow: true, show: false,
+  const saved = workflowConfig.widgetPos, sx = saved ? (saved.x ?? saved.cx - 620) : 0;
+  const onScreen = !widgetAnchor && saved && screen.getAllDisplays().some(s => sx + 40 >= s.bounds.x && sx < s.bounds.x + s.bounds.width - 40 && saved.y >= s.bounds.y && saved.y < s.bounds.y + s.bounds.height - 40);
+  const d = widgetAnchor ? screen.getDisplayNearestPoint({ x: Math.round(widgetAnchor.x), y: Math.round(widgetAnchor.y) }) : onScreen ? screen.getDisplayNearestPoint({ x: Math.round(sx), y: Math.round(saved.y) }) : activeDisplay(), W = Math.min(1240, d.bounds.width - 40), H = 84;
+  const x = widgetAnchor ? widgetAnchor.x - widgetLogo.x : onScreen ? sx : d.bounds.x + (d.bounds.width - W) / 2, y = widgetAnchor ? widgetAnchor.y - widgetLogo.y : onScreen ? saved.y : d.bounds.y + 14;
+  widgetWin = new BrowserWindow({ x: Math.round(x), y: Math.round(y), width: W, height: H, frame: false, resizable: false, maximizable: false, minimizable: false, skipTaskbar: false, alwaysOnTop: true, backgroundColor: '#16181a', hasShadow: true, show: false,
     webPreferences: { preload: asset('widget-preload.js'), contextIsolation: true } });
   widgetWin.setContentProtection(true);
   widgetWin.setAlwaysOnTop(true, 'floating');
   widgetWin.loadFile(asset('widget.html'));
-  widgetWin.webContents.once('did-finish-load', () => { widgetWin.webContents.send('init', widgetOpts); widgetWin.show(); });
+  // Shown once it has sized itself (so it never appears in the wrong place first), with a fallback.
+  widgetWin.webContents.once('did-finish-load', () => { widgetWin.webContents.send('init', widgetOpts); setTimeout(() => { if (widgetWin && !widgetWin.isDestroyed() && !widgetWin.isVisible()) widgetWin.show(); }, 800); });
+  widgetWin.on('moved', () => { if (!widgetWin || widgetWin.isDestroyed()) return; const b = widgetWin.getBounds(); workflowConfig.widgetPos = { x: b.x, y: b.y }; saveWorkflowConfig().catch(() => {}); });
   widgetWin.on('closed', () => { widgetWin = null; });
   if (win) win.hide();
 }
@@ -78,11 +86,42 @@ function openWidget(opts) {
 function beginCaptureUI() { if (widgetWin && !widgetWin.isDestroyed()) { reopenWidget = true; closeWidget(); } }
 function restoreUI(wasVisible) { if (reopenWidget) { reopenWidget = false; openWidget(); } else if (wasVisible) showWindow(); }
 function showWindow() { reopenWidget = false; closeWidget(); if (!win) return; if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
-ipcMain.on('widget-open', (e, opts) => openWidget(opts));
+ipcMain.on('widget-open', (e, opts, logo) => {
+  if (logo && Number.isFinite(logo.x) && Number.isFinite(logo.y)) editorLogo = { x: logo.x, y: logo.y };
+  widgetAnchor = null;
+  if (win && win.isVisible() && editorLogo) { const c = win.getContentBounds(); widgetAnchor = { x: c.x + editorLogo.x, y: c.y + editorLogo.y }; }
+  openWidget(opts);
+});
 ipcMain.on('widget-opts', (e, o) => { widgetOpts = o; if (win) win.webContents.send('widget-opts', o); });
 ipcMain.on('widget-go', (e, o) => { widgetOpts = o; reopenWidget = true; closeWidget(); if (win) win.webContents.send('widget-go', o); });
-ipcMain.on('widget-editor', () => showWindow());
-ipcMain.on('widget-size', (e, w, h) => { if (widgetWin && !widgetWin.isDestroyed() && h > 30 && w > 200) { const d = screen.getDisplayNearestPoint({ x: widgetWin.getBounds().x, y: widgetWin.getBounds().y }), W = Math.min(Math.round(w) + 2, d.bounds.width - 20), H = Math.min(520, Math.round(h)), cx = widgetWin.getBounds().x + widgetWin.getBounds().width / 2; widgetWin.setBounds({ x: Math.max(d.bounds.x + 4, Math.round(cx - W / 2)), y: widgetWin.getBounds().y, width: W, height: H }); } });
+ipcMain.on('widget-editor', () => {
+  // Bring the editor back with its logo where the widget's logo is (a maximized editor stays put).
+  if (win && editorLogo && widgetWin && !widgetWin.isDestroyed() && !win.isMaximized() && !win.isFullScreen()) {
+    const wb = widgetWin.getContentBounds(), cb = win.getContentBounds(), d = screen.getDisplayNearestPoint({ x: wb.x, y: wb.y }).workArea;
+    const x = Math.round(wb.x + widgetLogo.x - editorLogo.x), y = Math.round(wb.y + widgetLogo.y - editorLogo.y);
+    win.setContentBounds({ x: Math.max(d.x - cb.width + 120, Math.min(d.x + d.width - 120, x)), y: Math.max(d.y, Math.min(d.y + d.height - 80, y)), width: cb.width, height: cb.height });
+  }
+  showWindow();
+});
+// Webcam settings: one window for both the editor and the widget, kept above the widget.
+let camWin = null;
+ipcMain.on('cam-settings', () => {
+  if (camWin && !camWin.isDestroyed()) { camWin.show(); camWin.focus(); return; }
+  const d = activeDisplay(), W = Math.min(940, d.bounds.width - 40), H = Math.min(600, d.bounds.height - 40);
+  camWin = new BrowserWindow({ x: Math.round(d.bounds.x + (d.bounds.width - W) / 2), y: Math.round(d.bounds.y + (d.bounds.height - H) / 2), width: W, height: H, minWidth: 760, minHeight: 520,
+    title: 'Webcam settings', backgroundColor: '#16181a', autoHideMenuBar: true, minimizable: false, maximizable: false, icon: asset('icon.png'), webPreferences: { contextIsolation: true, nodeIntegration: false } });
+  camWin.setMenu(null); camWin.setAlwaysOnTop(true, 'pop-up-menu'); camWin.loadFile(asset('camsettings.html'));
+  camWin.on('closed', () => { camWin = null; });
+});
+ipcMain.on('widget-size', (e, w, h, lx, ly) => {
+  if (!widgetWin || widgetWin.isDestroyed() || !(h > 30 && w > 200)) return;
+  if (Number.isFinite(lx) && Number.isFinite(ly)) widgetLogo = { x: lx, y: ly };
+  // First placement lines the logo up with the editor's; after that the left edge stays where it is.
+  const b = widgetWin.getBounds(), x = widgetAnchor ? Math.round(widgetAnchor.x - widgetLogo.x) : b.x, y = widgetAnchor ? Math.round(widgetAnchor.y - widgetLogo.y) : b.y;
+  const d = screen.getDisplayNearestPoint({ x, y }), W = Math.min(Math.round(w) + 2, d.bounds.width - 20), H = Math.min(520, Math.round(h));
+  widgetWin.setBounds({ x, y, width: W, height: H }); widgetAnchor = null;
+  if (!widgetWin.isVisible()) widgetWin.show();
+});
 
 function activeDisplay() { return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()); }
 

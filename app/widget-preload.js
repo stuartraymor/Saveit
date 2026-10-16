@@ -4,5 +4,7 @@ contextBridge.exposeInMainWorld('widget', {
   opts: o => ipcRenderer.send('widget-opts', o),
   go: o => ipcRenderer.send('widget-go', o),
   editor: () => ipcRenderer.send('widget-editor'),
-  size: (w, h) => ipcRenderer.send('widget-size', w, h)
+  camSettings: () => ipcRenderer.send('cam-settings'),
+  appVersion: () => ipcRenderer.invoke('app-version'),
+  size: (w, h, lx, ly) => ipcRenderer.send('widget-size', w, h, lx, ly)
 });

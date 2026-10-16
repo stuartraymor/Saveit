@@ -13,7 +13,7 @@ canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
 .wid button{font:inherit;font-weight:700;border-radius:7px;border:1px solid #3a3f45;background:#30343a;color:#e8eaec;padding:6px 11px;cursor:pointer;white-space:nowrap}
 .wid button:hover:not(:disabled){border-color:#9aa1a8}
 .wid button:disabled{opacity:.4;cursor:default}
-.wid button.go{background:#2db3a0;border-color:#2db3a0;color:#06211d}
+.wid button.go{background:#e5483b;border-color:#e5483b;color:#fff}
 .wid button.go.rec{background:#e5483b;border-color:#e5483b;color:#fff}
 .wid .seg{display:flex;border:1px solid #3a3f45;border-radius:8px;overflow:hidden}
 .wid .seg button{border:0;border-radius:0;background:transparent;color:#b4bac0}
@@ -21,24 +21,26 @@ canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
 .wid .sep{width:1px;height:22px;background:#3a3f45}
 .wid .tm{font-family:"Cascadia Mono",Consolas,monospace;color:#7d848b;min-width:42px}
 .wid [hidden]{display:none!important}
+.wid{flex-wrap:nowrap}.wid:not(.adj) .adjonly{display:none!important}.wid.adj{transform:none}
+.wid button.toggle{min-width:84px}
 </style></head>
 <body>
 <canvas id="c"></canvas>
 <div class="tip" id="tip">Drag to select an area · <b>Click</b> for the whole screen · <b>Esc</b> to cancel</div>
 <div class="wid" id="wid">
+  <div id="opts" hidden>
   <div class="seg" role="group" aria-label="Capture type"><button id="mImg" aria-pressed="true">Image</button><button id="mVid" aria-pressed="false">Video</button></div>
   <label>Selection <select id="area"><option value="region">Region</option><option value="window">Window</option><option value="screen">Full screen</option><option value="steps">Steps</option><option value="scroll">Scrolling</option><option value="text">Grab text</option></select></label>
   <label class="ck"><input type="checkbox" id="oCur"> Cursor</label>
   <label class="ck"><input type="checkbox" id="oClip"> Copy to clipboard</label>
   <span id="imgOpts" style="display:contents"><label>Effect <select id="fxSel"></select></label><button id="fxGear" title="Settings for this effect">⚙</button></span>
   <span id="vidOpts" style="display:contents"><label class="ck"><input type="checkbox" id="oSys"> System audio</label><label class="ck"><input type="checkbox" id="oMic"> Mic</label><label class="ck"><input type="checkbox" id="oCam"> Webcam</label></span>
-  <span class="sep"></span>
-  <label>W <input id="w" type="number" min="1"></label><span>×</span><label>H <input id="h" type="number" min="1"></label>
-  <select id="preset" title="Common sizes"><option value="">Size…</option><option>1920x1080</option><option>1280x720</option><option>1024x768</option><option>800x600</option><option>640x480</option><option>1080x1080</option></select>
-  <span class="sep"></span>
-  <span class="tm" id="tm">00:00</span><button id="pz" disabled title="Available once recording starts">Pause</button><button id="sp" disabled title="Available once recording starts">Stop</button>
-  <span class="sep"></span>
-  <button class="go" id="ok">Capture</button><button id="redo" title="Draw the selection again">Redo</button><button id="cancel">Cancel</button>
+  <span class="tm" id="tm">00:00</span><button id="pz" disabled>Pause</button><button id="sp" disabled>Stop</button><button id="redo">Redo</button><button id="cancel">Cancel</button>
+  </div>
+  <label class="adjonly" title="Width in pixels">W <input id="w" type="number" min="1"></label><span class="adjonly">×</span><label class="adjonly" title="Height in pixels">H <input id="h" type="number" min="1"></label>
+  <select class="adjonly" id="preset" title="Common sizes"><option value="">Size…</option><option>1920x1080</option><option>1280x720</option><option>1024x768</option><option>800x600</option><option>640x480</option><option>1080x1080</option></select>
+  <span class="sep adjonly"></span>
+  <button class="go adjonly" id="ok">Capture</button><button id="toggle" class="toggle">Cancel</button>
 </div>
 <script src="fxdefs.js"></script><script src="fxui.js"></script>
 <script>
@@ -71,7 +73,16 @@ function handles(r){const mx=r.x+r.w/2,my=r.y+r.h/2,R=r.x+r.w,B=r.y+r.h;return[[
 function handleAt(p){if(!sel)return null;for(const [k,x,y] of handles(sel))if(Math.abs(p.x-x)<=HS+3&&Math.abs(p.y-y)<=HS+3)return k;return null}
 const inside=p=>sel&&p.x>sel.x&&p.x<sel.x+sel.w&&p.y>sel.y&&p.y<sel.y+sel.h;
 const CUR={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize'};
-function placeBar(){if(state!=='adjust'||!sel)return;const k=K();
+const isFull=()=>!!sel&&sel.w>=W-1&&sel.h>=H-1;
+function placeBar(){const b=$('wid'),adj=state==='adjust'&&!!sel,t=$('toggle');
+  if(state==='adjust'){const full=isFull();tip.style.display=full?'':'none';if(full)tip.innerHTML=(vmode==='video'?'Whole screen selected · <b>Record</b> to start':'Whole screen selected · <b>Capture</b> to take it')+' · <b>Drag</b> anywhere to pick an area instead'}
+  if(adj&&isFull()){b.classList.add('adj');t.textContent='Redo';t.title='Draw the selection again';b.style.left='50%';b.style.top='10px';b.style.transform='translateX(-50%)';const k=K();if(document.activeElement!==$('w'))$('w').value=Math.round(sel.w*k);if(document.activeElement!==$('h'))$('h').value=Math.round(sel.h*k);return}
+  b.style.transform='';b.classList.toggle('adj',adj);
+  t.textContent=adj?'Redo':'Cancel';t.title=adj?'Draw the selection again':'Close without capturing (Esc)';
+  if(!adj){b.style.left='50%';b.style.top='10px';return}
+  const bw=b.offsetWidth,bh=b.offsetHeight,m=8;let x=sel.x+sel.w-bw,y=sel.y+sel.h+m;
+  if(y+bh>H-4){y=sel.y-bh-m;if(y<4)y=sel.y+sel.h-bh-m}b.style.left=Math.max(4,Math.min(W-bw-4,x))+'px';b.style.top=Math.max(4,y)+'px';
+  const k=K();
   if(document.activeElement!==$('w'))$('w').value=Math.round(sel.w*k);if(document.activeElement!==$('h'))$('h').value=Math.round(sel.h*k)}
 function rrPath(x,y,w,h,r){r=Math.max(0,Math.min(r,w/2,h/2));g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath()}
 function edgeP(x,y,w,h,e,k){const d=(+e.depth||10)/k,step=Math.max(6,d*1.4);let sd=((w*31+h*17)|0)>>>0;const rnd=()=>{sd=(sd*1664525+1013904223)>>>0;return sd/4294967296};
@@ -91,7 +102,7 @@ function fxPreview(r){if(vmode==='video'||fxs.id==='none'||r.w<2||r.h<2)return;c
 function draw(){if(!ready)return;g.clearRect(0,0,W,H);g.drawImage(img,0,0,W,H);g.fillStyle='rgba(0,0,0,.45)';
   const r=state==='adjust'?sel:(start?norm(start,cur):null);
   if(r&&r.w>1&&r.h>1){g.beginPath();g.rect(0,0,W,H);g.rect(r.x,r.y,r.w,r.h);g.fill('evenodd');fxPreview(r);
-    g.strokeStyle='#2db3a0';g.lineWidth=1.5;g.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1);
+    g.strokeStyle='#2db3a0';g.lineWidth=1.5;if(state==='adjust'&&isFull()){g.lineWidth=3;g.setLineDash([10,7]);g.strokeRect(4,4,W-8,H-8);g.setLineDash([])}else g.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1);
     const k=K(),label=`${Math.round(r.w*k)} × ${Math.round(r.h*k)}`;g.font='600 12px "Cascadia Mono",Consolas,monospace';const tw=g.measureText(label).width+14;let ly=r.y-26;if(ly<4)ly=r.y+6;
     g.fillStyle='rgba(22,24,26,.92)';g.fillRect(r.x,ly,tw,22);g.fillStyle='#e8eaec';g.fillText(label,r.x+7,ly+15);
     if(state==='adjust'){for(const [,x,y] of handles(r)){g.fillStyle='#ffffff';g.strokeStyle='#2db3a0';g.lineWidth=1.5;g.fillRect(x-HS,y-HS,HS*2,HS*2);g.strokeRect(x-HS+.5,y-HS+.5,HS*2-1,HS*2-1)}}}
@@ -106,6 +117,7 @@ function finish(){if(!sel)return;if($('area').value==='screen'&&!(sel.w>=W-1&&se
 function cancel(){window.overlay.done(null)}
 function redo(){state='drag';sel=null;start=null;act=null;tip.style.display='';if($('area').value==='screen')$('area').value='region';labels();draw()}
 c.addEventListener('mousedown',e=>{if(e.button===2){cancel();return}if(e.button!==0)return;const p={x:e.clientX,y:e.clientY};cur=p;
+  if(state==='adjust'&&isFull()){state='drag';sel=null;if($('area').value==='screen')$('area').value='region';labels()}
   if(state==='adjust'){const hk=handleAt(p);if(hk){act={type:'resize',k:hk,orig:{...sel}};return}
     if(inside(p)){act={type:'move',dx:p.x-sel.x,dy:p.y-sel.y};c.style.cursor='grabbing';return}
     state='drag';sel=null;tip.style.display='';if($('area').value==='screen')$('area').value='region';labels()} // click outside the box starts a new selection
@@ -137,6 +149,8 @@ $('area').onchange=()=>{const v=$('area').value;
   else if(state==='adjust'&&sel&&sel.w>=W-1&&sel.h>=H-1)redo();
   labels();$('area').blur()};
 $('ok').onclick=finish;$('redo').onclick=redo;$('cancel').onclick=cancel;
+// One button: Redo while a selection is shown, then Cancel once you are drawing again.
+$('toggle').onclick=()=>{if(state==='adjust'&&sel)redo();else cancel()};
 addEventListener('contextmenu',e=>{e.preventDefault();cancel()});
 </script>
 </body></html>

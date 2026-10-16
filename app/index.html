@@ -16,6 +16,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--f-ui);font-size:13px
 button{font:inherit;color:inherit}
 .app.vmode{grid-template-columns:1fr!important}.app.vmode .props{display:none}
 .devsel{max-width:180px}
+.top .btn.camgear{width:28px;min-width:28px;padding:0!important;justify-content:center;font-size:13px!important}
 .props .btn[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent)}.props .tfmt{gap:4px;flex-wrap:nowrap}.props .tfmt .btn{min-width:0;flex:1;padding:6px 4px;justify-content:center}.props .tfmt [data-talign=left]{margin-left:8px}
 .rail>.tool[data-t=select]{min-width:82px!important;flex-basis:82px}.rail>.tool[data-t=selection]{min-width:64px!important;flex-basis:64px}
 .app{height:100%;display:grid;grid-template-columns:1fr 288px;grid-template-rows:auto auto 1fr auto auto;grid-template-areas:"top top" "rail rail" "stage props" "tray tray" "status status"}
@@ -211,7 +212,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size
     <label class="sel" id="clipWrap" title="Put each new capture or recording on the clipboard, ready to paste"><input type="checkbox" id="clipOn"> Copy to clipboard</label>
     <label class="sel" id="sysWrap" hidden title="Record the sound your computer plays"><input type="checkbox" id="sysAudio" checked> System audio</label>
     <label class="sel" id="micWrap" hidden title="Record your microphone"><input type="checkbox" id="mic"> Microphone <select id="micPick" class="devsel" aria-label="Microphone device"></select></label>
-    <label class="sel" id="camWrap" hidden title="Add your webcam to the recording"><input type="checkbox" id="camOn"> Webcam <select id="camPick" class="devsel" aria-label="Webcam device"></select></label>
+    <label class="sel" id="camWrap" hidden title="Add your webcam to the recording"><input type="checkbox" id="camOn"> Webcam <select id="camPick" class="devsel" aria-label="Webcam device"></select><button type="button" class="btn camgear" id="camGear" title="Webcam settings: shape, size, position, border" aria-label="Webcam settings">⚙</button></label>
     <label class="sel" id="fxWrap" title="Effect applied automatically to each new screenshot">Effect <select id="fxSel"></select><button class="btn" id="fxGear" title="Settings for this effect" aria-label="Effect settings" style="padding:5px 8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></label>
     <label class="sel">Delay
       <select id="delay"><option value="0">None</option><option value="3">3 s</option><option value="5">5 s</option><option value="10">10 s</option></select>
@@ -259,6 +260,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size
 <script src="vedit2.js"></script>
 <script src="fxui.js"></script>
 <script src="devices.js"></script>
+<script src="camdraw.js"></script>
 <script>
 (()=>{
 const $=s=>document.querySelector(s);
@@ -388,7 +390,7 @@ function layoutStage(){
   $('#inner').hidden=!it||it.kind!=='image';
   $('#guide').hidden=!it||it.kind!=='guide'; if(it&&it.kind==='guide')renderGuide();
   if(it&&it.kind==='video'){const w=document.createElement('div');w.className='vwrap';stage.appendChild(w);
-    const m=VEdit.mount(w,it,{toast,saveBlob,baseName,addVideo,persist,changed:()=>persist(it),newShape,drawShape,bbox,handles:legacyHandles,moveShape,norm,askText,setStyle:(k,v)=>{S.p[k]=v},itemById:id=>S.items.find(x=>x.id===id),videos:()=>S.items.filter(x=>x.kind==='video'&&x!==it)});vid=m.video;vid._wrap=w;vid._destroy=m.destroy;vid._ctl=m;try{renderProps()}catch(_){}}
+    const m=VEdit.mount(w,it,{toast,saveBlob,baseName,addVideo,persist,changed:()=>persist(it),newShape,drawShape,bbox,handles,selBox,resizeByHandle,handleCursor:HANDLE_CURSOR,moveShape,norm,askText,setStyle:(k,v)=>{S.p[k]=v},itemById:id=>S.items.find(x=>x.id===id),videos:()=>S.items.filter(x=>x.kind==='video'&&x!==it)});vid=m.video;vid._wrap=w;vid._destroy=m.destroy;vid._ctl=m;try{renderProps()}catch(_){}}
   if(it&&it.kind==='image'){const p=pad();cv.width=it.base.width+p*2;cv.height=it.base.height+p*2;applyZoom();}
 }
 function scale(){
@@ -635,7 +637,7 @@ cv.addEventListener('pointerdown',e=>{
   if(t==='selection'&&!(S.sel&&S.sel.t==='img'&&(hitHandle(x,y)||hit(x,y)===S.sel))){S.sel=null;S.drag={mode:'pix'};S.pixRect={x1:x,y1:y,x2:x,y2:y};render();return}
   if(t==='crop'){S.drag={mode:'crop',x0:x,y0:y};S.cropRect={x1:x,y1:y,x2:x,y2:y};render();return}
   if(t==='fill'){const col=S.p.fillTransparent?'none':S.p.stroke,r=ImgTools.fill(it.base,x,y,col,+(S.p.tol??20),S.p.contig!==false,+(S.p.grow??1));if(r){snap();it.base=r.canvas;render();changed();toast(`Filled ${r.count.toLocaleString()} pixels. Ctrl+Z to undo.`)}return}
-  if(t==='erase'){snap();const nb=document.createElement('canvas');nb.width=it.base.width;nb.height=it.base.height;nb.getContext('2d').drawImage(it.base,0,0);it.base=nb;S.drag={mode:'erase',lx:x,ly:y,col:ImgTools.dominant(nb)};eraseSeg(x,y,x,y);render();return}
+  if(t==='erase'){snap();const src=it.base;if((S.p.eraseWhat||'pixels')!=='objects'){const nb=document.createElement('canvas');nb.width=src.width;nb.height=src.height;nb.getContext('2d').drawImage(src,0,0);it.base=nb}S.drag={mode:'erase',lx:x,ly:y,src};eraseSeg(x,y,x,y);render();return}
   if(t==='cutout'){S.drag={mode:'cut'};S.cutRect={x1:x,y1:y,x2:x,y2:y};render();return}
   // handles & move in any tool when over current selection, or select tool
   const hk=hitHandle(x,y);
@@ -832,15 +834,9 @@ async function captureImage(){
   if($('#area').value==='region'){setTool('crop');S.cropRect={x1:c.width*.15,y1:c.height*.15,x2:c.width*.85,y2:c.height*.85};render();renderProps();toast('Drag to select the region, then press Enter to crop.')}
 }
 let rec=null;
-const CAM_DEF={pos:'br',shape:'circle',corners:'rounded',size:22,border:true,deviceId:''};
-function camSettings(){try{return{...CAM_DEF,...JSON.parse(localStorage.getItem('saveit.cam')||'{}')}}catch(e){return{...CAM_DEF}}}
-function drawCam(g,v,W,H,o){if(!v.videoWidth)return;const m=Math.round(W*.025),sw=Math.round(W*o.size/100);let w=sw,h=o.shape==='rect'?Math.round(sw*9/16):sw;
-  const x=o.pos[1]==='l'?m:W-m-w,y=o.pos[0]==='t'?m:H-m-h;
-  const vr=v.videoWidth/v.videoHeight,br=w/h;let sx=0,sy=0,sW=v.videoWidth,sH=v.videoHeight;if(vr>br){sW=sH*br;sx=(v.videoWidth-sW)/2}else{sH=sW/br;sy=(v.videoHeight-sH)/2}
-  g.save();g.beginPath();if(o.shape==='circle')g.arc(x+w/2,y+h/2,w/2,0,Math.PI*2);else if(o.corners==='rounded')roundRectPath(g,x,y,w,h,Math.min(w,h)*.14);else g.rect(x,y,w,h);
-  g.shadowColor='rgba(0,0,0,.4)';g.shadowBlur=W/90;g.fillStyle='#000';g.fill();g.shadowColor='transparent';g.clip();
-  g.translate(x+w,y);g.scale(-1,1);g.drawImage(v,sx,sy,sW,sH,0,0,w,h);g.restore(); // mirrored like a mirror
-  if(o.border){g.save();g.beginPath();if(o.shape==='circle')g.arc(x+w/2,y+h/2,w/2,0,Math.PI*2);else if(o.corners==='rounded')roundRectPath(g,x,y,w,h,Math.min(w,h)*.14);else g.rect(x,y,w,h);g.lineWidth=Math.max(2,W/400);g.strokeStyle='#ffffff';g.stroke();g.restore()}}
+// Webcam look and placement live in camdraw.js, shared with the webcam settings window.
+function camSettings(){return CAMDRAW.load()}
+function drawCam(g,v,W,H,o){CAMDRAW.draw(g,v,W,H,o)}
 async function openCam(id){return navigator.mediaDevices.getUserMedia({video:id?{deviceId:{exact:id},width:{ideal:1280},height:{ideal:720}}:{width:{ideal:1280},height:{ideal:720}},audio:false})}
 function camSetup(){return new Promise(async res=>{let o=camSettings(),cam=null,vEl=document.createElement('video');vEl.muted=true;vEl.playsInline=true;
   const m=document.createElement('div');m.className='modal';
@@ -944,7 +940,7 @@ function videoThumb(blob){return new Promise(res=>{const v=document.createElemen
 function grabFrame(){if(!vid)return;try{const c=(vid._ctl&&vid._ctl.grab)?vid._ctl.grab():canvasFrom(vid);addImage(c,'Frame '+stamp())}catch(e){toast('Could not grab this frame.')}}
 function setCapLabel(){const b=$('#capBtn');b.classList.toggle('rec',S.mode==='video');$('#capLbl').textContent=rec?'Stop':(S.mode==='video'?'Record':'Capture')}
 $('#capBtn').onclick=()=>{if(rec){rec.stop();return}S.mode==='video'?startRec():captureImage()};
-function syncAreaOptions(){const v=S.mode==='video';$('#curWrap').hidden=false;$('#camWrap').hidden=!v;$('#fxWrap').hidden=v;$('#sysWrap').hidden=!v;$('#micWrap').hidden=!v;
+function syncAreaOptions(){const v=S.mode==='video';$('#curWrap').hidden=false;$('#cursorOn').disabled=v;$('#curWrap').title=v?'Windows always includes the mouse pointer in screen recordings. This option applies to screenshots.':'Show the mouse pointer in screenshots';$('#camWrap').hidden=!v;$('#fxWrap').hidden=v;$('#sysWrap').hidden=!v;$('#micWrap').hidden=!v;
   for(const val of ['steps','text','scroll']){const o=$('#area').querySelector(`option[value="${val}"]`);o.hidden=o.disabled=v}if(v&&['steps','text','scroll'].includes($('#area').value))$('#area').value='region';saveOpts();if(v)refreshDevices()}
 // ---------- recording devices ----------
 const devPick={mic:'',cam:''};try{Object.assign(devPick,JSON.parse(localStorage.getItem('saveit.devices')||'{}'))}catch(e){}
@@ -953,6 +949,9 @@ function saveDevices(){try{localStorage.setItem('saveit.devices',JSON.stringify(
 async function refreshDevices(){if(S.mode!=='video')return;for(const [type,box] of [['mic','mic'],['cam','camOn']]){const res=await DEVICES.list(type,$('#'+box).checked),v=DEVICES.fill($('#'+type+'Pick'),type,res,devPick[type]);if(res.devices.length&&v!==devPick[type]){devPick[type]=v;saveDevices()}if(res.error==='blocked'&&$('#'+box).checked)toast(DEVICES.message(type,'blocked'),7000)}}
 for(const [type,box] of [['mic','mic'],['cam','camOn']]){$('#'+type+'Pick').onchange=e=>{devPick[type]=e.target.value;saveDevices();if(!$('#'+box).checked){$('#'+box).checked=true;saveOpts()}refreshDevices()};$('#'+box).addEventListener('change',()=>refreshDevices())}
 if(navigator.mediaDevices?.addEventListener)navigator.mediaDevices.addEventListener('devicechange',()=>refreshDevices());
+$('#camGear').onclick=e=>{e.preventDefault();e.stopPropagation();if(window.bench?.camSettings)window.bench.camSettings();else camSetup()};
+// A camera picked in the webcam settings window becomes the recording camera.
+addEventListener('storage',e=>{if(e.key!=='saveit.cam')return;const id=CAMDRAW.load().deviceId||'';if(id!==devPick.cam){devPick.cam=id;try{localStorage.setItem('saveit.devices',JSON.stringify({mic:devPick.mic||'',cam:id}))}catch(_){}refreshDevices()}});
 const autoFx={id:'none',p:{}};try{Object.assign(autoFx,JSON.parse(localStorage.getItem('saveit.fx')||'{}'))}catch(e){}
 const fxUi=FXUI.mount($('#fxSel'),$('#fxGear'),autoFx,st=>{try{localStorage.setItem('saveit.fx',JSON.stringify({id:st.id,p:st.p}))}catch(e){}});fxUi.set(autoFx);
 function applyAutoFx(it){if(autoFx.id==='none')return;it.fx=FXAPPLY(Object.assign(FXBLANK(),it.fx),autoFx.id,autoFx.p);S.fx=it.fx;layoutStage();render();persist(it);renderTray()}
@@ -1193,42 +1192,70 @@ function drawPreview(c,t,q){const g=c.getContext('2d');g.clearRect(0,0,96,76);co
   drawShape(g,base,c)}
 function applyPreset(q){const s=S.sel;S.p.stroke=q.c;S.p.fill=q.fill;S.p.shadow=q.sh;if(!s||!['text','step','callout'].includes(s.t))S.p.width=q.w;
   if(s){snap();s.c=q.c;s.fill=q.fill;s.sh=q.sh;if(!['text','step'].includes(s.t))s.w=q.w;s._w=null;render();changed()}renderProps()}
-function eraseSeg(x0,y0,x1,y1){const it=S.cur,g=it.base.getContext('2d'),sz=+(S.p.eraseSize||24),mode=S.p.eraseTo||'match',col=S.drag&&S.drag.col||[255,255,255];
-  g.save();if(mode==='transparent')g.globalCompositeOperation='destination-out';const css=mode==='white'?'#fff':`rgb(${col[0]},${col[1]},${col[2]})`;g.strokeStyle=g.fillStyle=mode==='transparent'?'#000':css;g.lineCap=g.lineJoin='round';g.lineWidth=sz;
-  g.beginPath();g.moveTo(x0,y0);g.lineTo(x1,y1);g.stroke();g.beginPath();g.arc(x1,y1,sz/2,0,7);g.fill();g.restore()}
+function eraseSeg(x0,y0,x1,y1){const it=S.cur,sz=+(S.p.eraseSize||24),what=S.p.eraseWhat||'pixels',square=S.p.eraseShape==='square',n=Math.max(1,Math.ceil(Math.hypot(x1-x0,y1-y0)/Math.max(2,sz/4)));
+  if(what!=='pixels'){const r=sz/2,probe=[[0,0],[r,0],[-r,0],[0,r],[0,-r],[r*.7,r*.7],[-r*.7,r*.7],[r*.7,-r*.7],[-r*.7,-r*.7]];let removed=false;
+    for(let i=0;i<=n;i++){const x=x0+(x1-x0)*i/n,y=y0+(y1-y0)*i/n;for(const [dx,dy] of probe){let s;while((s=hit(x+dx,y+dy))){const k=it.shapes.indexOf(s);if(k<0)break;it.shapes.splice(k,1);removed=true}}}
+    if(removed){S.sel=null;S.grp=[];renumber()}if(what==='objects')return}
+  const g=it.base.getContext('2d'),mode=S.p.eraseTo||'match';g.save();if(mode==='transparent')g.globalCompositeOperation='destination-out';
+  if(mode==='match'){const c=ImgTools.ringColor(S.drag?.src||it.base,{x:Math.round(x1-sz/2),y:Math.round(y1-sz/2),w:Math.round(sz),h:Math.round(sz)});g.fillStyle=`rgb(${c[0]},${c[1]},${c[2]})`}else g.fillStyle=mode==='white'?'#fff':'#000';
+  for(let i=0;i<=n;i++){const x=x0+(x1-x0)*i/n,y=y0+(y1-y0)*i/n;
+    g.beginPath();if(square)g.rect(x-sz/2,y-sz/2,sz,sz);else g.arc(x,y,sz/2,0,Math.PI*2);g.fill()}
+  g.restore()}
 function applyCut(axis,a,b){const it=S.cur;a=Math.round(Math.max(0,a));b=Math.round(b);const c=ImgTools.cut(it.base,axis,a,b);if(!c){toast('Pick a smaller strip.');render();return}
   snap();const n=b-a,ks=axis==='x'?['x1','x2','tx','cx']:['y1','y2','ty','cy'],f=v=>v<=a?v:v>=b?v-n:a,ai=axis==='x'?0:1;
   it.shapes=it.shapes.filter(s=>{const v=ks.map(k=>s[k]).filter(q=>q!=null);if(s.pts)v.push(...s.pts.map(p=>p[ai]));return!(v.length&&v.every(q=>q>a&&q<b))});
   for(const s of it.shapes){ks.forEach(k=>{if(s[k]!=null)s[k]=f(s[k])});if(s.pts)s.pts.forEach(p=>{p[ai]=f(p[ai])});s._w=null}
   it.base=c;S.sel=null;layoutStage();render();renderProps();changed();toast(`Removed ${n} px. Ctrl+Z to undo.`)}
 let simpT=0;
-function simpPreview(){clearTimeout(simpT);simpT=setTimeout(()=>{const it=S.cur;if(!S.simp||!it||it.kind!=='image')return;S.simp.prev=ImgTools.simplify(it.base,S.simp);render()},70)}
+// Colour choices name the exact number of colours each setting allows (levels per channel cubed).
+const SIMP_LEVELS=[[32,'Keep original colours'],[16,'4,096 colours'],[8,'512 colours'],[6,'216 colours'],[4,'64 colours'],[3,'27 colours'],[2,'8 colours']];
+const SIMP_PRESETS=[{name:'Half size',tip:'50% width and height (75% fewer pixels), original colours',set:{scale:50,detail:0,levels:32,outline:false}},
+  {name:'Fewer colours',tip:'Full size, 64 colours, light smoothing',set:{scale:100,detail:20,levels:4,outline:false}},
+  {name:'Sketch',tip:'Full size, 27 colours, outlined edges',set:{scale:100,detail:30,levels:3,outline:true}},
+  {name:'Reset',tip:'Back to the original',set:{scale:100,detail:0,levels:32,outline:false}}];
+// Estimated PNG size before and after, from the live preview at the target size.
+let simpEstT=0;function simpEstimate(){clearTimeout(simpEstT);simpEstT=setTimeout(async()=>{const it=S.cur,o=S.simp,el=$('#smInfo');if(!it||!o||!el)return;
+  const out=o.prev||it.base,w=Math.max(1,Math.round(it.base.width*o.scale/100)),h=Math.max(1,Math.round(it.base.height*o.scale/100)),t=document.createElement('canvas');t.width=w;t.height=h;const g=t.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(out,0,0,w,h);
+  const size=c=>new Promise(r=>c.toBlob(b=>r(b?b.size:0),'image/png')),[a,b]=await Promise.all([size(it.base),size(t)]),kb=n=>n>1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
+  if(S.simp===o&&$('#smInfo'))$('#smInfo').textContent=`PNG file: ${kb(a)} → about ${kb(b)}${a>b?` (${Math.round((1-b/a)*100)}% smaller)`:''}`},450)}
+function simpPreview(){clearTimeout(simpT);simpT=setTimeout(()=>{const it=S.cur;if(!S.simp||!it||it.kind!=='image')return;S.simp.prev=ImgTools.simplify(it.base,S.simp);render();simpEstimate()},70)}
 function toolPanel(P,it){const t=S.tool;if(!['fill','erase','cutout','simplify'].includes(t)||S.sel)return false;const W=it.base.width,H=it.base.height;let h='';
   const sw=()=>{P.querySelectorAll('.sw button').forEach(b=>b.onclick=()=>setProp(b.dataset.k,b.dataset.v));P.querySelectorAll('input[type=color][data-k]').forEach(i=>i.oninput=()=>setProp(i.dataset.k,i.value,true))};
   const rg=(attr,k,lbl,min,max,v)=>`<div class="row"><span>${lbl}</span><input type="range" ${attr}="${k}" min="${min}" max="${max}" value="${v}" aria-label="${lbl}"><span class="val">${v}</span></div>`;
   if(t==='fill'){const p=S.p;h=`<div class="grp"><h3>Fill</h3><p class="hint">Click an area to pour colour into it. Raise <b>Similar colours</b> to catch gradients and soft edges.</p><h3>Colour</h3>${swatches('stroke',false)}
     <label class="chk"><input type="checkbox" id="fTr" ${p.fillTransparent?'checked':''}> Make transparent instead</label>${rg('data-fp','tol','Similar colours',0,100,p.tol??20)}${rg('data-fp','grow','Grow edge (px)',0,6,p.grow??1)}
     <label class="chk"><input type="checkbox" id="fCt" ${p.contig!==false?'checked':''}> Only touching pixels</label></div>`}
-  else if(t==='erase'){const p=S.p;h=`<div class="grp"><h3>Erase</h3><p class="hint">Drag over anything you want gone.</p>${rg('data-fp','eraseSize','Brush size',4,200,p.eraseSize||24)}
-    <div class="row"><span>Erase to</span><select id="eTo"><option value="match">Match background</option><option value="white">White</option><option value="transparent">Transparent</option></select></div></div>`}
+  else if(t==='erase'){const p=S.p,what=p.eraseWhat||'pixels';h=`<div class="grp"><h3>Erase</h3><p class="hint">Drag over what you want gone. <span class="kbd">Ctrl</span>+<span class="kbd">Z</span> undoes the whole stroke.</p>
+    <div class="row"><span>Erase</span><select id="eWhat" aria-label="What to erase"><option value="pixels">Picture pixels</option><option value="objects">Annotations it touches</option><option value="both">Pixels and annotations</option></select></div>
+    ${rg('data-fp','eraseSize','Brush size (px)',4,200,p.eraseSize||24)}
+    <div class="row"><span>Brush shape</span><select id="eShape" aria-label="Brush shape"><option value="round">Round</option><option value="square">Square</option></select></div>
+    ${what==='objects'?'':`<div class="row"><span>Fill with</span><select id="eTo" aria-label="Fill erased area with"><option value="match">Nearby colour</option><option value="white">White</option><option value="transparent">Transparent</option></select></div>`}</div>`}
   else if(t==='cutout'){h=`<div class="grp"><h3>Cut out</h3><p class="hint">Drag across the picture. A sideways drag removes a vertical strip, an up-and-down drag removes a horizontal strip, and the gap closes up. Notes and arrows move with the picture.</p>
     <h3>Exact amounts</h3><div class="row"><span>Columns</span><input type="number" id="cx1" min="0" max="${W}" value="0"><span>to</span><input type="number" id="cx2" min="0" max="${W}" value="${Math.min(W,50)}"></div><div class="row"><button class="btn" id="cutX">Remove columns</button></div>
     <div class="row"><span>Rows</span><input type="number" id="cy1" min="0" max="${H}" value="0"><span>to</span><input type="number" id="cy2" min="0" max="${H}" value="${Math.min(H,50)}"></div><div class="row"><button class="btn" id="cutY">Remove rows</button></div></div>`}
-  else{if(!S.simp){S.simp={detail:40,levels:12,outline:false,scale:100,prev:null};simpPreview()}const o=S.simp;
-    h=`<div class="grp"><h3>Simplify</h3><p class="hint">Make a busy or very large screenshot cleaner and lighter. Watch the picture change as you adjust.</p>
-    <div class="row">${[['Light',15,24,false,100],['Medium',35,12,false,100],['Strong',60,8,false,75],['Outline',30,6,true,100]].map(([n,a,b,c,d],i)=>`<button class="btn" data-pre="${i}">${n}</button>`).join('')}</div>
-    ${rg('data-sm','detail','Smooth detail',0,100,o.detail)}${rg('data-sm','levels','Colours (fewer = simpler)',2,32,o.levels)}${rg('data-sm','scale','Size %',10,100,o.scale)}
-    <label class="chk"><input type="checkbox" id="smOut" ${o.outline?'checked':''}> Outline edges</label><p class="hint" id="smInfo"></p>
+  else{if(!S.simp){S.simp={detail:0,levels:32,outline:false,scale:100,prev:null};simpPreview()}const o=S.simp,tw=Math.max(1,Math.round(W*o.scale/100)),th=Math.max(1,Math.round(H*o.scale/100)),mp=v=>(v/1e6).toFixed(2)+' MP';
+    h=`<div class="grp"><h3>Simplify</h3><p class="hint">Make a large or busy screenshot smaller and cleaner. Every number below is exact, and the picture updates as you change it.</p>
+    <div class="row">${SIMP_PRESETS.map((q,i)=>`<button class="btn" data-pre="${i}" title="${q.tip}">${q.name}</button>`).join('')}</div></div>
+    <div class="grp"><h3>Size</h3><p class="hint" style="font-family:var(--f-mono)">Now: ${W} × ${H} px · ${mp(W*H)}</p>
+    <div class="crop-grid"><label>Width (px)<input type="number" id="smW" min="1" max="${W}" value="${tw}"></label><label>Height (px)<input type="number" id="smH" min="1" max="${H}" value="${th}"></label></div>
+    <div class="row"><span>Scale</span><input type="number" id="smPct" min="1" max="100" step="1" value="${o.scale}" style="width:70px"><span>% of the original</span></div>
+    <p class="hint" id="smSize" style="font-family:var(--f-mono)"></p></div>
+    <div class="grp"><h3>Detail and colour</h3>${rg('data-sm','detail','Smooth fine detail (%)',0,100,o.detail)}
+    <div class="row"><span>Colours</span><select id="smLevels" aria-label="Number of colours">${SIMP_LEVELS.map(([L,label])=>`<option value="${L}" ${L===o.levels?'selected':''}>${label}</option>`).join('')}</select></div>
+    <label class="chk"><input type="checkbox" id="smOut" ${o.outline?'checked':''}> Outline edges in dark grey</label></div>
+    <div class="grp"><h3>Result</h3><p class="hint" id="smInfo" style="font-family:var(--f-mono)">Estimating file size…</p>
     <div class="row"><button class="btn pri" id="smApply">Apply</button><button class="btn" id="smCancel">Cancel</button></div></div>`}
   P.innerHTML=h;
   if(t==='fill'){sw();P.querySelectorAll('[data-fp]').forEach(i=>i.oninput=()=>{S.p[i.dataset.fp]=+i.value});$('#fTr').onchange=e=>{S.p.fillTransparent=e.target.checked};$('#fCt').onchange=e=>{S.p.contig=e.target.checked}}
-  if(t==='erase'){P.querySelectorAll('[data-fp]').forEach(i=>i.oninput=()=>{S.p[i.dataset.fp]=+i.value});$('#eTo').value=S.p.eraseTo||'match';$('#eTo').onchange=e=>{S.p.eraseTo=e.target.value}}
+  if(t==='erase'){P.querySelectorAll('[data-fp]').forEach(i=>i.oninput=()=>{S.p[i.dataset.fp]=+i.value});for(const [id,k,d] of [['eTo','eraseTo','match'],['eWhat','eraseWhat','pixels'],['eShape','eraseShape','round']]){const e=$('#'+id);if(!e)continue;e.value=S.p[k]||d;e.onchange=()=>{S.p[k]=e.value;if(k==='eraseWhat')renderProps()}}}
   if(t==='cutout'){$('#cutX').onclick=()=>applyCut('x',+$('#cx1').value,+$('#cx2').value);$('#cutY').onclick=()=>applyCut('y',+$('#cy1').value,+$('#cy2').value)}
-  if(t==='simplify'){const o=S.simp,info=()=>{const k=o.scale/100;$('#smInfo').textContent=`${W} × ${H} px → ${Math.round(W*k)} × ${Math.round(H*k)} px`};info();
-    P.querySelectorAll('[data-sm]').forEach(i=>i.oninput=()=>{o[i.dataset.sm]=+i.value;info();simpPreview()});$('#smOut').onchange=e=>{o.outline=e.target.checked;simpPreview()};
-    P.querySelectorAll('[data-pre]').forEach(b=>b.onclick=()=>{const q=[[15,24,false,100],[35,12,false,100],[60,8,false,75],[30,6,true,100]][+b.dataset.pre];Object.assign(o,{detail:q[0],levels:q[1],outline:q[2],scale:q[3]});renderProps();simpPreview()});
+  if(t==='simplify'){const o=S.simp,size=()=>{const w=Math.max(1,Math.round(W*o.scale/100)),h2=Math.max(1,Math.round(H*o.scale/100)),saved=100-Math.round(w*h2/(W*H)*100);$('#smSize').textContent=`New: ${w} × ${h2} px · ${(w*h2/1e6).toFixed(2)} MP${saved>0?` · ${saved}% fewer pixels`:''}`;return[w,h2]};
+    const setScale=(pct,from)=>{o.scale=Math.max(1,Math.min(100,pct));const [w,h2]=size();if(from!=='w')$('#smW').value=w;if(from!=='h')$('#smH').value=h2;if(from!=='pct')$('#smPct').value=+o.scale.toFixed(2);simpPreview();simpEstimate()};size();simpEstimate();
+    $('#smW').onchange=e=>setScale(+e.target.value/W*100,'w');$('#smH').onchange=e=>setScale(+e.target.value/H*100,'h');$('#smPct').onchange=e=>setScale(+e.target.value,'pct');
+    P.querySelectorAll('[data-sm]').forEach(i=>i.oninput=()=>{o[i.dataset.sm]=+i.value;simpPreview();simpEstimate()});$('#smLevels').onchange=e=>{o.levels=+e.target.value;simpPreview();simpEstimate()};$('#smOut').onchange=e=>{o.outline=e.target.checked;simpPreview();simpEstimate()};
+    P.querySelectorAll('[data-pre]').forEach(b=>b.onclick=()=>{Object.assign(o,SIMP_PRESETS[+b.dataset.pre].set);renderProps();simpPreview()});
     $('#smCancel').onclick=()=>{S.simp=null;setTool('select')};
-    $('#smApply').onclick=()=>{const sc=o.scale;snap();it.base=ImgTools.simplify(it.base,{...o,scale:100});S.simp=null;if(sc<100)resizeImg(sc,true);else{layoutStage()}render();setTool('select');changed();toast('Simplified. Ctrl+Z to undo.')}}
+    $('#smApply').onclick=()=>{const sc=o.scale,w0=W,h0=H;snap();it.base=ImgTools.simplify(it.base,{...o,scale:100});S.simp=null;if(sc<100)resizeImg(sc,true);else{layoutStage()}render();setTool('select');changed();toast(`Simplified ${w0} × ${h0} to ${it.base.width} × ${it.base.height} px. Ctrl+Z to undo.`)}}
   numify(P);return true}
 function delSel(){const G=grpList();if(G.length>1){snap();const a=shapesOf(S.cur);G.forEach(q=>{const i=a.indexOf(q);if(i>=0)a.splice(i,1)});S.grp=[];S.sel=null;renumber();render();renderProps();changed();return}
   if(!S.sel)return;snap();const a=shapesOf(S.cur),wasStep=S.sel.t==='step';a.splice(a.indexOf(S.sel),1);S.sel=null;if(wasStep)renumber();render();renderProps();changed()}
@@ -1990,7 +2017,7 @@ const propsBefore35=renderProps;renderProps=function(){propsBefore35();if(S.tool
 
 // ---------- boot ----------
 
-if(window.bench){$('#widgetBtn').hidden=false;$('#widgetBtn').onclick=()=>window.bench.widgetOpen(curOpts());
+if(window.bench){$('#widgetBtn').hidden=false;$('#widgetBtn').onclick=()=>{const lg=document.querySelector('.brand i').getBoundingClientRect();window.bench.widgetOpen(curOpts(),{x:lg.left,y:lg.top})};
   window.bench.onWidgetOpts(o=>applySettings(o));
   window.bench.onWidgetGo(o=>{applySettings(o);if(S.mode==='video'){if(rec)return;fromWidget=true}$('#capBtn').click()});
   window.bench.onHotkey(mode=>{if(mode.startsWith('preset:')){runWorkflow(mode.slice(7)).catch(actionError);return}if(mode==='video'){if(rec){rec.stop();return}$('#mVid').click();startRec();return}if(rec)return;$("#mImg").click();captureDesktop(mode,true)});
@@ -1999,6 +2026,47 @@ if(window.bench){$('#widgetBtn').hidden=false;$('#widgetBtn').onclick=()=>window
   window.bench.onShortcutFailed(keys=>{if(keys.includes('PrintScreen'))toast('Windows is using the Print Screen key for Snipping Tool. Use Ctrl+Shift+X, or turn off "Use the Print screen key to open screen capture" in Windows Settings > Accessibility > Keyboard, then restart Saveit.',9000)});}
 // The version comes from package.json, so it follows each release automatically.
 window.bench?.appVersion?.().then(v=>{if(!v)return;const b=document.querySelector('.brand');const s=document.createElement('span');s.className='ver';s.textContent=v;b.append(' ',s);b.title='Saveit version '+v;document.title='Saveit '+v}).catch(()=>{});
+// Zoom box: type an exact percentage, step with -/+, or fit the window. The old dropdown stays hidden for compatibility.
+const ZOOM_STEPS=[10,25,33,50,67,75,100,125,150,200,300,400,600,800];
+function zoomAtCentre(z){const r=stage.getBoundingClientRect();setViewZoom(z,r.left+r.width/2,r.top+r.height/2)}
+function syncZoomBox(){const i=$('#zPct');if(!i||document.activeElement===i)return;const img=S.cur&&S.cur.kind==='image';i.value=img?Math.round(scale()*100)+'%':'';i.disabled=!img;['zIn','zOut','zMenu'].forEach(id=>$('#'+id).disabled=!img)}
+// Compact zoom control, the size of the old dropdown: type a percentage, nudge with the small arrows, or pick a preset.
+{const zb=document.createElement('label');zb.className='sel zoombox';
+ zb.innerHTML='Zoom <span class="zc"><input id="zPct" aria-label="Zoom percentage" title="Type a zoom level (10–800%) and press Enter"><span class="zspin"><button type="button" id="zIn" title="Zoom in" aria-label="Zoom in">▲</button><button type="button" id="zOut" title="Zoom out" aria-label="Zoom out">▼</button></span><button type="button" id="zMenu" title="Zoom presets" aria-label="Zoom presets">▾</button></span>';
+ zoom34.replaceWith(zb);zoom34.hidden=true;acts34.append(zoom34);
+ const st=document.createElement('style');st.textContent=`.zoombox{gap:6px}.zc{display:flex;align-items:stretch;height:32px;border:1px solid var(--line);border-radius:7px;background:var(--panel-2);overflow:hidden}
+  .zc input{width:44px;border:0;background:transparent;color:var(--fg);font:inherit;font-family:var(--f-mono);font-size:12px;text-align:right;padding:0 4px;outline:none}.zc input:focus{background:var(--panel)}
+  .zspin{display:flex;flex-direction:column;border-left:1px solid var(--line)}.zc button{border:0;background:transparent;color:var(--muted);padding:0;cursor:pointer;line-height:1}
+  .zspin button{flex:1;width:16px;font-size:7px}.zc button:hover:not(:disabled){color:var(--fg);background:var(--panel)}#zMenu{width:20px;border-left:1px solid var(--line);font-size:11px}.zc button:disabled{opacity:.35;cursor:default}`;document.head.append(st);
+ const pct=()=>Math.round(scale()*100),inp=$('#zPct');
+ $('#zIn').onclick=e=>{e.preventDefault();zoomAtCentre((ZOOM_STEPS.find(v=>v>pct())||800)/100)};$('#zOut').onclick=e=>{e.preventDefault();zoomAtCentre(([...ZOOM_STEPS].reverse().find(v=>v<pct())||10)/100)};
+ $('#zMenu').onclick=e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();menuAt(r.right-180,r.bottom+4,'Zoom',[['Fit to window',()=>{const z=$('#zoom');z.value='fit';z.dispatchEvent(new Event('change'))}],null,...[25,50,75,100,150,200,400,800].map(p=>[p+'%',()=>zoomAtCentre(p/100)])])};
+ const commit=()=>{const v=parseFloat(inp.value);if(Number.isFinite(v))zoomAtCentre(Math.min(800,Math.max(10,v))/100);inp.blur();syncZoomBox()};
+ inp.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter')commit();if(e.key==='Escape'){inp.blur();syncZoomBox()}if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();zoomAtCentre(Math.min(800,Math.max(10,pct()+(e.key==='ArrowUp'?1:-1)*(e.shiftKey?10:1)))/100);inp.value=pct()+'%';inp.select()}};
+ inp.onchange=commit;inp.onfocus=()=>inp.select();inp.ondblclick=()=>inp.select();
+ const statusBefore36=status;status=function(){statusBefore36();syncZoomBox()};syncZoomBox()}
+// Top bar in two compact rows: brand and Widget (as in the widget window) over Capture; Image/Video starts the top row of options.
+// Image: Selection, Cursor, Copy to clipboard / Effect, Delay. Video: Selection, Cursor, Copy to clipboard, Delay / System audio, Microphone, Webcam.
+{const lead=$('.lead'),segcol=document.createElement('div'),col=document.createElement('div'),r1=document.createElement('div'),r2=document.createElement('div'),areaL=$('#area').closest('label'),delayL=$('#delay').closest('label');
+ segcol.className='segcol';col.className='optcol';r1.className='optrow';r2.className='optrow';
+ const seg=$('.top .seg');$('.leadrow').append($('#widgetBtn'));col.append(r1,r2);lead.after(col);
+ const place=()=>{const v=S.mode==='video';r1.append(seg,areaL,$('#curWrap'),$('#clipWrap'));if(v){r1.append(delayL);r2.append($('#sysWrap'),$('#micWrap'),$('#camWrap'))}else r2.append($('#fxWrap'),delayL)};
+ const syncBefore37=syncAreaOptions;syncAreaOptions=function(){syncBefore37();place()};place();
+ const st=document.createElement('style');st.textContent=`.top{flex-wrap:nowrap!important}.tleft{flex-wrap:nowrap!important;align-items:center!important;gap:12px!important}
+  .lead,.optcol{display:grid!important;grid-template-rows:28px 32px;row-gap:5px!important;align-content:center;min-width:0}
+  .lead .cap button{height:32px;font-size:12px;padding:0 12px}.leadrow{height:28px}
+  .top .btn{min-height:24px!important;height:24px;padding:0 8px!important;font-size:11.5px!important}.top .acts .compact-history34 .btn{width:28px;min-width:28px}
+  .top .acts #saveBtn,.top .acts #saveAsBtn,.top .acts #openBtn,.top .acts #newMenu34{height:28px}.top .acts .compact-history34 .btn{width:26px!important;min-width:26px!important}.top .sel{font-size:12px}.top .sel select{font-size:12px;padding:0 6px;height:24px}
+  .top .seg button{padding:0 10px;font-size:12px;height:26px}.zc{height:24px}
+  .leadrow .brand{margin-right:0}.top .leadrow #widgetBtn{height:auto;min-height:0!important;padding:3px 9px!important;font-size:11px!important}.optrow{gap:9px!important}#area{max-width:118px!important}.optrow .seg{height:30px}.optrow .seg button{padding:0 12px}
+  .optrow{display:flex;align-items:center;gap:10px;min-width:0;white-space:nowrap}
+  .top .acts{grid-template-columns:auto auto auto 88px!important;grid-template-rows:24px 28px;row-gap:5px!important}
+  .top .sel select{padding-top:4px;padding-bottom:4px}#area{max-width:130px}.devsel{max-width:104px}
+  @media(max-width:1180px){.optrow{gap:8px}.devsel{max-width:100px}#area{max-width:115px}}`;document.head.append(st)}
+// The capture controls share capbar.css with the widget so both line up control for control.
+$('.tleft').classList.add('capbar');
+// New step guides are made from the New menu; the tray button stays only as that menu's hidden target.
+$('#newGuideBtn').hidden=true;{const l=document.createElement('link');l.rel='stylesheet';l.href='capbar.css';document.head.append(l)}
 bootLibrary().catch(storageError);
 })();
 </script>

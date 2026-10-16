@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Webcam settings</title>
+<style>
+html,body{margin:0;background:#16181a;color:#e8eaec;font:13px "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;user-select:none;height:100%}
+main{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:20px;padding:18px 20px 12px;box-sizing:border-box;height:calc(100% - 58px)}
+h1{font-size:16px;margin:0 0 4px}.hint{color:#9aa1a8;font-size:12px;margin:0 0 12px}
+canvas{width:100%;border-radius:10px;background:#2a2f34;display:block}
+#msg{color:#f0a35e;font-size:12px;min-height:16px;margin-top:8px}
+.ctl{display:flex;flex-direction:column;gap:12px;overflow:auto}
+.f{display:flex;flex-direction:column;gap:6px}.f>span{color:#b4bac0;font-weight:600;font-size:12px}
+.seg{display:flex;border:1px solid #3a3f45;border-radius:8px;overflow:hidden}
+.seg button{flex:1;border:0;border-right:1px solid #3a3f45;background:transparent;color:#c9ced3;padding:7px 6px;font:inherit;cursor:pointer}.seg button:last-child{border-right:0}
+.seg button[aria-pressed=true]{background:#2db3a0;color:#06211d;font-weight:700}.seg button:disabled{opacity:.35;cursor:default}
+.pos{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:150px}.pos button{height:44px;border:1px solid #3a3f45;border-radius:7px;background:#26292d;cursor:pointer;position:relative}
+.pos button::after{content:"";position:absolute;width:14px;height:14px;border-radius:50%;background:#7d848b}
+.pos [data-v=tl]::after{left:6px;top:6px}.pos [data-v=tr]::after{right:6px;top:6px}.pos [data-v=bl]::after{left:6px;bottom:6px}.pos [data-v=br]::after{right:6px;bottom:6px}
+.pos button[aria-pressed=true]{border-color:#2db3a0;background:#1d3d39}.pos button[aria-pressed=true]::after{background:#2db3a0}
+select,input[type=color]{font:inherit;background:#26292d;color:#e8eaec;border:1px solid #3a3f45;border-radius:6px;padding:5px}input[type=color]{width:44px;height:30px;padding:2px}
+.row{display:flex;align-items:center;gap:10px}input[type=range]{flex:1;accent-color:#2db3a0}.val{font-family:Consolas,monospace;min-width:44px;text-align:right;color:#c9ced3}
+label.ck{display:flex;align-items:center;gap:8px;cursor:pointer}
+footer{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;border-top:1px solid #2c3035;height:58px;box-sizing:border-box}
+footer button{font:inherit;font-weight:700;border-radius:8px;border:1px solid #3a3f45;background:#30343a;color:#e8eaec;padding:8px 18px;cursor:pointer}
+footer .pri{background:#2db3a0;border-color:#2db3a0;color:#06211d}
+</style></head><body>
+<main>
+  <section><h1>Webcam settings</h1><p class="hint">This is how your webcam will appear on recordings. Changes are saved right away.</p>
+    <canvas id="prev" width="1280" height="720" aria-label="Webcam preview"></canvas><div id="msg" role="status"></div></section>
+  <section class="ctl">
+    <div class="f"><span>Camera</span><select id="dev" aria-label="Camera"></select></div>
+    <div class="f"><span>Shape</span><div class="seg" data-k="shape"><button data-v="circle">Circle</button><button data-v="square">Square</button><button data-v="rect">Wide 16:9</button></div></div>
+    <div class="f"><span>Corners</span><div class="seg" data-k="corners"><button data-v="square">Square</button><button data-v="rounded">Rounded</button></div></div>
+    <div class="f"><span>Position</span><div class="pos" data-k="pos"><button data-v="tl" aria-label="Top left"></button><button data-v="tr" aria-label="Top right"></button><button data-v="bl" aria-label="Bottom left"></button><button data-v="br" aria-label="Bottom right"></button></div></div>
+    <div class="f"><span>Size (% of the recording's width)</span><div class="row"><input type="range" id="size" min="10" max="45" aria-label="Webcam size"><span class="val" id="sizeV"></span></div></div>
+    <label class="ck"><input type="checkbox" id="border"> Border</label>
+    <div class="row" id="borderRow"><span style="color:#b4bac0">Colour</span><input type="color" id="bcol" aria-label="Border colour"><input type="range" id="bw" min="1" max="12" aria-label="Border thickness"><span class="val" id="bwV"></span></div>
+    <label class="ck"><input type="checkbox" id="mirror"> Mirror image (like looking in a mirror)</label>
+  </section>
+</main>
+<footer><span class="hint" style="margin:0">Used for every recording with Webcam turned on.</span><div><button id="reset">Reset</button> <button class="pri" id="done">Done</button></div></footer>
+<script src="devices.js"></script><script src="camdraw.js"></script>
+<script>
+const $=id=>document.getElementById(id),cv=$('prev'),g=cv.getContext('2d'),v=document.createElement('video');v.muted=true;v.playsInline=true;
+let o=CAMDRAW.load(),stream=null;
+function sync(){
+  document.querySelectorAll('[data-k] button').forEach(b=>b.setAttribute('aria-pressed',o[b.parentElement.dataset.k]===b.dataset.v));
+  document.querySelectorAll('[data-k=corners] button').forEach(b=>b.disabled=o.shape==='circle');
+  $('size').value=o.size;$('sizeV').textContent=o.size+'%';$('border').checked=!!o.border;$('bcol').value=o.borderColor;$('bw').value=o.borderWidth;$('bwV').textContent=o.borderWidth+' px';
+  $('borderRow').style.opacity=o.border?1:.4;$('bcol').disabled=$('bw').disabled=!o.border;$('mirror').checked=o.mirror!==false;CAMDRAW.save(o)}
+async function start(id){if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('msg').textContent='Starting camera…';
+  try{const r=await DEVICES.open('cam',id,{width:{ideal:1280},height:{ideal:720}});stream=r.stream;v.srcObject=stream;await v.play();
+    const cur=stream.getVideoTracks()[0].getSettings().deviceId;o.deviceId=cur;$('msg').textContent=r.fellBack?'The saved camera was not found, so the default camera is shown.':'';await list();sync()}
+  catch(e){$('msg').textContent=e.message}}
+async function list(){const res=await DEVICES.list('cam',false);DEVICES.fill($('dev'),'cam',res,o.deviceId)}
+function paint(){const W=cv.width,H=cv.height;g.fillStyle='#2a2f34';g.fillRect(0,0,W,H);g.fillStyle='#3a4148';for(let i=0;i<7;i++)g.fillRect(80,70+i*80,1000-i*90,34);g.fillStyle='#4a535b';g.fillRect(0,0,W,40);CAMDRAW.draw(g,v,W,H,o);requestAnimationFrame(paint)}
+document.querySelectorAll('[data-k] button').forEach(b=>b.onclick=()=>{o[b.parentElement.dataset.k]=b.dataset.v;sync()});
+$('size').oninput=e=>{o.size=+e.target.value;sync()};$('border').onchange=e=>{o.border=e.target.checked;sync()};$('bcol').oninput=e=>{o.borderColor=e.target.value;sync()};
+$('bw').oninput=e=>{o.borderWidth=+e.target.value;sync()};$('mirror').onchange=e=>{o.mirror=e.target.checked;sync()};$('dev').onchange=e=>start(e.target.value);
+$('reset').onclick=()=>{const id=o.deviceId;o={...CAMDRAW.DEF,deviceId:id};sync()};
+$('done').onclick=()=>window.close();addEventListener('keydown',e=>{if(e.key==='Escape')window.close()});
+addEventListener('beforeunload',()=>{if(stream)stream.getTracks().forEach(t=>t.stop())});
+sync();paint();start(o.deviceId);
+</script></body></html>

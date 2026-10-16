@@ -1,0 +1,31 @@
+/* Capture bar shared by the editor's top bar (.tleft) and the capture widget (.bar), so both look and line up the same.
+   Compact sizes: two rows of 24px and 28px, controls measured from the Saveit logo. */
+.capbar{--cb-box:#26292d;--cb-line:#3a3f45;--cb-fg:#e8eaec;--cb-muted:#b4bac0;color-scheme:dark;gap:12px!important;align-items:center!important;flex-wrap:nowrap!important;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
+.capbar .lead{display:grid!important;grid-template-rows:24px 28px!important;row-gap:5px!important;width:178px;flex:none;margin:0!important;align-content:center}
+.capbar .leadrow{display:flex!important;align-items:center;gap:10px!important;height:24px!important}
+.capbar .brand{display:flex;align-items:center;gap:8px;font-size:13px!important;font-weight:700;margin:0!important;white-space:nowrap;color:var(--cb-fg)}
+.capbar .brand i{width:22px;height:22px;flex:none}
+.capbar .brand .ver{font:600 11px "Cascadia Mono",Consolas,monospace;color:#7d848b}
+.capbar #widgetBtn,.capbar #ed{height:22px!important;min-height:0!important;width:auto!important;padding:0 9px!important;font-size:11px!important;font-weight:700!important;border-radius:6px!important;background:#2db3a0!important;border:1px solid #2db3a0!important;color:#06211d!important;display:inline-flex;align-items:center}
+.capbar .cap{width:100%;display:flex}
+.capbar #capBtn,.capbar #ok{height:28px!important;width:100%!important;padding:0 12px!important;font-size:12px!important;font-weight:700!important;border-radius:999px!important;background:#e5483b!important;border:0!important;color:#fff!important;display:flex!important;align-items:center;justify-content:center;gap:7px}
+.capbar #capBtn svg,.capbar #ok svg{width:15px;height:15px;flex:none}
+.capbar .optcol{display:grid!important;grid-template-rows:24px 28px!important;row-gap:5px!important;min-width:0}
+.capbar .optrow{display:flex!important;align-items:center;gap:9px!important;white-space:nowrap;min-width:0}
+.capbar .optrow label{display:flex;align-items:center;gap:5px;font-size:12px!important;font-weight:600;color:var(--cb-muted)!important;margin:0}
+.capbar .optrow input[type=checkbox]{width:13px;height:13px;margin:0}
+.capbar .optrow select{height:24px!important;font-size:12px!important;font-family:inherit;padding:0 4px 0 7px!important;background:var(--cb-box)!important;color:var(--cb-fg)!important;border:1px solid var(--cb-line)!important;border-radius:6px!important}
+.capbar #area{width:112px!important;max-width:112px!important}.capbar #delay{width:64px!important}.capbar #fxSel{width:120px!important}
+.capbar .optrow select.devsel,.capbar .optrow select.dev{width:100px!important;max-width:100px!important}
+.capbar .seg{display:flex!important;height:24px!important;box-sizing:border-box;border:1px solid var(--cb-line)!important;border-radius:7px!important;overflow:hidden;background:var(--cb-box)!important}
+.capbar .seg button{height:22px!important;padding:0 11px!important;font-size:12px!important;font-weight:600!important;border:0!important;border-radius:0!important;background:transparent!important;color:var(--cb-muted)!important}
+.capbar .seg button[aria-pressed=true]{background:#2db3a0!important;color:#06211d!important;font-weight:700!important}
+.capbar #camGear,.capbar #fxGear{width:24px!important;min-width:24px!important;height:24px!important;padding:0!important;font-size:12px!important;display:inline-flex!important;align-items:center;justify-content:center;background:var(--cb-box)!important;border:1px solid var(--cb-line)!important;border-radius:6px!important;color:var(--cb-muted)!important}
+.capbar #camGear:hover,.capbar #fxGear:hover{color:var(--cb-fg)!important;border-color:#9aa1a8!important}
+/* Exact matching: fixed widths for the small button and Image/Video, one font, and the widget's separate
+   device pickers and gears sit 5px from their label, as they do inside the editor's labels. */
+.capbar button,.capbar select,.capbar label{font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif!important}
+.capbar #widgetBtn,.capbar #ed{width:58px!important;justify-content:center;padding:0!important}
+.capbar .seg button{width:56px!important;padding:0!important;text-align:center}
+.capbar #vidOpts>select.dev,.capbar #vidOpts>#camGear,.capbar #imgOpts>#fxGear{margin-left:-4px!important}
+.capbar .seg{padding:0!important;gap:0!important;width:114px!important;flex:none}
