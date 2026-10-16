@@ -1,6 +1,17 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('bench', {
+  onBeforeClose: fn => ipcRenderer.on('review-before-close',fn),
+  closeReady: () => ipcRenderer.send('review-close-ready'),
+  quickMarkup: url => ipcRenderer.invoke('quick-markup',url),
+  workflowConfig: () => ipcRenderer.invoke('workflow-config'),
+  saveWorkflows: list => ipcRenderer.invoke('workflow-save', list),
+  chooseWorkflowFolder: () => ipcRenderer.invoke('workflow-folder'),
+  workflowSaveFile: (folder,name,data) => ipcRenderer.invoke('workflow-file',folder,name,data),
+  ocrLayout: url => ipcRenderer.invoke('ocr-layout',url),
+  printImage: url => ipcRenderer.invoke('print-image',url),
+  readClipboard: () => ipcRenderer.invoke('clipboard-read'),
+  copyEditable: (url, text) => ipcRenderer.invoke('clipboard-editable', url, text),
   capture: (mode, delay, opts, pre) => ipcRenderer.invoke('capture', mode, delay, opts, pre),
   prepareRecord: (area, delay, opts, pre) => ipcRenderer.invoke('prepare-record', area, delay, opts, pre),
   ocr: dataUrl => ipcRenderer.invoke('ocr', dataUrl),

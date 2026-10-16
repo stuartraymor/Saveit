@@ -5,14 +5,44 @@ const os = require('os');
 const { spawn } = require('child_process');
 const fs = require('fs');
 
+// SAVEIT_REVIEW_DATA points the regression suites at an isolated test profile; normal runs use the real library.
+if (process.env.SAVEIT_REVIEW_DATA) app.setPath('userData', process.env.SAVEIT_REVIEW_DATA);
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 app.setAppUserModelId('com.saveit.app');
 // Keep the library from earlier versions (stored under the old app name)
-try { const old = path.join(app.getPath('appData'), 'Capture Bench'); if (fs.existsSync(old)) app.setPath('userData', old); } catch (_) { }
+try { const old = path.join(app.getPath('appData'), 'Capture Bench'); if (!process.env.SAVEIT_REVIEW_DATA && fs.existsSync(old)) app.setPath('userData', old); } catch (_) { }
 
 let win = null, tray = null, recording = false, trayTipShown = false;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const asset = f => path.join(__dirname, f);
+// Local-only workflow settings, explicitly chosen folders and reviewed output.
+const workflowPath=path.join(app.getPath('userData'),'workflows.json');let workflowConfig={presets:[],folders:[],lastRegion:null},lastRegion=null,workflowKeys=[];
+try{workflowConfig={...workflowConfig,...JSON.parse(fs.readFileSync(workflowPath,'utf8'))};lastRegion=workflowConfig.lastRegion}catch(_){}
+let configWrite=Promise.resolve();function saveWorkflowConfig(){workflowConfig.lastRegion=lastRegion;const data=JSON.stringify(workflowConfig,null,2);configWrite=configWrite.catch(()=>{}).then(async()=>{await fs.promises.mkdir(path.dirname(workflowPath),{recursive:true});const tmp=workflowPath+'.tmp';await fs.promises.writeFile(tmp,data);await fs.promises.rename(tmp,workflowPath)});return configWrite}
+function mainSender33(e){if(!win||e.sender!==win.webContents)throw Error('Unsupported request source')}
+function restoreWorkflowKeys(){for(const key of workflowKeys)globalShortcut.unregister(key);workflowKeys=[];return workflowConfig.presets.filter(p=>p.hotkey).map(p=>{let ok=false;try{ok=globalShortcut.register(p.hotkey,()=>{if(win&&!win.isDestroyed())win.webContents.send('hotkey','preset:'+p.id)})}catch(_){}if(ok)workflowKeys.push(p.hotkey);return{id:p.id,hotkey:p.hotkey,ok}})}
+ipcMain.handle('workflow-config',e=>{mainSender33(e);return{presets:workflowConfig.presets,lastRegion}});
+ipcMain.handle('workflow-save',async(e,list)=>{mainSender33(e);if(!Array.isArray(list)||list.length>100||!list.every(p=>typeof p.id==='string'&&typeof p.name==='string'&&p.name.length<=150&&['region','window','screen'].includes(p.area)&&(!p.hotkey||typeof p.hotkey==='string'&&p.hotkey.length<=100)&&(!p.folder||workflowConfig.folders.includes(p.folder))))throw Error('Invalid preset settings');workflowConfig.presets=list;await saveWorkflowConfig();return restoreWorkflowKeys()});
+ipcMain.handle('workflow-folder',async e=>{mainSender33(e);const r=await dialog.showOpenDialog(win,{title:'Choose automatic capture save folder',properties:['openDirectory','createDirectory']});if(r.canceled||!r.filePaths[0])return null;const folder=path.resolve(r.filePaths[0]);if(!workflowConfig.folders.includes(folder))workflowConfig.folders.push(folder);await saveWorkflowConfig();return folder});
+ipcMain.handle('workflow-file',async(e,folder,name,data)=>{mainSender33(e);if(!workflowConfig.folders.includes(folder))throw Error('Choose this save folder in Workflows first.');const safe=path.basename(String(name)).replace(/[<>:"/\\|?*\x00-\x1f]/g,'-');if(!safe||!safe.endsWith('.png'))throw Error('Expected a PNG filename');const parsed=path.parse(safe);let out=path.join(folder,safe),i=2;while(fs.existsSync(out))out=path.join(folder,parsed.name+'-'+i+++parsed.ext);await fs.promises.writeFile(out,Buffer.from(data),{flag:'wx'});return out});
+ipcMain.handle('ocr-layout',async(e,url)=>{mainSender33(e);return recognize35(url)});
+ipcMain.handle('print-image',async(e,url)=>{mainSender33(e);if(typeof url!=='string'||!url.startsWith('data:image/png;base64,'))throw Error('Expected a PNG image');const w=new BrowserWindow({show:false,webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true}});try{await w.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent('<html><head><style>@page{margin:12mm}body{margin:0}img{max-width:100%;height:auto}</style></head><body><img src="'+url+'"></body></html>'));await w.webContents.executeJavaScript('Promise.all([...document.images].map(i=>i.decode()))');return await new Promise(resolve=>w.webContents.print({silent:false,printBackground:true},(ok,reason)=>resolve({ok,reason})))}finally{w.destroy()}});
+function transposeFrame(f){const data=Buffer.alloc(f.w*f.h*4);for(let y=0;y<f.h;y++)for(let x=0;x<f.w;x++){const a=(y*f.w+x)*4,b=(x*f.h+y)*4;data[b]=f.data[a];data[b+1]=f.data[a+1];data[b+2]=f.data[a+2];data[b+3]=f.data[a+3]}return{data,w:f.h,h:f.w}}
+// Closing the window flushes pending library saves first, then hides to the tray (or quits when Quit was chosen).
+let quitPending=null;
+function requestQuit(){if(!win||win.isDestroyed()||quitPending){app.isQuitting=true;app.quit();return}quitPending=setTimeout(()=>{quitPending=null;showWindow()},5000);win.webContents.send('review-before-close')}
+ipcMain.on('review-close-ready',e=>{if(!win||e.sender!==win.webContents)return;if(quitPending){clearTimeout(quitPending);quitPending=null;app.isQuitting=true;app.quit();return}
+  win.hide();
+  if (!trayTipShown && tray && process.platform === 'win32') {
+    tray.displayBalloon({ iconType: 'info', title: 'Saveit is still running', content: 'Press Print Screen to capture. Right-click the tray icon to quit.' });
+    trayTipShown = true;
+  }
+});
+ipcMain.handle('quick-markup',async(e,url)=>{mainSender33(e);if(typeof url!=='string'||!url.startsWith('data:image/png;base64,'))throw Error('Expected a PNG capture');const q=new BrowserWindow({width:940,height:640,minWidth:640,minHeight:440,title:'Saveit Quick Markup',backgroundColor:'#1e2124',autoHideMenuBar:true,webPreferences:{preload:asset('quick-preload.js'),contextIsolation:true,nodeIntegration:false}});q.setMenu(null);await q.loadFile(asset('quick.html'));q.webContents.send('quick-image',url);return await new Promise(resolve=>{const done=(event,result)=>{if(event.sender!==q.webContents)return;if(result&&(!['copy','edit'].includes(result.action)||typeof result.url!=='string'||!result.url.startsWith('data:image/png;base64,')))return;ipcMain.removeListener('quick-result',done);if(result?.action==='edit')showWindow();resolve(result);q.destroy()};ipcMain.on('quick-result',done);q.on('closed',()=>{ipcMain.removeListener('quick-result',done);resolve(null)})})});
+async function manualScroll33(display,rect,horizontal){const bar=new BrowserWindow({width:620,height:170,resizable:false,alwaysOnTop:true,title:'Saveit Manual Scroll',autoHideMenuBar:true,backgroundColor:'#20262a',webPreferences:{preload:asset('manual-preload.js'),contextIsolation:true,nodeIntegration:false}});bar.setMenu(null);const st=new Stitcher();let busy=false,done=false,frames=0;await bar.loadFile(asset('manual.html'));const status=message=>{if(!bar.isDestroyed())bar.webContents.send('manual-status',message)};
+ return new Promise(resolve=>{const cleanup=()=>{ipcMain.removeListener('manual-command',command);if(!bar.isDestroyed())bar.destroy()};const take=async()=>{if(busy||done)return;busy=true;try{bar.hide();await sleep(160);const img=await grabDisplay(display),k=img.getSize().width/display.bounds.width,c=img.crop({x:Math.round(rect.x*k),y:Math.round(rect.y*k),width:Math.round(rect.w*k),height:Math.round(rect.h*k)}),size=c.getSize(),f={data:c.toBitmap(),w:size.width,h:size.height},r=st.add(horizontal?transposeFrame(f):f);frames++;status(r.lost?'No overlapping content found. Undo is unavailable; finish and retry with smaller scrolls.':`${frames} frame(s). Scroll a little, then add the next frame.`)}catch(e){status(e.message)}finally{busy=false;if(!bar.isDestroyed())bar.show()}};const command=async(e,cmd)=>{if(e.sender!==bar.webContents||busy||done)return;if(cmd==='add'){await take();return}if(cmd==='finish'&&frames){done=true;const result=st.result(),o=horizontal?transposeFrame(result):result;cleanup();resolve(nativeImage.createFromBitmap(o.data,{width:o.w,height:o.h}));return}if(cmd==='cancel'){done=true;cleanup();resolve(null)}};ipcMain.on('manual-command',command);bar.on('closed',()=>{if(!done){done=true;ipcMain.removeListener('manual-command',command);resolve(null)}});take()})
+}
+
 
 function createWindow() {
   win = new BrowserWindow({
@@ -24,14 +54,7 @@ function createWindow() {
   win.setMenu(null);
   win.loadFile(asset('index.html'));
   win.once('ready-to-show', () => { if (!process.argv.includes('--hidden')) win.show(); });
-  win.on('close', e => {
-    if (app.isQuitting) return;
-    e.preventDefault(); win.hide();
-    if (!trayTipShown && tray && process.platform === 'win32') {
-      tray.displayBalloon({ iconType: 'info', title: 'Saveit is still running', content: 'Press Print Screen to capture. Right-click the tray icon to quit.' });
-      trayTipShown = true;
-    }
-  });
+  win.on('close', e => { if(app.isQuitting)return;e.preventDefault();win.webContents.send('review-before-close'); });
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
 }
 
@@ -109,19 +132,19 @@ async function pickWindow(d) {
 
 // ---------- scrolling capture ----------
 const { Stitcher } = require('./stitch.js');
-function wheelDriver() {
+function wheelDriver(horizontal=false) {
   if (process.platform !== 'win32') throw new Error('Scrolling capture works on Windows.');
   const { spawn } = require('child_process');
   const ps = spawn('powershell.exe', ['-NoProfile', '-NoLogo', '-NonInteractive', '-Command', '-'], { windowsHide: true });
   ps.stdin.write(`Add-Type -Namespace W -Name M -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y); [DllImport("user32.dll")] public static extern void mouse_event(uint f,int x,int y,int d,int e);'\n`);
   return {
     move: (x, y) => ps.stdin.write(`[W.M]::SetCursorPos(${Math.round(x)},${Math.round(y)})\n`),
-    wheel: n => ps.stdin.write(`[W.M]::mouse_event(0x0800,0,0,${-120 * n},0)\n`),
+    wheel: n => ps.stdin.write(`[W.M]::mouse_event(${horizontal?0x1000:0x0800},0,0,${(horizontal?120:-120) * n},0)\n`),
     close: () => { try { ps.stdin.end(); ps.kill(); } catch (_) {} }
   };
 }
-async function scrollCapture(d, r) {
-  const k0 = d.scaleFactor || 1, drv = wheelDriver(), st = new Stitcher();
+async function scrollCapture(d, r, horizontal=false) {
+  const k0 = d.scaleFactor || 1, drv = wheelDriver(horizontal), st = new Stitcher();
   try {
     const cx = d.bounds.x + r.x + r.w / 2, cy = d.bounds.y + r.y + r.h / 2;
     drv.move(cx, cy); await sleep(500);
@@ -130,14 +153,14 @@ async function scrollCapture(d, r) {
       const img = await grabDisplay(d), kk = img.getSize().width / d.bounds.width;
       const rect = { x: Math.round(r.x * kk), y: Math.round(r.y * kk), width: Math.max(1, Math.round(r.w * kk)), height: Math.max(1, Math.round(r.h * kk)) };
       const c = img.crop(rect), sz = c.getSize();
-      const res = st.add({ data: c.toBitmap(), w: sz.width, h: sz.height });
+      const res = st.add({ ...(horizontal?transposeFrame({data:c.toBitmap(),w:sz.width,h:sz.height}):{data:c.toBitmap(),w:sz.width,h:sz.height}) });
       if (res.done) break;
       if (!res.first && res.added > 0) { ppn = res.added / notches; notches = Math.max(1, Math.min(30, Math.floor(sz.height * 0.6 / Math.max(1, ppn)))); }
       if (st.total > 32000) break;
       drv.wheel(notches); await sleep(450);
     }
   } finally { drv.close(); }
-  const o = st.result(), { nativeImage } = require('electron');
+  const result = st.result(), o=horizontal?transposeFrame(result):result, { nativeImage } = require('electron');
   return nativeImage.createFromBitmap(o.data, { width: o.w, height: o.h });
 }
 
@@ -170,15 +193,16 @@ async function doCapture(mode, delay = 0, opts = {}, pre = null) {
         if (!r) { restoreUI(wasVisible); return null; }
         if (r.redirect === 'window') { mode = 'window'; settings = r.opts; continue; }
         if (r.redirect === 'steps') return { redirect: 'steps', settings: r.opts };
-        if (r.opts) settings = r.opts;
+        if (r.opts) settings = {...opts,...r.opts};
         if (!pre && settings.mode === 'video') return { redirect: 'video', rect: { x: r.x, y: r.y, w: r.w, h: r.h, did: d.id }, settings };
         if (settings.area === 'text') mode = 'text';
-        if (settings.area === 'scroll' && !pre) mode = 'scroll'; else if (mode === 'scroll') mode = 'region';
+        if (settings.area === 'scroll' && !pre) mode = 'scroll'; else if (mode === 'scroll' && !opts.manualScroll) mode = 'region';
         const k = img.getSize().width / d.bounds.width;
+        lastRegion={did:d.id,x:r.x,y:r.y,w:r.w,h:r.h};saveWorkflowConfig();
         const rect = { x: Math.round(r.x * k), y: Math.round(r.y * k), width: Math.max(1, Math.round(r.w * k)), height: Math.max(1, Math.round(r.h * k)) };
         if (mode === 'scroll') {
           if (win) win.hide(); await sleep(250);
-          out = await scrollCapture(d, r); cursor = { x: -1, y: -1, k: kk };
+          out = settings.manualScroll?await manualScroll33(d,r,settings.scrollDirection==='horizontal'):await scrollCapture(d,r,settings.scrollDirection==='horizontal');if(!out){restoreUI(wasVisible);return null;} cursor = { x: -1, y: -1, k: kk };
         } else {
           out = img.crop(rect);
           cursor = { x: cursor.x - rect.x, y: cursor.y - rect.y, k: kk };
@@ -186,8 +210,8 @@ async function doCapture(mode, delay = 0, opts = {}, pre = null) {
       }
       break;
     }
-    showWindow();
-    return { url: out.toDataURL(), cursor, settings, area: mode };
+    if(!opts.quiet)showWindow();
+    return { region:lastRegion, url: out.toDataURL(), cursor, settings, area: mode };
   } catch (err) {
     showWindow();
     throw err;
@@ -420,20 +444,20 @@ ipcMain.handle('print-pdf', async (e, html, name) => {
   } finally { pw.destroy(); try { fs.unlinkSync(tmp); } catch (_) { } }
 });
 
-const FILTERS = { png: 'PNG image', jpg: 'JPEG image', webm: 'WebM video', mp4: 'MP4 video', docx: 'Word document', pdf: 'PDF document', saveit: 'Saveit file', webp: 'WebP image', bmp: 'BMP image', ico: 'Icon', svg: 'SVG picture', html: 'Web page' };
+const FILTERS = { pptx:'PowerPoint presentation',saveitbackup:'Saveit library backup',png: 'PNG image', jpg: 'JPEG image', webm: 'WebM video', mp4: 'MP4 video', docx: 'Word document', pdf: 'PDF document', saveit: 'Saveit file', webp: 'WebP image', bmp: 'BMP image', ico: 'Icon', svg: 'SVG picture', html: 'Web page' };
 ipcMain.handle('save', async (e, name, buf) => {
   const ext = (name.split('.').pop() || 'png').toLowerCase();
-  const dir = ['webm', 'mp4'].includes(ext) ? app.getPath('videos') : ['docx', 'pdf', 'saveit'].includes(ext) ? app.getPath('documents') : app.getPath('pictures');
+  const dir = ['webm', 'mp4'].includes(ext) ? app.getPath('videos') : ['docx', 'pdf', 'saveit','pptx','saveitbackup'].includes(ext) ? app.getPath('documents') : app.getPath('pictures');
   const r = await dialog.showSaveDialog(win, { defaultPath: path.join(dir, name), filters: [{ name: FILTERS[ext] || ext.toUpperCase(), extensions: [ext] }] });
   if (r.canceled || !r.filePath) return null;
-  fs.writeFileSync(r.filePath, Buffer.from(buf));
+  await fs.promises.writeFile(r.filePath, Buffer.from(buf));
   return r.filePath;
 });
 
 ipcMain.handle('save-many', async (e, files) => {
   const r = await dialog.showOpenDialog(win, { title: 'Choose a folder', defaultPath: app.getPath('pictures'), properties: ['openDirectory', 'createDirectory'] });
   if (r.canceled || !r.filePaths[0]) return null;
-  for (const f of files) fs.writeFileSync(path.join(r.filePaths[0], path.basename(f.name)), Buffer.from(f.data));
+  for (const f of files) await fs.promises.writeFile(path.join(r.filePaths[0], path.basename(f.name)), Buffer.from(f.data));
   return r.filePaths[0];
 });
 
@@ -457,25 +481,7 @@ if ($engine -eq $null) { [Console]::Error.WriteLine('NO_ENGINE'); exit 2 }
 $result = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
 foreach ($line in $result.Lines) { [Console]::Out.WriteLine($line.Text) }
 `;
-ipcMain.handle('ocr', async (e, dataUrl) => {
-  if (process.platform !== 'win32') throw new Error('Grab Text uses the text recognition built into Windows');
-  const dir = path.join(os.tmpdir(), 'saveit'); fs.mkdirSync(dir, { recursive: true });
-  const png = path.join(dir, 'ocr-' + Date.now() + '.png'), ps1 = path.join(dir, 'ocr.ps1');
-  fs.writeFileSync(png, Buffer.from(dataUrl.split(',')[1], 'base64'));
-  fs.writeFileSync(ps1, '﻿' + OCR_SCRIPT, 'utf8');
-  try {
-    return await new Promise((resolve, reject) => {
-      const p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps1, '-Path', png], { windowsHide: true });
-      let out = '', err = '';
-      const timer = setTimeout(() => { try { p.kill(); } catch (_) { } reject(new Error('Text recognition took too long')); }, 45000);
-      p.stdout.on('data', d => out += d.toString('utf8'));
-      p.stderr.on('data', d => err += d.toString('utf8'));
-      p.on('exit', code => { clearTimeout(timer); if (code === 0) resolve(out.replace(/\r/g, '').trim());
-        else reject(new Error(/NO_ENGINE/.test(err) ? 'No text-recognition language is installed in Windows (Settings > Time & language > Language)' : 'Windows text recognition is not available on this computer')); });
-      p.on('error', () => { clearTimeout(timer); reject(new Error('PowerShell could not start')); });
-    });
-  } finally { try { fs.unlinkSync(png); } catch (_) { } }
-});
+ipcMain.handle('ocr',async(e,url)=>{mainSender33(e);const result=await recognize35(url);return result.lines.map(l=>l.text).join('\n')});
 
 // Put a saved recording on the clipboard as a file, ready to paste into email, Teams or a folder
 ipcMain.handle('copy-file', async (e, name, buf) => {
@@ -489,6 +495,18 @@ ipcMain.handle('copy-file', async (e, name, buf) => {
   });
 });
 
+ipcMain.handle('clipboard-read', e => {
+  if (!win || e.sender !== win.webContents) throw new Error('Invalid clipboard sender');
+  const image = clipboard.readImage();
+  return { image: image.isEmpty() ? null : image.toDataURL(), text: clipboard.readText().slice(0, 16000000) };
+});
+ipcMain.handle('clipboard-editable', (e, url, text) => {
+  if (!win || e.sender !== win.webContents || typeof text !== 'string' || text.length > 16000000 || !/^data:image\/png;base64,/.test(url)) throw new Error('Invalid clipboard data');
+  const image = nativeImage.createFromDataURL(url);
+  if (image.isEmpty()) throw new Error('Empty image');
+  clipboard.write({ image, text });
+  return true;
+});
 ipcMain.handle('copy-image', (e, dataUrl) => { clipboard.writeImage(nativeImage.createFromDataURL(dataUrl)); return true; });
 ipcMain.on('recording', (e, on) => { recording = !!on; buildTrayMenu(); });
 
@@ -523,7 +541,7 @@ function buildTrayMenu() {
     { label: 'Open Saveit', click: showWindow },
     { label: 'Start with Windows', type: 'checkbox', checked: startAtLogin(), click: i => app.setLoginItemSettings({ openAtLogin: i.checked, name: 'Saveit', args: ['--hidden'] }) },
     { type: 'separator' },
-    { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } }
+    { label: 'Quit', click: requestQuit }
   ]));
 }
 
@@ -546,9 +564,32 @@ app.whenReady().then(() => {
   tray.setToolTip('Saveit');
   tray.on('click', showWindow);
   buildTrayMenu();
-  const failed = registerShortcuts();
+  // Test profiles skip the built-in hotkeys so a running installed copy keeps them.
+  const failed = process.env.SAVEIT_REVIEW_DATA ? [] : registerShortcuts();
+  restoreWorkflowKeys(); // preset hotkeys after the built-ins, so conflicts are reported on the preset
   if (failed.length) win.webContents.once('did-finish-load', () => win.webContents.send('shortcut-failed', failed));
 });
 
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', e => { /* keep running in the tray */ });
+// The text and positioned-text paths use the same local Windows OCR service.
+async function recognize35(url){
+ if(process.platform!=='win32')throw Error('Grab Text requires Windows OCR.');
+ if(typeof url!=='string'||!/^data:image\/png;base64,/.test(url)||url.length>180000000)throw Error('Choose a PNG image up to 64 million pixels.');
+ const img=nativeImage.createFromDataURL(url),size=img.getSize();if(img.isEmpty()||size.width*size.height>64000000)throw Error('Choose an image up to 64 million pixels.');
+ const dir=await fs.promises.mkdtemp(path.join(os.tmpdir(),'saveit-ocr35-')),png=path.join(dir,'image.png');
+ try{await fs.promises.writeFile(png,Buffer.from(url.split(',')[1],'base64'));const data=await new Promise((resolve,reject)=>{
+ const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',asset('ocr.ps1'),'-Path',png],{windowsHide:true});let out='',err='',timedOut=false;
+ const timer=setTimeout(()=>{timedOut=true;child.kill()},90000);child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');child.stdout.on('data',d=>out+=d);child.stderr.on('data',d=>err+=d);
+ child.on('error',e=>{clearTimeout(timer);reject(Error('Windows text recognition could not start: '+e.message))});
+ child.on('close',code=>{clearTimeout(timer);if(timedOut){reject(Error('Text recognition took too long. Select a smaller area.'));return}if(code!==0){reject(Error(/NO_ENGINE/.test(err)?'No Windows OCR language is installed. Add a language with text recognition in Windows Settings.':'Windows text recognition failed. Try a smaller area.'));return}try{resolve(JSON.parse(out.trim().replace(/^\uFEFF/,'')))}catch(e){reject(Error('Windows returned unreadable text-recognition results.'))}})
+ });
+ // Merge repeated words in tile overlaps, preserving two identical lines at different positions.
+ const words=[];const overlap=(a,b)=>{const w=Math.max(0,Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x)),h=Math.max(0,Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y));return w*h/Math.max(1,Math.min(a.w*a.h,b.w*b.h))};
+ for(const line of data.lines||[])for(const word of line.words||[]){const duplicate=words.find(w=>overlap(w.rect,word.rect)>.65);if(!duplicate)words.push(word);else if(word.text.length>duplicate.text.length)Object.assign(duplicate,word)}
+ words.sort((a,b)=>a.rect.y-b.rect.y||a.rect.x-b.rect.x);const rows=[];
+ for(const word of words){let row=rows.find(r=>Math.abs(r.y-(word.rect.y+word.rect.h/2))<Math.min(r.h,word.rect.h)*.45);if(!row){row={y:word.rect.y+word.rect.h/2,h:word.rect.h,words:[]};rows.push(row)}row.words.push(word)}
+ const lines=rows.sort((a,b)=>a.y-b.y).map(row=>{const w=row.words.sort((a,b)=>a.rect.x-b.rect.x),x=Math.min(...w.map(a=>a.rect.x)),y=Math.min(...w.map(a=>a.rect.y)),right=Math.max(...w.map(a=>a.rect.x+a.rect.w)),bottom=Math.max(...w.map(a=>a.rect.y+a.rect.h));return{text:w.map(a=>a.text).join(' '),words:w,rect:{x,y,w:right-x,h:bottom-y}}});
+ return{lines,width:size.width,height:size.height};
+ }finally{await fs.promises.rm(dir,{recursive:true,force:true}).catch(()=>{})}
+}
