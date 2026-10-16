@@ -1166,12 +1166,23 @@ function textFormat(s,t){const d=s||textDefaults,fam=d.fontFamily||'Segoe UI',bo
 function setText(k,v){textDefaults[k]=v;const s=S.sel;if(s&&(s.t==='text'||s.t==='callout')){snap();s[k]=v;s._w=null;render();changed()}renderProps()}
 function objectGroup(s){const b=selBox(s);
   return `<div class="grp"><h3>Position and size</h3><div class="crop-grid">${[['X','x'],['Y','y'],['Width','w'],['Height','h']].map(([l,k])=>`<label>${l}<input type="number" data-ob="${k}" aria-label="${l}" value="${Math.round(b[k])}" ${k==='w'||k==='h'?'min="2"':''}></label>`).join('')}</div>${UNIFORM.includes(s.t)?'<p class="hint">Width and height change together for this object.</p>':''}<div class="row"><button class="btn" id="dup">Duplicate</button><button class="btn" id="front">To front</button><button class="btn" id="back">To back</button><button class="btn" id="del">Delete</button></div></div>`}
+// 8.7: Width, Height, a proportion lock and Size Presets at the top of the Image tab. They use the same resize as the
+// corner handles (commitResize80), so Undo and the annotation rules are the same. "Original" is the size the picture had
+// when it was first shown in this session (it isn't saved with the capture yet).
+let resLock87=true;const origSizes87=new Map();
+const RES_PRESETS87=[['orig','Original image size'],['640x480','640 × 480'],['800x600','800 × 600'],['1280x720','1280 × 720'],['1920x1080','1920 × 1080'],['2560x1440','2560 × 1440'],['3840x2160','3840 × 2160'],['fit','Fit to window'],['custom','Custom size']];
+const LOCK_ON87='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>';
+const LOCK_OFF87='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 017.8-1.3"/></svg>';
+function resFields87(it){const W=it.base.width,H=it.base.height;if(!origSizes87.has(it.id))origSizes87.set(it.id,{w:W,h:H});const o=origSizes87.get(it.id);
+  const match=RES_PRESETS87.find(([k])=>k==='orig'?o.w===W&&o.h===H:/^\d+x\d+$/.test(k)&&k.split('x').map(Number).join('x')===W+'x'+H)?.[0]||'custom';
+  return `<div class="row res87"><label>Width <input type="number" id="resW87" min="1" max="16384" step="1" value="${W}" aria-label="Width in pixels"></label><label>Height <input type="number" id="resH87" min="1" max="16384" step="1" value="${H}" aria-label="Height in pixels"></label><button class="btn" id="resLock87" aria-pressed="${resLock87}" title="Keep proportions when you change the width or height" aria-label="Keep proportions">${resLock87?LOCK_ON87:LOCK_OFF87}</button></div>
+    <div class="row"><label>Size presets <select id="resPreset87" aria-label="Size presets">${RES_PRESETS87.map(([k,l])=>`<option value="${k}" ${k===match?'selected':''}>${l}</option>`).join('')}</select></label></div>`}
 function imagePanel(it){const f=S.fx,radii=f.radii,rounded=(+f.radius||0)>0||!!radii;
   return `<div class="grp"><h3>Image</h3><p class="hint" style="font-family:var(--f-mono);font-variant-numeric:tabular-nums">${it.base.width} × ${it.base.height} px · ${it.shapes.length} annotation${it.shapes.length===1?'':'s'}</p>
+    ${resFields87(it)}
     <div class="row"><button class="btn" id="imRotL" title="Rotate 90° counterclockwise">⟲ Rotate left</button><button class="btn" id="imRotR" title="Rotate 90° clockwise">⟳ Rotate right</button></div>
     <div class="row"><button class="btn" id="imFlipH" title="Mirror left to right">⇋ Flip horizontal</button><button class="btn" id="imFlipV" title="Mirror top to bottom">⇵ Flip vertical</button></div>
-    <div class="row"><button class="btn" id="imResize">Resize image…</button><button class="btn" id="imCanvas">Canvas size…</button></div>
-    <div class="row"><button class="btn" id="imScreen">Resize on screen…</button><button class="btn" id="imCrop">Crop</button></div>
+    <div class="row"><button class="btn" id="imCanvas">Canvas size…</button><button class="btn" id="imCrop">Crop</button></div>
     <p class="hint">Rotating, flipping and resizing turn annotations into pixels. Undo restores them.</p></div>
   <div class="grp"><h3>Border</h3>${rngFx('border','Thickness',0,40,+f.border||0)}
     <div class="row"><span>Color</span><input type="color" id="fxBc" value="${f.borderColor}" aria-label="Border color"></div>
@@ -1203,7 +1214,7 @@ function bindPanel(P,it,t){const on=(id,f)=>{const e=$('#'+id);if(e)e.onclick=f}
   // Image panel
   on('imRotL',()=>transformImage('left').catch(actionError));on('imRotR',()=>transformImage('right').catch(actionError));
   on('imFlipH',()=>transformImage('horizontal').catch(actionError));on('imFlipV',()=>transformImage('vertical').catch(actionError));
-  on('imResize',()=>dimensionDialog(false));on('imCanvas',()=>dimensionDialog(true));on('imScreen',()=>visualResize34().catch(actionError));on('imCrop',startCrop);
+  on('imCanvas',()=>dimensionDialog(true));on('imCrop',startCrop);
   const bc=$('#fxBc');if(bc)bc.oninput=e=>{fxSnap();S.fx.borderColor=e.target.value;render();changed()};
   ch('fxBs',e=>fxSet('bStyle',e.target.value));ch('fxBp',e=>fxSet('bPlace',e.target.value));
   on('cnSquare',()=>{snap();S.fx.radius=0;S.fx.radii=null;layoutStage();render();renderProps();changed()});
@@ -2124,6 +2135,7 @@ cv.addEventListener('pointermove',e=>{if(!rzOn80())return;const rz=rzState80();
   if(hAff){if(h.includes('n')){T=b.B-nH}else if(h.includes('s')){B=b.T+nH}else{T=cy-nH/2;B=cy+nH/2}}
   const M=rzMargin80();rz.L=Math.max(-M,L);rz.R=Math.min(rz.W+M,R);rz.T=Math.max(-M,T);rz.B=Math.min(rz.H+M,B);
   if(rz.R-rz.L<1)rz.R=rz.L+1;if(rz.B-rz.T<1)rz.B=rz.T+1;
+  const fwL=document.getElementById('resW87'),fhL=document.getElementById('resH87');if(fwL)fwL.value=Math.round(rz.R-rz.L);if(fhL)fhL.value=Math.round(rz.B-rz.T);
   render()},true);
 const endResize80=e=>{if(!rzDrag)return;e.stopImmediatePropagation();const rz=rzState80(),d=rzDrag;rzDrag=null;
   const w=Math.round(rz.R-rz.L),h=Math.round(rz.B-rz.T);
@@ -2136,7 +2148,22 @@ const drawUIbefore86=drawUI;drawUI=function(c,it){drawUIbefore86(c,it);if(!rzOn8
   c.lineWidth=1.2*k;const hs=5*k;for(const [,x,y] of rzHandles80(rz)){c.fillStyle='#ffffff';c.fillRect(x-hs,y-hs,hs*2,hs*2);c.strokeRect(x-hs,y-hs,hs*2,hs*2)}c.restore()};
 // the canvas needs room when the Image tab opens or closes; renderProps runs after every tool change
 const setTool86=setTool;setTool=function(t){setTool86(t);if(t!=='image')S.rz=null};
-const props86=renderProps;renderProps=function(){props86();const m=rzMargin80();if(m!==lastRzM80){lastRzM80=m;layoutStage();render()}};
+const props86=renderProps;renderProps=function(){props86();const m=rzMargin80();if(m!==lastRzM80){lastRzM80=m;layoutStage();render()}
+  const fw=document.getElementById('resW87'),fh=document.getElementById('resH87'),lk=document.getElementById('resLock87'),pr=document.getElementById('resPreset87');
+  if(!fw||!S.cur||S.cur.kind!=='image')return;
+  const applyWH87=async(w,h)=>{const it=S.cur;w=Math.round(+w);h=Math.round(+h);
+    if(!(w>=1&&h>=1&&w<=16384&&h<=16384)){toast('Width and height must be whole numbers from 1 to 16,384.');renderProps();return}
+    if(w===it.base.width&&h===it.base.height){renderProps();return}await commitResize80(w,h)};
+  fw.onchange=()=>{const it=S.cur,w=+fw.value;if(!(w>=1)){renderProps();return}applyWH87(w,resLock87?Math.max(1,Math.round(w*it.base.height/it.base.width)):+fh.value)};
+  fh.onchange=()=>{const it=S.cur,h=+fh.value;if(!(h>=1)){renderProps();return}applyWH87(resLock87?Math.max(1,Math.round(h*it.base.width/it.base.height)):+fw.value,h)};
+  lk.onclick=()=>{resLock87=!resLock87;renderProps()};
+  pr.onchange=()=>{const it=S.cur,k=pr.value,W=it.base.width,H=it.base.height;if(k==='custom')return;let w,h;
+    if(k==='orig'){const o=origSizes87.get(it.id)||{w:W,h:H};w=o.w;h=o.h}
+    else if(k==='fit'){const dpr=window.devicePixelRatio||1,st=stage.getBoundingClientRect(),sc=Math.min((st.width-64)*dpr/W,(st.height-64)*dpr/H);w=Math.max(1,Math.round(W*sc));h=Math.max(1,Math.round(H*sc))}
+    else{const [pw,ph]=k.split('x').map(Number);if(resLock87){const sc=Math.min(pw/W,ph/H);w=Math.max(1,Math.round(W*sc));h=Math.max(1,Math.round(H*sc))}else{w=pw;h=ph}}
+    applyWH87(w,h)};
+  [fw,fh].forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();i.blur()}}));
+};
 // Zoom box: type an exact percentage, step with -/+, or fit the window. The old dropdown stays hidden for compatibility.
 const ZOOM_STEPS=[10,25,33,50,67,75,100,125,150,200,300,400,600,800];
 function zoomAtCentre(z){const r=stage.getBoundingClientRect();setViewZoom(z,r.left+r.width/2,r.top+r.height/2)}
