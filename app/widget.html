@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Saveit widget</title>
+<style>
+html,body{margin:0;background:#16181a;overflow:hidden;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;user-select:none;color:#e8eaec;font-size:12px}
+.bar{display:flex;flex-wrap:nowrap;width:max-content;align-items:center;gap:6px 6px;padding:8px 10px;border:1px solid #3a3f45;-webkit-app-region:drag;min-height:36px}
+.bar *{-webkit-app-region:no-drag}.bar .brand,.bar .brand *{-webkit-app-region:drag}
+select.dev{max-width:104px}
+.bar{align-items:center;gap:12px;padding:6px 10px}.lead{display:grid;grid-template-rows:28px 32px;row-gap:5px;margin-right:0}.lead .go{height:32px;padding:0 12px}
+.optcol{display:grid;grid-template-rows:28px 32px;row-gap:5px}.optrow{display:flex;align-items:center;gap:9px;white-space:nowrap}
+.seg button{height:26px;padding:0 10px}select{padding:2px 6px;height:28px}#area{max-width:118px}#fxGear,#camGear{height:28px;padding:0 8px}
+.lead{display:flex;flex-direction:column;gap:6px;margin-right:6px}.leadrow{display:flex;align-items:center;gap:10px}.lead .go{width:100%}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;-webkit-app-region:drag}
+.brand i{width:22px;height:22px;border-radius:6px;background:#2db3a0;display:grid;place-items:center}
+.brand i::after{content:"";width:10px;height:10px;border:2px dashed #06211d;border-radius:2px}
+label{display:flex;align-items:center;gap:4px;color:#b4bac0;font-weight:600;white-space:nowrap}
+label.ck{cursor:pointer}
+select{font:inherit;background:#26292d;color:#e8eaec;border:1px solid #3a3f45;border-radius:6px;padding:4px}
+button{font:inherit;font-weight:700;border-radius:7px;border:1px solid #3a3f45;background:#30343a;color:#e8eaec;padding:6px 11px;cursor:pointer;white-space:nowrap}
+button:hover:not(:disabled){border-color:#9aa1a8}button:disabled{opacity:.4;cursor:default}
+#ed{padding:3px 9px;font-size:11px;background:#2db3a0;border-color:#2db3a0;color:#06211d}#ed:hover:not(:disabled){filter:brightness(1.1);border-color:#2db3a0}
+button.go{background:#e5483b;border-color:#e5483b;color:#fff}
+.seg{display:flex;border:1px solid #3a3f45;border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:transparent;color:#b4bac0}
+.seg button[aria-pressed=true]{background:#2db3a0;color:#06211d}
+[hidden]{display:none!important}
+</style></head>
+<body>
+<div class="bar capbar" id="bar">
+  <div class="lead"><div class="leadrow"><span class="brand"><i></i>Saveit <span class="ver" id="ver"></span></span><button id="ed" title="Bring the editor back">Editor</button></div><button class="go" id="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg><span id="okLbl">Capture</span></button></div>
+  <div class="seg"><button id="mImg" aria-pressed="true">Image</button><button id="mVid" aria-pressed="false">Video</button></div>
+  <label>Selection <select id="area"><option value="region">Region</option><option value="window">Window</option><option value="screen">Full screen</option><option value="steps">Steps</option><option value="scroll">Scrolling</option><option value="text">Grab text</option></select></label>
+  <label class="ck"><input type="checkbox" id="oCur"> Cursor</label>
+  <label class="ck" title="Copy each capture or recording to the clipboard"><input type="checkbox" id="oClip"> Copy to clipboard</label>
+  <span id="vidOpts" style="display:contents"><label class="ck" title="Record the sound your computer plays"><input type="checkbox" id="oSys"> System audio</label><label class="ck"><input type="checkbox" id="oMic"> Microphone</label><select class="dev" id="micDev" aria-label="Microphone"></select><label class="ck"><input type="checkbox" id="oCam"> Webcam</label><select class="dev" id="camDev" aria-label="Webcam"></select><button id="camGear" title="Webcam settings: shape, size, position, border" aria-label="Webcam settings">⚙</button></span>
+  <span id="imgOpts" style="display:contents"><label>Effect <select id="fxSel"></select></label><button id="fxGear" title="Settings for this effect">⚙</button></span>
+  <label>Delay <select id="delay"><option value="0">None</option><option value="3">3 s</option><option value="5">5 s</option><option value="10">10 s</option></select></label>
+  
+</div>
+<script src="fxdefs.js"></script><script src="fxui.js"></script><link rel="stylesheet" href="capbar.css"><script src="devices.js"></script><script src="camdraw.js"></script>
+<script>
+const $=id=>document.getElementById(id);let vmode='image';const fx={id:'none',p:{}};
+function collect(){return{mode:vmode,area:$('area').value,cursor:$('oCur').checked,clip:$('oClip').checked,sys:$('oSys').checked,sysAudio:$('oSys').checked,mic:$('oMic').checked,cam:$('oCam').checked,micId:dev.mic,camId:dev.cam,delay:$('delay').value,fx:{id:fx.id,p:fx.p}}}
+function resize(){const pop=document.querySelector('.fxpop.on'),r=pop?pop.getBoundingClientRect():null;const h=Math.max($('bar').offsetHeight,r?Math.ceil(r.bottom)+8:0),w=Math.max($('bar').offsetWidth,r?Math.ceil(r.right)+8:0);const lg=document.querySelector('.brand i').getBoundingClientRect();window.widget.size(w,h,lg.left,lg.top)}
+const ui=FXUI.mount($('fxSel'),$('fxGear'),fx,()=>{push()},()=>setTimeout(resize,30));
+function labels(){const v=vmode==='video';$('mImg').setAttribute('aria-pressed',!v);$('mVid').setAttribute('aria-pressed',v);$('vidOpts').hidden=!v;$('imgOpts').hidden=v;$('oCur').disabled=v;$('oCur').parentElement.title=v?'Windows always includes the mouse pointer in screen recordings. This option applies to screenshots.':'Show the mouse pointer in screenshots';
+  for(const val of['steps','text','scroll']){const o=$('area').querySelector('option[value="'+val+'"]');o.hidden=o.disabled=v}if(v&&['steps','text','scroll'].includes($('area').value))$('area').value='region';
+  $('okLbl').textContent=$('area').value==='text'?'Grab text':(v?'Record':'Capture');$('ok').classList.toggle('rec',v);setTimeout(resize,30)}
+function push(){window.widget.opts(collect())}
+window.widget.onInit(o=>{o=o||{};vmode=o.mode==='video'?'video':'image';$('area').value=o.area||'region';$('oCur').checked=!!o.cursor;$('oClip').checked=!!o.clip;$('oSys').checked=o.sys!==false;$('oMic').checked=!!o.mic;$('oCam').checked=!!o.cam;$('delay').value=o.delay||'0';ui.set(o.fx||{id:'none',p:{}});dev.mic=o.micId||'';dev.cam=o.camId||'';labels();refreshDevices()});
+$('mImg').onclick=()=>{vmode='image';labels();push()};$('mVid').onclick=()=>{vmode='video';labels();push()};
+document.querySelectorAll('input,select').forEach(e=>{if(e.id!=='fxSel'&&!e.classList.contains('dev'))e.addEventListener('change',()=>{labels();push()})});
+// Device pickers: choosing a device also turns that input on. Names appear once access is granted.
+const dev={mic:'',cam:''};
+async function refreshDevices(){if(vmode!=='video')return;for(const [type,box] of [['mic','oMic'],['cam','oCam']]){const res=await DEVICES.list(type,$(box).checked);dev[type]=DEVICES.fill($(type+'Dev'),type,res,dev[type])}setTimeout(resize,30)}
+for(const [type,box] of [['mic','oMic'],['cam','oCam']]){$(type+'Dev').onchange=e=>{dev[type]=e.target.value;$(box).checked=true;push();refreshDevices()};$(box).addEventListener('change',()=>refreshDevices())}
+$('mVid').addEventListener('click',refreshDevices);
+$('camGear').onclick=()=>window.widget.camSettings();
+window.widget.appVersion?.().then(v=>{if(v){$('ver').textContent=v;setTimeout(resize,30)}});
+// A camera picked in the settings window becomes the widget's camera too.
+addEventListener('storage',e=>{if(e.key!=='saveit.cam')return;const id=CAMDRAW.load().deviceId||'';if(id!==dev.cam){dev.cam=id;push();refreshDevices()}});
+{const bar=$('bar'),col=document.createElement('div'),r1=document.createElement('div'),r2=document.createElement('div'),areaL=$('area').closest('label'),delayL=$('delay').closest('label'),curL=$('oCur').closest('label'),clipL=$('oClip').closest('label');
+ col.className='optcol';r1.className='optrow';r2.className='optrow';col.append(r1,r2);bar.append(col);
+ const place=()=>{r1.append(document.querySelector('.seg'),areaL,curL,clipL);if(vmode==='video'){r1.append(delayL);r2.append($('vidOpts'))}else r2.append($('imgOpts'),delayL);r2.append(vmode==='video'?$('imgOpts'):$('vidOpts'))};
+ const labelsBefore=labels;labels=function(){labelsBefore();place()};place()}navigator.mediaDevices.addEventListener('devicechange',refreshDevices);
+$('ok').onclick=()=>window.widget.go(collect());$('ed').onclick=()=>window.widget.editor();
+addEventListener('keydown',e=>{if(e.key==='Escape')window.widget.editor()});
+</script></body></html>

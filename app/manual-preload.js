@@ -1,0 +1,1 @@
+const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('manual',{send:cmd=>ipcRenderer.send('manual-command',cmd),onStatus:fn=>ipcRenderer.on('manual-status',(_,m)=>fn(m))});

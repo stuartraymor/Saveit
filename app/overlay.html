@@ -1,0 +1,156 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Select region</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#000;user-select:none;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
+canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+.tip{position:fixed;left:50%;top:78px;transform:translateX(-50%);background:rgba(22,24,26,.92);color:#e8eaec;font-size:13px;font-weight:600;padding:8px 14px;border-radius:999px;pointer-events:none}
+.tip b{color:#2db3a0}
+.wid{position:fixed;left:50%;top:10px;transform:translateX(-50%);width:max-content;max-width:98vw;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px 8px;background:#16181a;border:1px solid #3a3f45;border-radius:12px;padding:7px 10px;box-shadow:0 8px 28px rgba(0,0,0,.55);color:#e8eaec;font-size:12px;z-index:5}
+.wid label{display:flex;align-items:center;gap:4px;color:#b4bac0;font-weight:600;white-space:nowrap}
+.wid label.ck{cursor:pointer}
+.wid input[type=number]{width:62px;font:inherit;font-family:"Cascadia Mono",Consolas,monospace;background:#26292d;color:#e8eaec;border:1px solid #3a3f45;border-radius:6px;padding:4px 6px}
+.wid select{font:inherit;background:#26292d;color:#e8eaec;border:1px solid #3a3f45;border-radius:6px;padding:4px}
+.wid button{font:inherit;font-weight:700;border-radius:7px;border:1px solid #3a3f45;background:#30343a;color:#e8eaec;padding:6px 11px;cursor:pointer;white-space:nowrap}
+.wid button:hover:not(:disabled){border-color:#9aa1a8}
+.wid button:disabled{opacity:.4;cursor:default}
+.wid button.go{background:#e5483b;border-color:#e5483b;color:#fff}
+.wid button.go.rec{background:#e5483b;border-color:#e5483b;color:#fff}
+.wid .seg{display:flex;border:1px solid #3a3f45;border-radius:8px;overflow:hidden}
+.wid .seg button{border:0;border-radius:0;background:transparent;color:#b4bac0}
+.wid .seg button[aria-pressed=true]{background:#2db3a0;color:#06211d}
+.wid .sep{width:1px;height:22px;background:#3a3f45}
+.wid .tm{font-family:"Cascadia Mono",Consolas,monospace;color:#7d848b;min-width:42px}
+.wid [hidden]{display:none!important}
+.wid{flex-wrap:nowrap}.wid:not(.adj) .adjonly{display:none!important}.wid.adj{transform:none}
+.wid button.toggle{min-width:84px}
+</style></head>
+<body>
+<canvas id="c"></canvas>
+<div class="tip" id="tip">Drag to select an area · <b>Click</b> for the whole screen · <b>Esc</b> to cancel</div>
+<div class="wid" id="wid">
+  <div id="opts" hidden>
+  <div class="seg" role="group" aria-label="Capture type"><button id="mImg" aria-pressed="true">Image</button><button id="mVid" aria-pressed="false">Video</button></div>
+  <label>Selection <select id="area"><option value="region">Region</option><option value="window">Window</option><option value="screen">Full screen</option><option value="steps">Steps</option><option value="scroll">Scrolling</option><option value="text">Grab text</option></select></label>
+  <label class="ck"><input type="checkbox" id="oCur"> Cursor</label>
+  <label class="ck"><input type="checkbox" id="oClip"> Copy to clipboard</label>
+  <span id="imgOpts" style="display:contents"><label>Effect <select id="fxSel"></select></label><button id="fxGear" title="Settings for this effect">⚙</button></span>
+  <span id="vidOpts" style="display:contents"><label class="ck"><input type="checkbox" id="oSys"> System audio</label><label class="ck"><input type="checkbox" id="oMic"> Mic</label><label class="ck"><input type="checkbox" id="oCam"> Webcam</label></span>
+  <span class="tm" id="tm">00:00</span><button id="pz" disabled>Pause</button><button id="sp" disabled>Stop</button><button id="redo">Redo</button><button id="cancel">Cancel</button>
+  </div>
+  <label class="adjonly" title="Width in pixels">W <input id="w" type="number" min="1"></label><span class="adjonly">×</span><label class="adjonly" title="Height in pixels">H <input id="h" type="number" min="1"></label>
+  <select class="adjonly" id="preset" title="Common sizes"><option value="">Size…</option><option>1920x1080</option><option>1280x720</option><option>1024x768</option><option>800x600</option><option>640x480</option><option>1080x1080</option></select>
+  <span class="sep adjonly"></span>
+  <button class="go adjonly" id="ok">Capture</button><button id="toggle" class="toggle">Cancel</button>
+</div>
+<script src="fxdefs.js"></script><script src="fxui.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const c=$('c'),g=c.getContext('2d'),img=new Image(),tip=$('tip');
+let W=innerWidth,H=innerHeight,dpr=devicePixelRatio||1,ready=false,mode='image';
+let state='drag',start=null,cur={x:W/2,y:H/2},sel=null,act=null; // act: {type:'move'|'resize'|'new', ...}
+const HS=6;
+const K=()=>img.naturalWidth/W||1;
+function size(){W=innerWidth;H=innerHeight;dpr=devicePixelRatio||1;c.width=W*dpr;c.height=H*dpr;g.setTransform(dpr,0,0,dpr,0,0);draw()}
+addEventListener('resize',size);
+let vmode='image';
+const fxs={id:'none',p:{}};const fxUi=FXUI.mount($('fxSel'),$('fxGear'),fxs,()=>draw());
+function collect(){return{fx:{id:fxs.id,p:fxs.p},mode:vmode,area:$('area').value,cursor:$('oCur').checked,clip:$('oClip').checked,sys:$('oSys').checked,mic:$('oMic').checked,cam:$('oCam').checked}}
+function labels(){const v=vmode==='video',a=$('area').value;
+  $('mImg').setAttribute('aria-pressed',!v);$('mVid').setAttribute('aria-pressed',v);$('vidOpts').hidden=!v;$('imgOpts').hidden=v;
+  for(const val of ['steps','text','scroll']){const o=$('area').querySelector('option[value="'+val+'"]');o.hidden=o.disabled=v}
+  if(v&&['steps','text','scroll'].includes(a))$('area').value='region';
+  const a2=$('area').value;$('ok').textContent=a2==='text'?'Grab text':(v?'Record':'Capture');$('ok').classList.toggle('rec',v);
+  if(state==='drag')tip.innerHTML=v?'Drag the area to <b>record</b> · <b>Click</b> for the whole screen · <b>Esc</b> to cancel':(a2==='text'?'Drag around the <b>text</b> to grab · <b>Esc</b> to cancel':'Drag to select an area · <b>Click</b> for the whole screen · <b>Esc</b> to cancel')}
+window.overlay.onData(d=>{const o=d.opts||{};vmode=o.mode==='video'?'video':'image';
+  $('area').value=o.area&&o.area!=='window'&&o.area!=='steps'?o.area:'region';
+  $('oCur').checked=!!o.cursor;$('oClip').checked=!!o.clip;$('oSys').checked=o.sys!==false;$('oMic').checked=!!o.mic;$('oCam').checked=!!o.cam;fxUi.set(o.fx||{id:'none',p:{}});
+  if(d.init==='full'||$('area').value==='screen'){$('area').value='screen';state='adjust';tip.style.display='none'}
+  labels();
+  img.onload=()=>{ready=true;size();if(state==='adjust'){sel={x:0,y:0,w:W,h:H};draw()}};img.src=d.shot});
+function norm(a,b){return{x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y)}}
+function clampSel(){sel.w=Math.max(4,Math.min(sel.w,W));sel.h=Math.max(4,Math.min(sel.h,H));sel.x=Math.max(0,Math.min(W-sel.w,sel.x));sel.y=Math.max(0,Math.min(H-sel.h,sel.y))}
+function handles(r){const mx=r.x+r.w/2,my=r.y+r.h/2,R=r.x+r.w,B=r.y+r.h;return[['nw',r.x,r.y],['n',mx,r.y],['ne',R,r.y],['e',R,my],['se',R,B],['s',mx,B],['sw',r.x,B],['w',r.x,my]]}
+function handleAt(p){if(!sel)return null;for(const [k,x,y] of handles(sel))if(Math.abs(p.x-x)<=HS+3&&Math.abs(p.y-y)<=HS+3)return k;return null}
+const inside=p=>sel&&p.x>sel.x&&p.x<sel.x+sel.w&&p.y>sel.y&&p.y<sel.y+sel.h;
+const CUR={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize'};
+const isFull=()=>!!sel&&sel.w>=W-1&&sel.h>=H-1;
+function placeBar(){const b=$('wid'),adj=state==='adjust'&&!!sel,t=$('toggle');
+  if(state==='adjust'){const full=isFull();tip.style.display=full?'':'none';if(full)tip.innerHTML=(vmode==='video'?'Whole screen selected · <b>Record</b> to start':'Whole screen selected · <b>Capture</b> to take it')+' · <b>Drag</b> anywhere to pick an area instead'}
+  if(adj&&isFull()){b.classList.add('adj');t.textContent='Redo';t.title='Draw the selection again';b.style.left='50%';b.style.top='10px';b.style.transform='translateX(-50%)';const k=K();if(document.activeElement!==$('w'))$('w').value=Math.round(sel.w*k);if(document.activeElement!==$('h'))$('h').value=Math.round(sel.h*k);return}
+  b.style.transform='';b.classList.toggle('adj',adj);
+  t.textContent=adj?'Redo':'Cancel';t.title=adj?'Draw the selection again':'Close without capturing (Esc)';
+  if(!adj){b.style.left='50%';b.style.top='10px';return}
+  const bw=b.offsetWidth,bh=b.offsetHeight,m=8;let x=sel.x+sel.w-bw,y=sel.y+sel.h+m;
+  if(y+bh>H-4){y=sel.y-bh-m;if(y<4)y=sel.y+sel.h-bh-m}b.style.left=Math.max(4,Math.min(W-bw-4,x))+'px';b.style.top=Math.max(4,y)+'px';
+  const k=K();
+  if(document.activeElement!==$('w'))$('w').value=Math.round(sel.w*k);if(document.activeElement!==$('h'))$('h').value=Math.round(sel.h*k)}
+function rrPath(x,y,w,h,r){r=Math.max(0,Math.min(r,w/2,h/2));g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath()}
+function edgeP(x,y,w,h,e,k){const d=(+e.depth||10)/k,step=Math.max(6,d*1.4);let sd=((w*31+h*17)|0)>>>0;const rnd=()=>{sd=(sd*1664525+1013904223)>>>0;return sd/4294967296};
+  const off=i=>e.style==='zigzag'?(i%2?d:0):e.style==='wave'?(Math.sin(i*.9)+1)/2*d:rnd()*d;const nx=Math.max(2,Math.round(w/step)),ny=Math.max(2,Math.round(h/step)),pts=[];
+  for(let i=0;i<nx;i++)pts.push([x+w*i/nx,y+off(i)]);for(let i=0;i<ny;i++)pts.push([x+w-off(i),y+h*i/ny]);for(let i=0;i<nx;i++)pts.push([x+w-w*i/nx,y+h-off(i)]);for(let i=0;i<ny;i++)pts.push([x+off(i),y+h-h*i/ny]);
+  g.beginPath();pts.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]));g.closePath()}
+// Live preview of the chosen effect on the area you have selected
+function fxPreview(r){if(vmode==='video'||fxs.id==='none'||r.w<2||r.h<2)return;const k=K(),f=FXAPPLY(FXBLANK(),fxs.id,fxs.p),b=(f.border||0)/k,R=(f.radius||0)/k,E=f.edge;
+  g.save();
+  if(f.shadow){g.save();g.shadowColor='rgba(0,0,0,.5)';g.shadowBlur=(f.shadowBlur||24)/k;g.shadowOffsetY=8/k;g.fillStyle='#fff';if(E)edgeP(r.x,r.y,r.w,r.h,E,k);else rrPath(r.x,r.y,r.w,r.h,R);g.fill();g.restore()}
+  if(b&&!E){rrPath(r.x-b,r.y-b,r.w+b*2,r.h+b*2,R+(R?b:0));g.fillStyle=f.borderColor;g.fill()}
+  if(E)edgeP(r.x,r.y,r.w,r.h,E,k);else rrPath(r.x,r.y,r.w,r.h,R);g.clip();
+  const fl=FXFILTER(f.adj);if(fl!=='none')g.filter=fl.replace(/blur\(([\d.]+)px\)/,(m,v)=>`blur(${v/k}px)`);
+  g.drawImage(img,r.x*k,r.y*k,r.w*k,r.h*k,r.x,r.y,r.w,r.h);g.filter='none';
+  if(f.vig){const gr=g.createRadialGradient(r.x+r.w/2,r.y+r.h/2,Math.min(r.w,r.h)*.25,r.x+r.w/2,r.y+r.h/2,Math.hypot(r.w,r.h)/2);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,`rgba(0,0,0,${f.vig/100*.85})`);g.fillStyle=gr;g.fillRect(r.x,r.y,r.w,r.h)}
+  g.restore()}
+function draw(){if(!ready)return;g.clearRect(0,0,W,H);g.drawImage(img,0,0,W,H);g.fillStyle='rgba(0,0,0,.45)';
+  const r=state==='adjust'?sel:(start?norm(start,cur):null);
+  if(r&&r.w>1&&r.h>1){g.beginPath();g.rect(0,0,W,H);g.rect(r.x,r.y,r.w,r.h);g.fill('evenodd');fxPreview(r);
+    g.strokeStyle='#2db3a0';g.lineWidth=1.5;if(state==='adjust'&&isFull()){g.lineWidth=3;g.setLineDash([10,7]);g.strokeRect(4,4,W-8,H-8);g.setLineDash([])}else g.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1);
+    const k=K(),label=`${Math.round(r.w*k)} × ${Math.round(r.h*k)}`;g.font='600 12px "Cascadia Mono",Consolas,monospace';const tw=g.measureText(label).width+14;let ly=r.y-26;if(ly<4)ly=r.y+6;
+    g.fillStyle='rgba(22,24,26,.92)';g.fillRect(r.x,ly,tw,22);g.fillStyle='#e8eaec';g.fillText(label,r.x+7,ly+15);
+    if(state==='adjust'){for(const [,x,y] of handles(r)){g.fillStyle='#ffffff';g.strokeStyle='#2db3a0';g.lineWidth=1.5;g.fillRect(x-HS,y-HS,HS*2,HS*2);g.strokeRect(x-HS+.5,y-HS+.5,HS*2-1,HS*2-1)}}}
+  else{g.fillRect(0,0,W,H);g.strokeStyle='rgba(45,179,160,.9)';g.lineWidth=1;g.beginPath();g.moveTo(cur.x+.5,0);g.lineTo(cur.x+.5,H);g.moveTo(0,cur.y+.5);g.lineTo(W,cur.y+.5);g.stroke()}
+  if(state==='drag'||act){// magnifier loupe
+    const L=120,z=8,k=K(),src=L/z;let lx=cur.x+20,ly2=cur.y+20;if(lx+L>W)lx=cur.x-20-L;if(ly2+L+22>H)ly2=cur.y-20-L-22;
+    g.save();g.imageSmoothingEnabled=false;g.beginPath();g.rect(lx,ly2,L,L);g.clip();g.drawImage(img,(cur.x-src/2)*k,(cur.y-src/2)*k,src*k,src*k,lx,ly2,L,L);g.restore();
+    g.strokeStyle='#e8eaec';g.lineWidth=2;g.strokeRect(lx,ly2,L,L);g.strokeStyle='rgba(229,72,59,.9)';g.lineWidth=1;g.beginPath();g.moveTo(lx+L/2,ly2);g.lineTo(lx+L/2,ly2+L);g.moveTo(lx,ly2+L/2);g.lineTo(lx+L,ly2+L/2);g.stroke();
+    g.fillStyle='rgba(22,24,26,.92)';g.fillRect(lx,ly2+L,L,22);g.fillStyle='#e8eaec';g.font='12px "Cascadia Mono",Consolas,monospace';g.fillText(`${Math.round(cur.x*k)}, ${Math.round(cur.y*k)}`,lx+7,ly2+L+15)}
+  placeBar()}
+function finish(){if(!sel)return;if($('area').value==='screen'&&!(sel.w>=W-1&&sel.h>=H-1))$('area').value='region';window.overlay.done({x:sel.x,y:sel.y,w:sel.w,h:sel.h,opts:collect()})}
+function cancel(){window.overlay.done(null)}
+function redo(){state='drag';sel=null;start=null;act=null;tip.style.display='';if($('area').value==='screen')$('area').value='region';labels();draw()}
+c.addEventListener('mousedown',e=>{if(e.button===2){cancel();return}if(e.button!==0)return;const p={x:e.clientX,y:e.clientY};cur=p;
+  if(state==='adjust'&&isFull()){state='drag';sel=null;if($('area').value==='screen')$('area').value='region';labels()}
+  if(state==='adjust'){const hk=handleAt(p);if(hk){act={type:'resize',k:hk,orig:{...sel}};return}
+    if(inside(p)){act={type:'move',dx:p.x-sel.x,dy:p.y-sel.y};c.style.cursor='grabbing';return}
+    state='drag';sel=null;tip.style.display='';if($('area').value==='screen')$('area').value='region';labels()} // click outside the box starts a new selection
+  start=p;draw()});
+addEventListener('mousemove',e=>{const p={x:e.clientX,y:e.clientY};cur=p;
+  if(act&&act.type==='move'){sel.x=p.x-act.dx;sel.y=p.y-act.dy;clampSel()}
+  else if(act&&act.type==='resize'){const o=act.orig,k=act.k;let L=o.x,T=o.y,R=o.x+o.w,B=o.y+o.h;if(k.includes('w'))L=p.x;if(k.includes('e'))R=p.x;if(k.includes('n'))T=p.y;if(k.includes('s'))B=p.y;
+    sel={x:Math.min(L,R),y:Math.min(T,B),w:Math.max(4,Math.abs(R-L)),h:Math.max(4,Math.abs(B-T))};clampSel()}
+  else if(state==='adjust'){const hk=handleAt(p);c.style.cursor=hk?CUR[hk]:(inside(p)?'move':'crosshair')}
+  else c.style.cursor='crosshair';
+  draw()});
+addEventListener('mouseup',e=>{if(act){act=null;c.style.cursor='move';draw();return}if(!start)return;const r=norm(start,cur);start=null;
+  sel=(r.w<4||r.h<4)?{x:0,y:0,w:W,h:H}:r;if(sel.w>=W-1&&sel.h>=H-1)$('area').value='screen';state='adjust';tip.style.display='none';draw();$('ok').focus()});
+c.addEventListener('dblclick',e=>{if(state==='adjust'&&inside({x:e.clientX,y:e.clientY}))finish()});
+addEventListener('keydown',e=>{if((e.target.tagName==='INPUT'||e.target.tagName==='SELECT')&&e.key!=='Escape'&&e.key!=='Enter')return;if(e.target.tagName==='SELECT'&&e.key==='Enter')return;
+  if(e.key==='Escape')cancel();
+  if(e.key==='Enter'){if(state==='adjust')finish();else{sel={x:0,y:0,w:W,h:H};finish()}}
+  if(state==='adjust'&&e.key.startsWith('Arrow')){e.preventDefault();const d=e.shiftKey?10:1,k=1/K();
+    if(e.ctrlKey){if(e.key==='ArrowRight')sel.w+=d*k;if(e.key==='ArrowLeft')sel.w-=d*k;if(e.key==='ArrowDown')sel.h+=d*k;if(e.key==='ArrowUp')sel.h-=d*k}
+    else{if(e.key==='ArrowRight')sel.x+=d*k;if(e.key==='ArrowLeft')sel.x-=d*k;if(e.key==='ArrowDown')sel.y+=d*k;if(e.key==='ArrowUp')sel.y-=d*k}clampSel();draw()}});
+function setSize(wpx,hpx){const k=K();if(wpx>0)sel.w=wpx/k;if(hpx>0)sel.h=hpx/k;clampSel();draw()}
+$('w').addEventListener('change',()=>setSize(+$('w').value,0));$('h').addEventListener('change',()=>setSize(0,+$('h').value));
+$('w').addEventListener('keydown',e=>{if(e.key==='Enter'){setSize(+$('w').value,0);e.stopPropagation()}});$('h').addEventListener('keydown',e=>{if(e.key==='Enter'){setSize(0,+$('h').value);e.stopPropagation()}});
+$('preset').addEventListener('change',()=>{const v=$('preset').value;if(!v)return;const [a,b]=v.split('x').map(Number);setSize(a,b);$('preset').value=''});
+$('mImg').onclick=()=>{vmode='image';labels()};$('mVid').onclick=()=>{vmode='video';labels()};
+$('area').onchange=()=>{const v=$('area').value;
+  if(v==='window'||v==='steps'){window.overlay.done({redirect:v,opts:collect()});return}
+  if(v==='screen'){sel={x:0,y:0,w:W,h:H};state='adjust';tip.style.display='none';draw()}
+  else if(state==='adjust'&&sel&&sel.w>=W-1&&sel.h>=H-1)redo();
+  labels();$('area').blur()};
+$('ok').onclick=finish;$('redo').onclick=redo;$('cancel').onclick=cancel;
+// One button: Redo while a selection is shown, then Cancel once you are drawing again.
+$('toggle').onclick=()=>{if(state==='adjust'&&sel)redo();else cancel()};
+addEventListener('contextmenu',e=>{e.preventDefault();cancel()});
+</script>
+</body></html>

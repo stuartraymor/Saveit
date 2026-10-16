@@ -1,0 +1,1 @@
+const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('quick',{onImage:fn=>ipcRenderer.on('quick-image',(_,u)=>fn(u)),done:result=>ipcRenderer.send('quick-result',result)});
