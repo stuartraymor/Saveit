@@ -2246,7 +2246,7 @@ const props86=renderProps;renderProps=function(){props86();syncWs80();
 const drawUIbefore810=drawUI;drawUI=function(c,it){drawUIbefore810(c,it);if(it!==S.cur||it.kind!=='image'||!it.shapes.some(x=>x.t==='img'))return;
   const k=1/scale(),W=it.base.width,H=it.base.height;
   if(!rzOn80()){c.save();c.strokeStyle='rgba(255,255,255,.35)';c.lineWidth=1*k;c.setLineDash([4*k,3*k]);c.strokeRect(0,0,W,H);c.restore()}
-  const s=S.sel;if(s&&s.t==='img'&&it.shapes.includes(s)&&!rzOn80()){const r=norm(s),txt=`${Math.round(r.w)} × ${Math.round(r.h)}  at ${Math.round(r.x)}, ${Math.round(r.y)}`;
+  const s=S.sel;if(s&&s.t==='img'&&it.shapes.includes(s)&&!rzOn80()){const r=norm(s),txt=`${Math.round(r.w)} × ${Math.round(r.h)}  at ${Math.round(r.x)}, ${Math.round(r.y)}  ·  layer ${it.shapes.indexOf(s)+1} of ${it.shapes.length}`;
     c.save();c.font=`${12*k}px sans-serif`;const tw=c.measureText(txt).width+10*k,th=18*k,tx=Math.max(0,Math.min(W-tw,r.x)),ty=r.y-th-4*k>0?r.y-th-4*k:r.y+4*k;
     c.fillStyle='rgba(0,0,0,.75)';c.fillRect(tx,ty,tw,th);c.fillStyle='#fff';c.textBaseline='middle';c.fillText(txt,tx+5*k,ty+th/2);c.restore()}};
 // Zoom box: type an exact percentage, step with -/+, or fit the window. The old dropdown stays hidden for compatibility.
@@ -2402,12 +2402,14 @@ const dupSel0=dupSel;dupSel=function(){const it=S.cur,before=new Set(it?.shapes|
 const paste0=pasteAnnotations;pasteAnnotations=async function(sh){const it=S.cur,before=new Set(it?.shapes||[]);const r=await paste0(sh);if(it?.shapes)regroup9(it.shapes.filter(s=>!before.has(s)));return r};
 
 // ---------- 9.05: layer order and Flatten selected ----------
+window.layerOf9=s=>{const a=S.cur.shapes;return{n:a.indexOf(s)+1,of:a.length}};
+function layerToast9(){const a=expand9(selectedShapes());if(!a.length)return;const L=a.map(s=>layerOf9(s).n),of=S.cur.shapes.length;toast(a.length===1?`Now on layer ${L[0]} of ${of} (1 = bottom).`:`Now on layers ${Math.min(...L)}–${Math.max(...L)} of ${of} (1 = bottom).`)}
 window.orderStep9=function(dir){const it=S.cur;if(it?.kind!=='image')return;const sel=new Set(expand9(selectedShapes()));if(!sel.size){toast('Select something first.');return}
   const a=it.shapes.slice();let moved=false;
   if(dir>0){for(let i=a.length-2;i>=0;i--)if(sel.has(a[i])&&!sel.has(a[i+1])){[a[i],a[i+1]]=[a[i+1],a[i]];moved=true}}
   else{for(let i=1;i<a.length;i++)if(sel.has(a[i])&&!sel.has(a[i-1])){[a[i],a[i-1]]=[a[i-1],a[i]];moved=true}}
-  if(!moved){toast(dir>0?'Already at the front.':'Already at the back.');return}snap();it.shapes.splice(0,it.shapes.length,...a);render();changed()};
-const order0=orderSelection;orderSelection=function(front){const a=expand9(selectedShapes());if(a.length>1&&S.sel){S.grp=a;S.sel=null}return order0(front)};
+  if(!moved){toast(dir>0?`Already on the top layer (${it.shapes.length} of ${it.shapes.length}).`:'Already on the bottom layer (1).');return}snap();it.shapes.splice(0,it.shapes.length,...a);render();changed();layerToast9()};
+const order0=orderSelection;orderSelection=function(front){const a=expand9(selectedShapes());if(a.length>1&&S.sel){S.grp=a;S.sel=null}const r=order0(front);layerToast9();return r};
 window.flattenSel9=async function(){const it=S.cur;if(it?.kind!=='image')return;commitText();const a=expand9(selectedShapes());if(!a.length){toast('Select the items to flatten.');return}
   await readyShapes(a);const m=Math.ceil(Math.max(4,...a.map(s=>+s.w||0)))+16,bs=a.map(bbox);
   const x=Math.floor(Math.min(...bs.map(b=>b.x))-m),y=Math.floor(Math.min(...bs.map(b=>b.y))-m),w=Math.ceil(Math.max(...bs.map(b=>b.x+b.w))+m)-x,h=Math.ceil(Math.max(...bs.map(b=>b.y+b.h))+m)-y;
