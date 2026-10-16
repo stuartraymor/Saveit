@@ -444,6 +444,7 @@ function drawComposite(c,it,p,ui){
   else{cornerPath(c,o,o,W+ob*2,H+ob*2,f,ob); c.fillStyle=ob&&bs==='solid'?f.borderColor:'#fff'; c.fill();}
   c.restore();
   c.save(); if(E)edgePath(c,p,p,W,H,E);else cornerPath(c,p,p,W,H,f,0); c.clip(); c.clearRect(p,p,W,H); c.translate(p,p);
+  if(f.bg){c.fillStyle=f.bg;c.fillRect(0,0,W,H)}
   const flt=FXFILTER(f.adj);if(flt!=='none')c.filter=flt;
   if(!(ui&&S.rzHide==='base'))c.drawImage(ui&&S.simp&&S.simp.prev&&it===S.cur?S.simp.prev:it.base,0,0);
   c.filter='none';
@@ -1189,6 +1190,7 @@ function imagePanel(it){const f=S.fx,radii=f.radii,rounded=(+f.radius||0)>0||!!r
     <div class="row"><button class="btn" id="imFlipH" title="Mirror left to right">⇋ Flip horizontal</button><button class="btn" id="imFlipV" title="Mirror top to bottom">⇵ Flip vertical</button></div>
     <div class="row"><button class="btn" id="imCanvas">Canvas size…</button><button class="btn" id="imCrop">Crop</button></div>
     <div class="row"><button class="btn" id="imAddPic" title="Put another picture on this canvas. Each picture moves and resizes on its own.">Add picture…</button></div>
+    <div class="row"><label>Canvas background <select id="imBg89" aria-label="Canvas background"><option value="">Transparent</option><option value="#ffffff">White</option><option value="#000000">Black</option><option value="custom">Colour…</option></select></label><input type="color" id="imBgc89" aria-label="Background colour" value="${/^#[0-9a-f]{6}$/i.test(f.bg||'')?f.bg:'#ffffff'}"></div>
     <p class="hint">Rotating and flipping turn annotations into pixels. Undo restores them.</p></div>
   <div class="grp"><h3>Border</h3>${rngFx('border','Thickness',0,40,+f.border||0)}
     <div class="row"><span>Color</span><input type="color" id="fxBc" value="${f.borderColor}" aria-label="Border color"></div>
@@ -1604,6 +1606,7 @@ async function pictureUrl88(f){const url=await new Promise((res,rej)=>{const r=n
 function addPictures88(){const it=S.cur;if(it?.kind!=='image'){toast('Open an image first.');return}if(it.guide){toast('Add pictures to a normal capture, not to a guide step.');return}
   const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;
   inp.onchange=async()=>{const files=[...inp.files].filter(f=>f.type.startsWith('image/'));if(!files.length){toast('Choose an image file.');return}
+    const used=it.shapes.reduce((n,x)=>n+(x.t==='img'?x.src.length:0),0)+files.reduce((n,f)=>n+f.size*1.4,0);if(used>120e6){toast('That would make this capture too large (about 90 MB of pictures). Remove or flatten some pictures first.',7000);return}
     try{let n=0;for(const f of files)await pasteImageLayer(await pictureUrl88(f),n++,true);toast(`Added ${files.length} picture${files.length>1?'s':''}. Drag to move; use the handles to resize. Ctrl+Z undoes.`,5000)}catch(e){actionError(e)}};
   inp.click()}
 async function pasteImageLayer(url,n=0,quiet=false){const it=S.cur;if(it?.kind!=='image'){toast('Open an image first, or choose Paste as new capture.');return}const c=await dataUrlCanvas(url),k=Math.min(1,it.base.width/c.width,it.base.height/c.height),w=Math.round(c.width*k),h=Math.round(c.height*k),s={id:uid++,t:'img',x1:Math.round((it.base.width-w)/2)+n*24,y1:Math.round((it.base.height-h)/2)+n*24,x2:Math.round((it.base.width-w)/2)+w+n*24,y2:Math.round((it.base.height-h)/2)+h+n*24,src:url,op:1,sh:false,c:'#000',w:1,fs:20};await readyShapes([s]);snap();it.shapes.push(s);setTool('select');S.sel=s;render();renderProps();changed();if(!quiet)toast('Pasted image layer. Drag to move; use corner handles to resize.')}
@@ -2201,6 +2204,9 @@ function syncWs80(){const on=rzOn80(),it=S.cur;
     S.ws={it,ox:p0+M,oy:p0+M,sw:it.base.width+2*(p0+M),sh:it.base.height+2*(p0+M),bw:it.base.width,bh:it.base.height};S.wsZoom=S.zoom;layoutStage();
     if(S.zoom==='fit'){S.zoom=scale();applyZoom()}S.wsZoomSet=S.zoom;render()}}
 const props86=renderProps;renderProps=function(){props86();syncWs80();
+  {const sel=document.getElementById('imBg89'),col=document.getElementById('imBgc89'),it=S.cur;if(sel&&it?.kind==='image'){const bg=it.fx.bg||'';sel.value=['','#ffffff','#000000'].includes(bg)?bg:'custom';
+    const setBg=v=>{snap();it.fx.bg=v||null;render();changed();renderProps()};
+    sel.onchange=()=>{if(sel.value==='custom')setBg(col.value);else setBg(sel.value)};col.onchange=()=>setBg(col.value)}}
   const fw=document.getElementById('resW87'),fh=document.getElementById('resH87'),lk=document.getElementById('resLock87'),pr=document.getElementById('resPreset87');
   if(!fw||!S.cur||S.cur.kind!=='image')return;
   const tgt=()=>{const b=rzBox88();return{L:Math.round(b.L),T:Math.round(b.T),w:Math.round(b.R-b.L),h:Math.round(b.B-b.T)}};
