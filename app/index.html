@@ -1084,6 +1084,31 @@ function renderProps(){
 }
 const FX_FILTERS=[['Original',{}],['Mono',{gray:100,co:10}],['Sepia',{sepia:90}],['Vivid',{sa:55,co:15}],['Fade',{sa:-35,br:10,co:-15}],['Cool',{hue:-20,sa:10}],['Warm',{hue:18,sepia:20,sa:10}],['Dramatic',{co:45,br:-8,sa:-15}],['Invert',{invert:100}]];
 const FX_ADJ=[['br','Brightness',-100,100],['co','Contrast',-100,100],['sa','Saturation',-100,100],['hue','Hue',-180,180],['blur','Blur',0,20],['gray','Grayscale',0,100],['sepia','Sepia',0,100]];
+// 8.4: the Effects tiles show each effect on one sample picture, so they look the same for every image and are
+// never dark. The picture is drawn here (a flower in a garden), so it needs no photo licence or attribution. Cached once.
+let fxSampleCanvas=null;
+function fxSample(){if(fxSampleCanvas)return fxSampleCanvas;
+  const W=240,H=190,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  const sky=g.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#7fcdf5');sky.addColorStop(.6,'#d4f0b0');sky.addColorStop(1,'#3f9a4d');g.fillStyle=sky;g.fillRect(0,0,W,H);
+  const sun=g.createRadialGradient(36,30,4,36,30,110);sun.addColorStop(0,'rgba(255,255,226,.95)');sun.addColorStop(1,'rgba(255,255,226,0)');g.fillStyle=sun;g.fillRect(0,0,W,H);
+  const petal=(x,y,a,len,wid,col)=>{g.save();g.translate(x,y);g.rotate(a);g.beginPath();g.ellipse(0,-len/2,wid,len/2,0,0,Math.PI*2);g.fillStyle=col;g.fill();g.strokeStyle='rgba(0,0,0,.18)';g.lineWidth=1;g.stroke();g.restore()};
+  const leaf=(x,y,a,len,col)=>{g.save();g.translate(x,y);g.rotate(a);g.beginPath();g.ellipse(0,-len/2,len*.28,len/2,0,0,Math.PI*2);g.fillStyle=col;g.fill();g.restore()};
+  // distant flowers for depth
+  [[30,40,'#ffd600'],[210,60,'#ff4081'],[222,150,'#7e57c2']].forEach(([x,y,col])=>{for(let i=0;i<5;i++)petal(x,y,i*Math.PI*2/5,12,5,col);g.beginPath();g.arc(x,y,3,0,7);g.fillStyle='#fff3e0';g.fill()});
+  // stem and leaves
+  g.strokeStyle='#2e7d32';g.lineWidth=5;g.lineCap='round';g.beginPath();g.moveTo(116,92);g.quadraticCurveTo(110,140,122,188);g.stroke();
+  leaf(114,140,-.9,34,'#43a047');leaf(119,160,.9,38,'#2e7d32');leaf(116,118,-.5,20,'#66bb6a');
+  // main flower: eight petals in bright colours, each with a light edge
+  const cols=['#e91e63','#ff5722','#ffc107','#9c27b0','#ff4081','#ff9800','#f50057','#ffeb3b'];
+  for(let i=0;i<8;i++)petal(116,84,i*Math.PI/4,62,16,cols[i]);
+  for(let i=0;i<8;i++)petal(116,84,i*Math.PI/4+.12,50,6,'rgba(255,255,255,.35)');
+  // centre with texture
+  const cg=g.createRadialGradient(112,80,2,116,84,17);cg.addColorStop(0,'#fff59d');cg.addColorStop(1,'#e65100');g.fillStyle=cg;g.beginPath();g.arc(116,84,17,0,7);g.fill();
+  g.fillStyle='rgba(120,50,0,.55)';for(let i=0;i<16;i++){const r=3+(i%4)*2.5;g.beginPath();g.arc(116+Math.cos(i*2.4)*r,84+Math.sin(i*2.4)*r,1.3,0,7);g.fill()}
+  // light and shadow: a soft shadow under the flower, dew highlights on the petals
+  g.fillStyle='rgba(0,40,0,.25)';g.beginPath();g.ellipse(126,184,60,6,0,0,7);g.fill();
+  g.fillStyle='rgba(255,255,255,.85)';[[96,66],[136,70],[104,104],[150,96],[126,44]].forEach(([x,y])=>{g.beginPath();g.arc(x,y,1.8,0,7);g.fill()});
+  fxSampleCanvas=c;return c}
 function renderFxPanel(P,it){const f=it.fx=Object.assign(FXBLANK(),it.fx);f.adj=Object.assign(FXBLANK().adj,f.adj);S.fx=f;
   const r=(attr,k,lbl,min,max,v)=>`<div class="row"><span>${lbl}</span><input type="range" ${attr}="${k}" min="${min}" max="${max}" value="${v}" aria-label="${lbl}"><span class="val">${v}</span></div>`;
   let h='';
@@ -1097,8 +1122,8 @@ function renderFxPanel(P,it){const f=it.fx=Object.assign(FXBLANK(),it.fx);f.adj=
   P.innerHTML=h;
   if(it.guide)$('#backGuide').onclick=()=>openItem(it.guide);
   numify(P);
-  P.querySelectorAll('#fxTiles button').forEach(b=>{const q=FX_FILTERS[+b.dataset.i][1],cc=b.querySelector('canvas'),g=cc.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,96,76);const sc=Math.min(96/it.base.width,76/it.base.height),w=it.base.width*sc,hh=it.base.height*sc;
-    g.filter=FXFILTER(Object.assign({},FXBLANK().adj,q));g.drawImage(it.base,(96-w)/2,(76-hh)/2,w,hh);g.filter='none';
+  P.querySelectorAll('#fxTiles button').forEach(b=>{const q=FX_FILTERS[+b.dataset.i][1],cc=b.querySelector('canvas'),g=cc.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,96,76);const src=fxSample(),sc=Math.min(96/src.width,76/src.height),w=src.width*sc,hh=src.height*sc;
+    g.filter=FXFILTER(Object.assign({},FXBLANK().adj,q));g.drawImage(src,(96-w)/2,(76-hh)/2,w,hh);g.filter='none';
     b.onclick=()=>{snap();it.fx.adj=Object.assign(FXBLANK().adj,q);render();renderFxPanel(P,it);changed()}});
   P.querySelectorAll('[data-fa]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=i.value;fxSnap();f.adj[i.dataset.fa]=+i.value;render();changed()});
   P.querySelectorAll('[data-fv]').forEach(i=>i.oninput=()=>{i.nextElementSibling.textContent=i.value;fxSnap();f.vig=+i.value;render();changed()});
