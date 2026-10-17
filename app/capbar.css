@@ -29,3 +29,29 @@
 .capbar .seg button{width:56px!important;padding:0!important;text-align:center}
 .capbar #vidOpts>select.dev,.capbar #vidOpts>#camGear,.capbar #imgOpts>#fxGear{margin-left:-4px!important}
 .capbar .seg{padding:0!important;gap:0!important;width:114px!important;flex:none}
+/* 9.9: logo only (the window title already says Saveit and its version), so the Capture button column is narrower
+   and the switch has room for Image | Video | Audio. */
+.capbar .lead{width:132px!important}
+.capbar .brand{gap:0!important}.capbar .brand .ver{display:none!important}
+.capbar .brand i{width:24px!important;height:24px!important;border-radius:7px!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.capbar .brand[data-save-error] i{box-shadow:0 0 0 2px #ff6b5b!important}
+.capbar .leadrow{justify-content:space-between}
+.capbar .seg{width:168px!important}
+/* Audio settings: Mic with a live bar, + Mic 2, Computer sound. Shown only while Audio is chosen. */
+.capbar:not(.amode) .amic,.capbar:not(.amode) .aadd,.capbar:not(.amode) .asys{display:none!important}
+.capbar .amic{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--cb-muted)}
+.capbar .amic[hidden],.capbar .aadd[hidden]{display:none!important}
+.capbar .amic select.dev{width:150px!important;max-width:150px!important}
+.capbar .ameter{width:48px;height:10px;flex:none;border-radius:2px;image-rendering:pixelated}
+.capbar .aadd,.capbar .amic-x{height:24px!important;min-height:0!important;padding:0 8px!important;font-size:11.5px!important;font-weight:700!important;border-radius:6px!important;background:var(--cb-box)!important;border:1px solid var(--cb-line)!important;color:var(--cb-fg)!important;cursor:pointer}
+.capbar .amic-x{width:22px!important;padding:0!important;color:var(--cb-muted)!important}
+.capbar .aadd:hover,.capbar .amic-x:hover{border-color:#9aa1a8!important;color:var(--cb-fg)!important}
+.capbar .asys{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--cb-muted)}
+/* small editor windows only (the widget window always fits its bar, so it never shrinks these) */
+@media (max-width:1180px){.top .capbar .amic select.dev{width:100px!important;max-width:100px!important}.top .capbar .ameter{width:36px}.top .capbar .amic{gap:4px}}
+/* 9.9.1: the Widget / Editor button fills the room beside the logo, at the logo's height */
+.capbar .leadrow{gap:8px!important;justify-content:flex-start!important}
+html .capbar .leadrow #widgetBtn,html .capbar .leadrow #ed{flex:1 1 auto!important;width:auto!important;height:24px!important;padding:0 10px!important;font-size:12px!important;border-radius:7px!important}
+/* 9.9.1: one row model for both bars (rows size to their content and may wrap only when the editor window is narrow) */
+html .capbar .optcol{grid-template-rows:none!important;grid-auto-rows:auto!important;height:auto!important;row-gap:5px!important;align-content:center}
+html .capbar .optrow{height:auto!important;min-height:24px;flex-wrap:wrap!important;row-gap:5px}

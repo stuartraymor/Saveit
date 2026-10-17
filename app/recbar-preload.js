@@ -2,5 +2,6 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('recbar', {
   cmd: c => ipcRenderer.send('rec-cmd', c),
-  onState: fn => ipcRenderer.on('state', (e, st) => fn(st))
+  onState: fn => ipcRenderer.on('state', (e, st) => fn(st)),
+  onLevel: fn => ipcRenderer.on('level', (e, lv) => fn(lv))
 });

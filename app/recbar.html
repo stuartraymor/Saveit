@@ -6,9 +6,11 @@ html,body{margin:0;height:100%;background:#16181a;overflow:hidden;font-family:"S
 .dot{width:10px;height:10px;border-radius:50%;background:#e5483b;animation:p 1s infinite}
 .paused .dot{animation:none;background:#f5c400}
 .t{font-family:"Cascadia Mono",Consolas,monospace;font-variant-numeric:tabular-nums;font-size:14px;min-width:52px}
+.info.meters{display:flex;gap:8px;align-items:center}.info .m{width:56px;height:8px;border-radius:2px}
 .info{font-size:11px;color:#9aa1a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sp{flex:1}
 button{-webkit-app-region:no-drag;font:inherit;font-size:12px;font-weight:700;border-radius:999px;border:1px solid #3a3f45;background:#30343a;color:#e8eaec;padding:5px 12px;cursor:pointer}
+button:disabled{opacity:.45;cursor:default}
 button.stop{background:#e5483b;border-color:#e5483b;color:#fff}
 @keyframes p{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
@@ -20,7 +22,14 @@ let secs=0,paused=false;
 const $=id=>document.getElementById(id),t=$('t'),bar=$('bar'),pauseBtn=$('pause'),stopBtn=$('stop');
 const q=new URLSearchParams(location.search);
 $('info').textContent=[q.get('size'),q.get('cursor')==='1'?'Cursor':'',q.get('sys')==='1'?'Audio':'',q.get('mic')==='1'?'Mic':'',q.get('cam')==='1'?'Cam':''].filter(Boolean).join(' · ');
-setInterval(()=>{if(!paused){secs++;t.textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0')}},1000);
+// 9.9: audio recordings show a live level bar for each track (green, amber when loud, red when it would clip) and the countdown
+const audio=q.get('audio')==='1';let count=audio?Math.max(0,+q.get('countdown')||0):0;const meters=[];
+if(audio){let names=[];try{names=JSON.parse(q.get('tracks')||'[]')}catch(_){}$('info').textContent='';$('info').classList.add('meters');
+  names.forEach(n=>{const c=document.createElement('canvas');c.width=112;c.height=16;c.className='m';c.title=n;c.setAttribute('role','meter');c.setAttribute('aria-label',n+' level');$('info').append(c);meters.push(c)});
+  if(count){t.textContent='in '+count;pauseBtn.disabled=true}}
+function drawMeter(c,lv){const g=c.getContext('2d'),seg=10,w=c.width,h=c.height,sw=(w-(seg-1)*3)/seg,db=lv>0?20*Math.log10(lv):-99,lit=Math.max(0,Math.min(seg,Math.round((db+48)/48*seg)));g.clearRect(0,0,w,h);for(let i=0;i<seg;i++){g.fillStyle=i<lit?(i>=9?'#e5483b':i>=7?'#f5c400':'#2db3a0'):'#3a3f45';g.fillRect(i*(sw+3),0,sw,h)}}
+meters.forEach(c=>drawMeter(c,0));if(window.recbar.onLevel)window.recbar.onLevel(lv=>meters.forEach((c,i)=>drawMeter(c,lv[i]||0)));
+setInterval(()=>{if(count>0){count--;if(count>0){t.textContent='in '+count;return}pauseBtn.disabled=false;t.textContent='00:00';return}if(!paused){secs++;t.textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0')}},1000);
 pauseBtn.onclick=()=>window.recbar.cmd('pause');
 stopBtn.onclick=()=>{stopBtn.disabled=true;stopBtn.textContent='Saving…';window.recbar.cmd('stop')};
 window.recbar.onState(st=>{paused=st==='paused';bar.classList.toggle('paused',paused);pauseBtn.textContent=paused?'Resume':'Pause'});
