@@ -439,7 +439,12 @@ async function takeStep(seq) {
   try {
     const d = screen.getDisplayNearestPoint(pt);
     await sleep(140); // let the click land so the screenshot shows its result (menus, highlights)
-    const img = await grabDisplay(d);
+    // 10.0.9: the step bar must never appear in a step image. Content protection alone is not honoured by desktopCapturer thumbnails.
+    const stepBar = steps.bar && !steps.bar.isDestroyed() ? steps.bar : null;
+    if (stepBar) { stepBar.setOpacity(0); await sleep(40); }
+    let img;
+    try { img = await grabDisplay(d); }
+    finally { if (stepBar && !stepBar.isDestroyed()) stepBar.setOpacity(1); }
     const k = img.getSize().width / d.bounds.width;
     steps.count++;
     win.webContents.send('step-shot', { seq: seq || null, url: img.toDataURL(), click: { x: Math.round((pt.x - d.bounds.x) * k), y: Math.round((pt.y - d.bounds.y) * k) }, k });
@@ -474,7 +479,11 @@ ipcMain.handle('steps-start', async (e, delay = 0) => {
   try { globalShortcut.register('F9', () => takeStep()); } catch (_) { }
   if (process.platform === 'win32') {
     try {
-      const h = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', CLICK_WATCHER], { windowsHide: true });
+      // 10.0.10: native hook + UI Automation helper (saveit-steps.exe in the app folder); the old PowerShell watcher if it is missing
+      const helperExe = path.join(__dirname, 'saveit-steps.exe');
+      const h = fs.existsSync(helperExe)
+        ? spawn(helperExe, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] })
+        : spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', CLICK_WATCHER], { windowsHide: true });
       steps.helper = h;
       let buf = '';
       h.stdout.on('data', ch => {
@@ -482,7 +491,9 @@ ipcMain.handle('steps-start', async (e, delay = 0) => {
         while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
           if (line === 'READY' && steps) { steps.auto = true; stepsBarState(); }
           if (line.startsWith('CLICK')) takeStep(+line.split(' ')[1] || null);
-          if (line.startsWith('INFO ')) { try { win.webContents.send('step-info', JSON.parse(line.slice(5))); } catch (_) { } } }
+          if (line.startsWith('INFO ')) { try { win.webContents.send('step-info', JSON.parse(line.slice(5))); } catch (_) { } }
+          // 10.0.10: typed text, one line per field (the helper never sends what is typed into password fields)
+          if (line.startsWith('TYPE ')) { try { const m = /^TYPE \d+ (.*)$/.exec(line); const t = m && JSON.parse(m[1]); if (t && !t.isPassword && typeof t.text === 'string' && t.text) win.webContents.send('step-type', { field: String(t.field || '').slice(0, 80), text: t.text.slice(0, 200) }); } catch (_) { } } }
       });
       h.on('exit', () => { if (steps && steps.helper === h) { steps.auto = false; steps.helper = null; stepsBarState(); } });
     } catch (_) { }
@@ -497,7 +508,7 @@ ipcMain.on('steps-cmd', (e, c) => {
 });
 
 // ---------- PDF export ----------
-ipcMain.handle('print-pdf', async (e, html, name) => {
+ipcMain.handle('print-pdf', async (e, html, name, asBuffer) => {
   const tmp = path.join(os.tmpdir(), 'saveit-' + Date.now() + '.html');
   fs.writeFileSync(tmp, html, 'utf8');
   const pw = new BrowserWindow({ show: false, webPreferences: { offscreen: false } });
@@ -505,6 +516,7 @@ ipcMain.handle('print-pdf', async (e, html, name) => {
     await pw.loadFile(tmp);
     await sleep(300);
     const pdf = await pw.webContents.printToPDF({ pageSize: 'Letter', printBackground: true, preferCSSPageSize: true });
+    if (asBuffer) return pdf; // 10.0.9: Library Save builds the file itself
     const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), name), filters: [{ name: 'PDF document', extensions: ['pdf'] }] });
     if (r.canceled || !r.filePath) return null;
     fs.writeFileSync(r.filePath, pdf);
@@ -517,7 +529,8 @@ const FILTERS = { pptx:'PowerPoint presentation',saveitbackup:'Saveit library ba
 ipcMain.handle('save-pick', async (e, name, exts) => {
   const ext = (exts && exts[0]) || 'png';
   const dir = ['wav', 'mp3', 'm4a'].includes(ext) ? app.getPath('music') : ['webm', 'mp4', 'gif'].includes(ext) ? app.getPath('videos') : ['docx', 'pdf', 'saveit','pptx','saveitbackup'].includes(ext) ? app.getPath('documents') : app.getPath('pictures');
-  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(dir, name + '.' + ext), filters: exts.map(x => ({ name: FILTERS[x] || x.toUpperCase(), extensions: [x] })) });
+  // 10.0.9: name may be the full previous path (without extension) so the dialog opens where the user last saved
+  const r = await dialog.showSaveDialog(win, { defaultPath: path.isAbsolute(name) ? name + '.' + ext : path.join(dir, name + '.' + ext), filters: exts.map(x => ({ name: FILTERS[x] || x.toUpperCase(), extensions: [x] })) });
   if (r.canceled || !r.filePath) return null;
   let fp = r.filePath; const got = path.extname(fp).slice(1).toLowerCase();
   if (!exts.includes(got)) fp += '.' + ext;
@@ -533,8 +546,13 @@ ipcMain.handle('save', async (e, name, buf, target) => {
   return r.filePath;
 });
 
+// 10.0.9: "Open folder" button on the Saved to message
+ipcMain.handle('reveal-file', (e, p) => { mainSender33(e); if (typeof p === 'string' && path.isAbsolute(p) && fs.existsSync(p)) shell.showItemInFolder(p); });
+
 ipcMain.handle('save-many', async (e, files) => {
-  const r = await dialog.showOpenDialog(win, { title: 'Choose a folder', defaultPath: app.getPath('pictures'), properties: ['openDirectory', 'createDirectory'] });
+  // 10.0.9: guides and documents start in Documents, pictures in Pictures
+  const docsOnly = files.length && files.every(f => /\.(docx|pdf|pptx|saveit)$/i.test(f.name));
+  const r = await dialog.showOpenDialog(win, { title: 'Choose a folder', defaultPath: app.getPath(docsOnly ? 'documents' : 'pictures'), properties: ['openDirectory', 'createDirectory'] });
   if (r.canceled || !r.filePaths[0]) return null;
   for (const f of files) await fs.promises.writeFile(path.join(r.filePaths[0], path.basename(f.name)), Buffer.from(f.data));
   return r.filePaths[0];
