@@ -15,7 +15,7 @@ $startMenu = Join-Path ([Environment]::GetFolderPath('Programs')) 'Saveit.lnk'
 $desktop   = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Saveit.lnk'
 
 Write-Host ''
-Write-Host "  Saveit Setup  (version 10.0.5)" -ForegroundColor Cyan
+Write-Host "  Saveit Setup  (version 10.0.6)" -ForegroundColor Cyan
 Write-Host ''
 if (-not (Test-Path (Join-Path $PSScriptRoot 'app\main.js'))) {
   Write-Host '  The app files were not found next to this script.' -ForegroundColor Yellow
@@ -92,7 +92,7 @@ $uns.TargetPath = (Join-Path $dest 'Uninstall.cmd'); $uns.WorkingDirectory = $de
 $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Saveit'
 New-Item -Path $key -Force | Out-Null
 Set-ItemProperty $key DisplayName $app
-Set-ItemProperty $key DisplayVersion '10.0.5'
+Set-ItemProperty $key DisplayVersion '10.0.6'
 Set-ItemProperty $key Publisher 'Saveit'
 Set-ItemProperty $key DisplayIcon $icon
 Set-ItemProperty $key InstallLocation $dest

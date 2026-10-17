@@ -648,15 +648,31 @@ function bbox(s){
 }
 const BOXY=['rect','ellipse','highlight','blur','spotlight','magnify','img','callout'],UNIFORM=['text','step','stamp'];
 // The box the dashed outline and resize handles sit on: the shape's own frame, or its drawn extent.
-function selBox(s){return BOXY.includes(s.t)?norm(s):bbox(s)}
+// 10.0.6: free rotation. s.rot is an angle in degrees about the centre of the object's own frame (its "pivot").
+// Everything below works in the object's own (unrotated) frame; rotPt103 converts a point between the two frames.
+const BBOX_LOCAL103=bbox,FREE103=['text','step','stamp','rect','ellipse','highlight','callout','pen'],ROT_STEM103=26;
+const rotOK103=s=>!!s&&FREE103.includes(s.t),rotated103=s=>!!(s&&s.rot&&FREE103.includes(s.t)),inShapes103=s=>!!(S.cur&&S.cur.shapes&&S.cur.shapes.includes(s));
+const pivot103=s=>{const b=s.t==='callout'?norm(s):BBOX_LOCAL103(s);return{x:b.x+b.w/2,y:b.y+b.h/2}};
+const rotPt103=(x,y,p,deg)=>{const a=deg*Math.PI/180,co=Math.cos(a),si=Math.sin(a),dx=x-p.x,dy=y-p.y;return{x:p.x+dx*co-dy*si,y:p.y+dx*si+dy*co}};
+// the rotate handle: a short stem above the top-middle of the frame
+function rotTop103(s){const b=selBox(s),p=pivot103(s),a={x:b.x+b.w/2,y:b.y},h={x:b.x+b.w/2,y:b.y-ROT_STEM103/scale()};return s.rot?{a:rotPt103(a.x,a.y,p,s.rot),h:rotPt103(h.x,h.y,p,s.rot)}:{a,h}}
+function rotHandles103(s,hs){const p=pivot103(s),out=hs.map(([k,x,y])=>{if(!s.rot)return[k,x,y];const q=rotPt103(x,y,p,s.rot);return[k,q.x,q.y]});const t=rotTop103(s);out.push(['rot',t.h.x,t.h.y]);return out}
+function rotDrag103(s,d,x,y,shift){const P=d._pv||(d._pv=pivot103(d.s0));
+  // the handle follows the pointer: straight up from the centre is 0 degrees
+  let deg=Math.atan2(y-P.y,x-P.x)*180/Math.PI+90;deg=((deg%360)+360)%360;
+  if(shift)deg=Math.round(deg/15)*15;else{const n=Math.round(deg/45)*45;if(Math.abs(deg-n)<3)deg=n}
+  s.rot=Math.round((deg%360)*10)/10}
+function selBox(s){return BOXY.includes(s.t)?norm(s):BBOX_LOCAL103(s)}
 function handles(s){
   if(s.t==='arrow'&&s.style==='curved'){const q=ctrlPt(s);return[['p1',s.x1,s.y1],['p2',s.x2,s.y2],['c',q.x,q.y]]}
   if(s.t==='arrow'||s.t==='line')return[['p1',s.x1,s.y1],['p2',s.x2,s.y2]];
   const {x,y,w,h}=selBox(s),cx=x+w/2,cy=y+h/2,hs=[['nw',x,y],['ne',x+w,y],['se',x+w,y+h],['sw',x,y+h]];
   if(!UNIFORM.includes(s.t))hs.push(['n',cx,y],['e',x+w,cy],['s',cx,y+h],['w',x,cy]);
   if(s.t==='callout')hs.push(['tail',s.tx,s.ty]);
-  return hs}
-const HANDLE_CURSOR={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',p1:'grab',p2:'grab'};
+  return rotOK103(s)&&inShapes103(s)?rotHandles103(s,hs):hs}
+const HANDLE_CURSOR0={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',p1:'grab',p2:'grab',rot:'grab'};
+const HANDLE_DIR103={n:0,ne:45,e:90,se:135,s:180,sw:225,w:270,nw:315},CURSOR_BY_DIR103=['ns-resize','nesw-resize','ew-resize','nwse-resize'];
+const HANDLE_CURSOR=new Proxy(HANDLE_CURSOR0,{get(o,k){const r=S.sel&&S.tool!=='crop'&&rotated103(S.sel)?S.sel.rot:0;if(!r||!(k in HANDLE_DIR103))return o[k];return CURSOR_BY_DIR103[((Math.round((HANDLE_DIR103[k]+r)/45)%8)+8)%4]}});
 // Maps a shape from its starting box b onto box nb (used by handles and by the exact size fields).
 function applyBox(s,s0,b,nb){const sx=nb.w/(b.w||1),sy=nb.h/(b.h||1),X=v=>nb.x+(v-b.x)*sx,Y=v=>nb.y+(v-b.y)*sy;
   if(s.t==='text'){s.fs=Math.max(4,s0.fs*sy);if(s0.tw)s.tw=s0.tw*sy;s.x1=s.x2=nb.x;s.y1=s.y2=nb.y;s._w=null}
@@ -669,6 +685,11 @@ function resizeByHandle(s,d,x,y,shift){const b=d.b0,k=d.k,corner=k.length===2;le
   if(k.includes('w'))L=Math.min(x,R-2);if(k.includes('e'))R=Math.max(x,L+2);if(k.includes('n'))T=Math.min(y,B-2);if(k.includes('s'))B=Math.max(y,T+2);
   if(corner&&b.w>0&&b.h>0&&(UNIFORM.includes(s.t)||(S.p.lockRatio!==false)!==!!shift)){const f=Math.max((R-L)/b.w,(B-T)/b.h),w=b.w*f,h=b.h*f;if(k.includes('w'))L=R-w;else R=L+w;if(k.includes('n'))T=B-h;else B=T+h}
   applyBox(s,d.s0,b,{x:L,y:T,w:R-L,h:B-T})}
+// resizing a rotated object: the pointer is read in the object's own frame, then the object is shifted so the opposite edge stays put
+const resizeByHandle103=resizeByHandle;
+resizeByHandle=function(s,d,x,y,shift){if(!rotated103(s))return resizeByHandle103(s,d,x,y,shift);
+  const P0=d._pv||(d._pv=pivot103(d.s0)),loc=rotPt103(x,y,P0,-s.rot);resizeByHandle103(s,d,loc.x,loc.y,shift);
+  const P1=pivot103(s),a=s.rot*Math.PI/180,co=Math.cos(a),si=Math.sin(a),vx=P0.x-P1.x,vy=P0.y-P1.y;moveShape(s,vx-(vx*co-vy*si),vy-(vx*si+vy*co))};
 function legacyHandles(s){
   if(s.t==='arrow'&&s.style==='curved'){const q=ctrlPt(s);return[['p1',s.x1,s.y1],['p2',s.x2,s.y2],['c',q.x,q.y]]}
   if(s.t==='arrow'||s.t==='line')return[['p1',s.x1,s.y1],['p2',s.x2,s.y2]];
@@ -679,8 +700,10 @@ function legacyHandles(s){
 function grpList(){return(S.grp||[]).filter(q=>S.cur&&S.cur.shapes&&S.cur.shapes.includes(q))}
 function drawUI(c,it){
   const z=scale(),hs=4.5/z;
-  if(S.sel){const s=S.sel,line=s.t==='arrow'||s.t==='line',b=line?bbox(s):selBox(s),g=line?4/z:0;c.save();c.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--sel');c.lineWidth=1.2/z;c.setLineDash([5/z,4/z]);c.strokeRect(b.x-g,b.y-g,b.w+g*2,b.h+g*2);c.setLineDash([]);
-    for(const [k,x,y] of handles(s)){c.fillStyle=k==='tail'?'#f5c400':'#fff';c.beginPath();c.rect(x-hs,y-hs,hs*2,hs*2);c.fill();c.stroke();}c.restore();}
+  if(S.sel){const s=S.sel,line=s.t==='arrow'||s.t==='line',b=line?bbox(s):selBox(s),g=line?4/z:0;c.save();c.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--sel');c.lineWidth=1.2/z;c.setLineDash([5/z,4/z]);c.save();if(rotated103(s)&&inShapes103(s)){const p=pivot103(s);c.translate(p.x,p.y);c.rotate(s.rot*Math.PI/180);c.translate(-p.x,-p.y)}c.strokeRect(b.x-g,b.y-g,b.w+g*2,b.h+g*2);c.restore();c.setLineDash([]);
+    for(const [k,x,y] of handles(s)){if(k==='rot'){const t=rotTop103(s);c.beginPath();c.moveTo(t.a.x,t.a.y);c.lineTo(x,y);c.stroke();c.fillStyle='#2db3a0';c.strokeStyle='#fff';c.lineWidth=1.6/z;c.beginPath();c.arc(x,y,5.6/z,0,7);c.fill();c.stroke();c.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--sel');c.lineWidth=1.2/z;
+        if(S.drag&&S.drag.mode==='handle'&&S.drag.k==='rot'){c.font=`600 ${12/z}px sans-serif`;const lbl=Math.round(s.rot||0)+'°',tw=c.measureText(lbl).width;c.fillStyle='rgba(22,24,26,.9)';c.fillRect(x+10/z,y-9/z,tw+8/z,16/z);c.fillStyle='#fff';c.fillText(lbl,x+14/z,y+4/z)}continue}
+      c.fillStyle=k==='tail'?'#f5c400':'#fff';c.beginPath();c.rect(x-hs,y-hs,hs*2,hs*2);c.fill();c.stroke();}c.restore();}
   if(S.cutRect){const q=S.cutRect,ax=q.axis||(Math.abs(q.x2-q.x1)>=Math.abs(q.y2-q.y1)?'x':'y'),a=Math.min(ax==='x'?q.x1:q.y1,ax==='x'?q.x2:q.y2),b=Math.max(ax==='x'?q.x1:q.y1,ax==='x'?q.x2:q.y2);
     c.save();c.fillStyle='rgba(229,72,59,.3)';c.strokeStyle='#e5483b';c.lineWidth=1.5/z;c.setLineDash([6/z,4/z]);
     if(ax==='x'){c.fillRect(a,0,b-a,it.base.height);c.strokeRect(a,0,b-a,it.base.height)}else{c.fillRect(0,a,it.base.width,b-a);c.strokeRect(0,a,it.base.width,b-a)}
@@ -703,10 +726,16 @@ function hit(x,y){const sh=S.cur.shapes,tol=8/scale();
   return null}
 function hitHandle(x,y){if(!S.sel||S.sel.hidden9||S.sel.locked9)return null;const t=9/scale();for(const [k,hx,hy] of handles(S.sel))if(Math.abs(x-hx)<t&&Math.abs(y-hy)<t)return k;return null}
 
+// Hit-testing a rotated object: test the pointer in the object's own frame, one object at a time.
+const hit103=hit;
+hit=function(x,y){const it=S.cur;if(!it||!it.shapes.some(rotated103))return hit103(x,y);const sh=it.shapes;
+  for(let i=sh.length-1;i>=0;i--){const s=sh[i];let px=x,py=y,r=0;if(rotated103(s)){const q=rotPt103(x,y,pivot103(s),-s.rot);px=q.x;py=q.y;r=s.rot;s.rot=0}
+    it.shapes=[s];let h=null;try{h=hit103(px,py)}finally{it.shapes=sh;if(r)s.rot=r}if(h)return s}
+  return null};
 // Match the frame actually drawn by drawUI, including the padding around lines/arrows.
 function nearBorder(x,y,b,tol){return x>=b.x-tol&&x<=b.x+b.w+tol&&y>=b.y-tol&&y<=b.y+b.h+tol&&
   (Math.abs(x-b.x)<=tol||Math.abs(x-b.x-b.w)<=tol||Math.abs(y-b.y)<=tol||Math.abs(y-b.y-b.h)<=tol)}
-function selectedBorder(x,y){const s=S.sel;if(!s||s.hidden9||s.locked9)return false;const b=selBox(s),g=/^(arrow|line)$/.test(s.t)?4/scale():0;
+function selectedBorder(x,y){const s=S.sel;if(rotated103(s)&&inShapes103(s)){const q=rotPt103(x,y,pivot103(s),-s.rot);x=q.x;y=q.y}if(!s||s.hidden9||s.locked9)return false;const b=selBox(s),g=/^(arrow|line)$/.test(s.t)?4/scale():0;
   return nearBorder(x,y,{x:b.x-g,y:b.y-g,w:b.w+2*g,h:b.h+2*g},6/scale())}
 // Cut Out keeps a pending strip until the user presses its confirmation button.
 function cutRegion(){const it=S.cur,q=S.cutRect;if(it?.kind!=='image'||!q)return null;
@@ -734,7 +763,7 @@ cv.addEventListener('pointerdown',e=>{
   const {x,y}=pt(e);cv.setPointerCapture(e.pointerId);
   const t=S.tool;
   const hk=hitHandle(x,y);
-  if(hk){snap();S.drag={mode:'handle',k:hk,s:S.sel,b0:selBox(S.sel),s0:clone(S.sel)};if(hk==='p1'||hk==='p2')cv.style.cursor='grabbing';return}
+  if(hk){snap();S.drag={mode:'handle',k:hk,s:S.sel,b0:selBox(S.sel),s0:clone(S.sel)};if(hk==='p1'||hk==='p2'||hk==='rot')cv.style.cursor='grabbing';return}
   if(selectedBorder(x,y)||((t==='stamp'||t==='step')&&S.sel&&!S.sel.hidden9&&!S.sel.locked9&&hit(x,y)===S.sel)){
     snap();S.drag={mode:'move',s:S.sel,lx:x,ly:y,moved:false};cv.style.cursor='move';return}
   if(t==='ocr'){S.sel=null;S.drag={mode:'pix',ocr:true};S.pixRect={x1:x,y1:y,x2:x,y2:y};render();return}
@@ -781,7 +810,8 @@ cv.addEventListener('pointermove',e=>{
       s.x2=X;s.y2=Y;}render();return}
   if(d.mode==='move'){const dx=x-d.lx,dy=y-d.ly;if(!dx&&!dy)return;d.lx=x;d.ly=y;d.moved=true;(d.list||[d.s]).forEach(q=>moveShape(q,dx,dy));render();return}
   if(d.mode==='handle'){const s=d.s,k=d.k;
-    if(k==='p1'){s.x1=x;s.y1=y}else if(k==='p2'){s.x2=x;s.y2=y}else if(k==='c'){s.cx=x;s.cy=y}else if(k==='tail'){s.tx=x;s.ty=y}
+    if(k==='p1'){s.x1=x;s.y1=y}else if(k==='p2'){s.x2=x;s.y2=y}else if(k==='c'){s.cx=x;s.cy=y}else if(k==='tail'){const q=rotated103(s)?rotPt103(x,y,pivot103(s),-s.rot):{x,y};s.tx=q.x;s.ty=q.y}
+    else if(k==='rot')rotDrag103(s,d,x,y,e.shiftKey);
     else resizeByHandle(s,d,x,y,e.shiftKey);
     render();}
 });
@@ -819,6 +849,9 @@ function positionTe(){if(!editing)return;const s=editing.s,z=scale(),px=padX(),p
   if(s.t==='callout'){const r=norm(s);te.style.left=(off+(r.x+px)*z+8)+'px';te.style.top=(off+(r.y+py)*z+8)+'px';te.style.width=(r.w*z-16)+'px';te.style.height=(r.h*z-16)+'px';te.style.background=s.fill&&s.fill!=='none'?s.fill:'#fff'}
   else{te.style.left=(off+(s.x1+px)*z)+'px';te.style.top=(off+(s.y1+py)*z)+'px';te.style.background='transparent';sizeTe()}
 }
+// text is edited upright; the angle comes back when editing ends
+const startText103=startText;startText=function(s,isNew){if(rotated103(s)){s._rot103=s.rot;s.rot=0}return startText103(s,isNew)};
+const commitText103=commitText;commitText=function(){const e=editing,s=e&&e.s,r=commitText103.apply(this,arguments);if(s&&s._rot103!=null){s.rot=s._rot103;delete s._rot103;s._w=null;render()}return r};
 function sizeTe(){if(!editing||editing.s.t!=='text')return;if(editing.s.tw){te.style.whiteSpace='pre-wrap';te.style.width=(editing.s.tw*scale()+8)+'px';te.style.height='10px';te.style.height=(te.scrollHeight+4)+'px';return}te.style.width='10px';te.style.height='10px';te.style.width=(te.scrollWidth+24)+'px';te.style.height=(te.scrollHeight+4)+'px'}
 te.addEventListener('input',sizeTe);
 te.addEventListener('keydown',e=>{if(e.key==='Escape'||(e.key==='Enter'&&(e.ctrlKey||e.metaKey))){e.preventDefault();commitText()}e.stopPropagation()});
@@ -1307,8 +1340,8 @@ function textFormat(s,t){const d=s||textDefaults,fam=d.fontFamily||'Segoe UI',bo
   return `<div class="row"><span>Font</span><select id="tFont" style="flex:1;min-width:0">${list.map(f=>`<option value="${escH(f)}" ${f===fam?'selected':''}>${escH(f)}</option>`).join('')}</select></div>${rng('font','Size',8,160,s?s.fs:S.p.font)}
   <div class="row tfmt"><button class="btn" id="tBold" aria-pressed="${bold}" title="Bold" aria-label="Bold"><b>B</b></button><button class="btn" id="tItalic" aria-pressed="${!!d.italic}" title="Italic" aria-label="Italic"><i>I</i></button><button class="btn" id="tUnder" aria-pressed="${!!d.underline}" title="Underline" aria-label="Underline"><u>U</u></button>${t==='text'?['left','center','right'].map(a=>`<button class="btn" data-talign="${a}" aria-pressed="${(d.align||'left')===a}" title="Align ${a}" aria-label="Align ${a}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="${ALIGN_ICON[a]}"/></svg></button>`).join(''):''}</div>`}
 function setText(k,v){textDefaults[k]=v;const s=S.sel;if(s&&(s.t==='text'||s.t==='callout')){snap();s[k]=v;s._w=null;render();changed()}renderProps()}
-function objectGroup(s){const b=selBox(s);
-  return `<div class="grp"><h3>Position and size</h3><div class="crop-grid">${[['X','x'],['Y','y'],['Width','w'],['Height','h']].map(([l,k])=>`<label>${l}<input type="number" data-ob="${k}" aria-label="${l}" value="${Math.round(b[k])}" ${k==='w'||k==='h'?'min="2"':''}></label>`).join('')}</div>${UNIFORM.includes(s.t)?'<p class="hint">Width and height change together for this object.</p>':''}<div class="row"><button class="btn" id="dup">Duplicate</button><button class="btn" id="front">Top layer</button><button class="btn" id="back">Bottom layer</button><button class="btn" id="del">Delete</button></div></div>`}
+function objectGroup(s){const b=selBox(s);const rotRow103=rotOK103(s)&&inShapes103(s)?`<label>Rotation (°)<input type="number" data-rot103 step="1" aria-label="Rotation in degrees" value="${Math.round((s.rot||0)*10)/10}"></label>`:'';
+  return `<div class="grp"><h3>Position and size</h3><div class="crop-grid">${[['X','x'],['Y','y'],['Width','w'],['Height','h']].map(([l,k])=>`<label>${l}<input type="number" data-ob="${k}" aria-label="${l}" value="${Math.round(b[k])}" ${k==='w'||k==='h'?'min="2"':''}></label>`).join('')}${rotRow103}</div>${UNIFORM.includes(s.t)?'<p class="hint">Width and height change together for this object.</p>':''}<div class="row"><button class="btn" id="dup">Duplicate</button><button class="btn" id="front">Top layer</button><button class="btn" id="back">Bottom layer</button><button class="btn" id="del">Delete</button></div></div>`}
 // 8.7: Width, Height, a proportion lock and Size Presets at the top of the Image tab. They use the same resize as the
 // corner handles (setPictureBox88), so Undo and the annotation rules are the same. "Original" is the size the picture had
 // when it was first shown in this session (it isn't saved with the capture yet).
@@ -1353,9 +1386,10 @@ function bindPanel(P,it,t){const on=(id,f)=>{const e=$('#'+id);if(e)e.onclick=f}
   P.querySelectorAll('[data-talign]').forEach(b=>b.onclick=()=>setText('align',b.dataset.talign));
   on('back',()=>{const a=shapesOf(S.cur);snap();a.unshift(a.splice(a.indexOf(S.sel),1)[0]);render();changed()});
   P.querySelectorAll('[data-ob]').forEach(i=>i.onchange=()=>{const s=S.sel;if(!s)return;const b=selBox(s),v={};P.querySelectorAll('[data-ob]').forEach(x=>v[x.dataset.ob]=+x.value);
-    if(!Object.values(v).every(Number.isFinite)||v.w<2||v.h<2){renderProps();return}snap();const k=i.dataset.ob;
-    if(k==='x'||k==='y')moveShape(s,v.x-b.x,v.y-b.y);else{const f=k==='w'?v.w/b.w:v.h/b.h,nb=UNIFORM.includes(s.t)?{x:b.x,y:b.y,w:b.w*f,h:b.h*f}:{x:b.x,y:b.y,w:v.w,h:v.h};applyBox(s,clone(s),b,nb)}
+    if(!Object.values(v).every(Number.isFinite)||v.w<2||v.h<2){renderProps();return}snap();const k=i.dataset.ob,P0=rotated103(s)?pivot103(s):null;
+    if(k==='x'||k==='y')moveShape(s,v.x-b.x,v.y-b.y);else{const f=k==='w'?v.w/b.w:v.h/b.h,nb=UNIFORM.includes(s.t)?{x:b.x,y:b.y,w:b.w*f,h:b.h*f}:{x:b.x,y:b.y,w:v.w,h:v.h};applyBox(s,clone(s),b,nb);if(P0){const P1=pivot103(s);moveShape(s,P0.x-P1.x,P0.y-P1.y)}}
     render();renderProps();changed()});
+  P.querySelectorAll('[data-rot103]').forEach(i=>i.onchange=()=>{const s=S.sel,v=+i.value;if(!s||!rotOK103(s))return;if(!Number.isFinite(v)){renderProps();return}snap();s.rot=Math.round((((v%360)+360)%360)*10)/10;s._w=null;render();renderProps();changed()});
   // Image panel
   on('imRotL',()=>transformImage('left').catch(actionError));on('imRotR',()=>transformImage('right').catch(actionError));
   on('imFlipH',()=>transformImage('horizontal').catch(actionError));on('imFlipV',()=>transformImage('vertical').catch(actionError));
@@ -2505,9 +2539,9 @@ window.groupOf9=groupOf9;
 
 // ---------- rotation for text, step numbers and stamps ----------
 const bbox0=bbox;
-bbox=function(s){const b=bbox0(s);if(s.rot&&ROT9.includes(s.t)&&s.rot%180){const cx=b.x+b.w/2,cy=b.y+b.h/2;return{x:cx-b.h/2,y:cy-b.w/2,w:b.h,h:b.w}}return b};
+bbox=function(s){const b=bbox0(s);if(rotated103(s)){const p=pivot103(s),q=[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]].map(([x,y])=>rotPt103(x,y,p,s.rot)),xs=q.map(v=>v.x),ys=q.map(v=>v.y);return{x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)}}return b};
 const drawShape0=drawShape;
-drawShape=function(c,s,base){if(!s.rot||!ROT9.includes(s.t))return drawShape0(c,s,base);const b=bbox0(s),cx=b.x+b.w/2,cy=b.y+b.h/2;c.save();c.translate(cx,cy);c.rotate(s.rot*Math.PI/180);c.translate(-cx,-cy);drawShape0(c,s,base);c.restore()};
+drawShape=function(c,s,base){if(!rotated103(s))return drawShape0(c,s,base);const p=pivot103(s),r=s.rot;c.save();c.translate(p.x,p.y);c.rotate(r*Math.PI/180);c.translate(-p.x,-p.y);s.rot=0;try{drawShape0(c,s,base)}finally{s.rot=r;c.restore()}};
 
 // ---------- undo is skipped while a picture is being edited in place ----------
 const snap0=snap;snap=function(){if(S.noSnap9)return;return snap0()};
@@ -2515,7 +2549,7 @@ const hit0=hit;hit=function(x,y){const s=hit0(x,y);if(s&&s._editing9){const keep
 
 // ---------- 9.02: select and move in the Image tab ----------
 window.imageTabDown9=function(e,x,y){const it=S.cur;
-  const hk=hitHandle(x,y);if(hk&&S.sel&&S.sel.t!=='img'){snap();S.drag={mode:'handle',k:hk,s:S.sel,b0:selBox(S.sel),s0:clone(S.sel)};if(hk==='p1'||hk==='p2')cv.style.cursor='grabbing';return}
+  const hk=hitHandle(x,y);if(hk&&S.sel&&S.sel.t!=='img'){snap();S.drag={mode:'handle',k:hk,s:S.sel,b0:selBox(S.sel),s0:clone(S.sel)};if(hk==='p1'||hk==='p2'||hk==='rot')cv.style.cursor='grabbing';return}
   const target=rzTargetShape88(),rb=rzBox88();const hs=target&&!target.locked9&&!target.hidden9&&nearBorder(x,y,{x:rb.L,y:rb.T,w:rb.R-rb.L,h:rb.B-rb.T},6/scale())?target:hit(x,y);
   if(e.shiftKey&&hs){const cur=grpList().length>1?grpList():S.sel?[S.sel]:[],g=groupOf9(hs),has=cur.includes(hs);const L=has?cur.filter(q=>!g.includes(q)):[...cur,...g.filter(q=>!cur.includes(q))];setSel9(L);render();renderProps();return}
   if(!hs){S.sel=null;S.grp=[];if(!it.base._blank&&x>=0&&y>=0&&x<=it.base.width&&y<=it.base.height)S.rzTarget=null;S.rz=null;render();renderProps();return}
@@ -2531,6 +2565,9 @@ async function picXform9(s,kind){const im=imgFor(s.src);await readyShapes([s]);c
   g.drawImage(im,0,0);const u=c.toDataURL('image/png');await readyShapes([{t:'img',src:u}]);s.src=u}
 function around9(kind,cx,cy){return kind==='right'?(x,y)=>[cx-(y-cy),cy+(x-cx)]:kind==='left'?(x,y)=>[cx+(y-cy),cy-(x-cx)]:kind==='horizontal'?(x,y)=>[2*cx-x,y]:(x,y)=>[x,2*cy-y]}
 async function xformShape9(s,f,kind){
+  if(rotated103(s)&&!ROT9.includes(s.t)){const P=pivot103(s),[nx,ny]=f(P.x,P.y);
+    if(kind==='horizontal'||kind==='vertical'){const H=kind==='horizontal',mx=v=>2*P.x-v,my=v=>2*P.y-v;if(s.pts)s.pts=s.pts.map(([px,py])=>H?[mx(px),py]:[px,my(py)]);if(s.t==='callout'&&s.tx!=null){if(H)s.tx=mx(s.tx);else s.ty=my(s.ty)}}
+    moveShape(s,nx-P.x,ny-P.y);const r=s.rot||0;s.rot=kind==='right'?(r+90)%360:kind==='left'?(r+270)%360:(360-r)%360;return}
   if(ROT9.includes(s.t)){const b=bbox0(s),cx=b.x+b.w/2,cy=b.y+b.h/2,[nx,ny]=f(cx,cy);moveShape(s,nx-cx,ny-cy);const r=s.rot||0;s.rot=kind==='right'?(r+90)%360:kind==='left'?(r+270)%360:(360-r)%360;s._w=null;return}
   if(s.t==='arrow'&&s.style==='curved'&&s.cx==null){const q=ctrlPt(s);s.cx=q.x;s.cy=q.y}
   for(const [a,b] of [['x1','y1'],['x2','y2'],['tx','ty'],['cx','cy']])if(s[a]!=null&&s[b]!=null)[s[a],s[b]]=f(s[a],s[b]);
@@ -2688,7 +2725,7 @@ cv.addEventListener('pointerup',end91,true);cv.addEventListener('pointercancel',
 const TNAME92={img:'Picture',arrow:'Arrow',line:'Line',rect:'Shape',ellipse:'Ellipse',pen:'Pen',highlight:'Highlight',blur:'Blur',spotlight:'Spotlight',magnify:'Magnify',stamp:'Stamp',step:'Step',text:'Text',callout:'Callout'};
 const lname92=s=>s.name9||((s.t==='text'||s.t==='callout')&&(s.txt||'').trim()&&`${TNAME92[s.t]}: ${(s.txt||'').trim().split('\n')[0].slice(0,24)}`)||(s.t==='step'?`Step ${stepLabel(s.n,s.seq)}`:TNAME92[s.t]||s.t);
 const hitL92=hit;hit=function(x,y){const it=S.cur,a=it.shapes;if(!a.some(s=>s.hidden9||s.locked9))return hitL92(x,y);it.shapes=a.filter(s=>!s.hidden9&&!s.locked9);try{return hitL92(x,y)}finally{it.shapes=a}};
-const hitIn93=hit;hit=function(x,y){const s=hitIn93(x,y);if(s&&!isBgPic(s))return s;const a=S.cur?.shapes||[];for(let i=a.length-1;i>=0;i--){const q=a[i];if(q.hidden9||q.locked9||q._editing9||(q.t!=='rect'&&q.t!=='ellipse'))continue;const r=norm(q);if(x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h&&(!s||a.indexOf(q)>a.indexOf(s)))return q}return s||null};
+const hitIn93=hit;hit=function(x,y){const s=hitIn93(x,y);if(s&&!isBgPic(s))return s;const a=S.cur?.shapes||[];for(let i=a.length-1;i>=0;i--){const q=a[i];if(q.hidden9||q.locked9||q._editing9||(q.t!=='rect'&&q.t!=='ellipse'))continue;const r=norm(q),w=rotated103(q)?rotPt103(x,y,pivot103(q),-q.rot):{x,y};if(w.x>=r.x&&w.x<=r.x+r.w&&w.y>=r.y&&w.y<=r.y+r.h&&(!s||a.indexOf(q)>a.indexOf(s)))return q}return s||null};
 group33=function(remove){return remove?ungroup9():group9()};
 const lyBtn92=document.createElement('button');lyBtn92.className='tool';lyBtn92.id='layersBtn92';lyBtn92.title='Layers: see, name, select and reorder every layer';lyBtn92.setAttribute('aria-pressed','false');
 lyBtn92.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 4.5 9-4.5" opacity=".55"/></svg><span>Layers</span>';
