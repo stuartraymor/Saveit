@@ -1403,7 +1403,7 @@ function applyCut(axis,a,b){const it=S.cur;if(it?.kind!=='image'||!['x','y'].inc
   for(const s of it.shapes){ks.forEach(k=>{if(s[k]!=null)s[k]=f(s[k])});if(s.pts)s.pts.forEach(p=>{p[ai]=f(p[ai])});s._w=null}
   it.base=c;S.sel=null;layoutStage();render();renderProps();changed();toast(`Removed ${n} px. Ctrl+Z to undo.`)}
 let simpT=0;
-const SIMP_SIZES=[[320,240],[640,480],[800,600],[1280,720],[1920,1080]];
+const SIMP_SIZES=[[320,240,''],[640,480,''],[800,600,''],[1280,720,'720p HD'],[1920,1080,'1080p Full HD'],[2560,1440,'1440p'],[3840,2160,'4K'],[5120,2880,'5K'],[7680,4320,'8K'],[8000,8000,'64 MP, the largest allowed']];
 function simpDims(it,o){return{w:o.width??Math.max(1,Math.round(it.base.width*(o.scale||100)/100)),h:o.height??Math.max(1,Math.round(it.base.height*(o.scale||100)/100))}}
 function validSimpSize(w,h){return Number.isInteger(w)&&Number.isInteger(h)&&w>=1&&h>=1&&w<=16384&&h<=16384&&w*h<=64000000}
 function applySimplify(it,o){const {w,h}=simpDims(it,o);if(it!==S.cur||S.tool!=='simplify'||!validSimpSize(w,h))return;
@@ -1443,9 +1443,10 @@ function toolPanel(P,it){const t=S.tool;if(!['fill','erase','cutout','simplify']
     <div class="row"><button class="btn" id="cutApply" style="background:var(--rec);color:#fff;border-color:var(--rec)" ${q?'':'disabled'}>Cut Out</button><button class="btn" id="cutCancel">Cancel</button></div></div>`}
   else{if(!S.simp){S.simp={detail:0,levels:32,outline:false,scale:100,width:W,height:H,lock:true,prev:null};simpPreview()}const o=S.simp,{w:tw,h:th}=simpDims(it,o),mp=v=>(v/1e6).toFixed(2)+' MP';
     h=`<div class="grp"><h3>Simplify</h3><p class="hint">Make a large or busy screenshot smaller and cleaner. Every number below is exact, and the picture updates as you change it.</p>
-    <div class="row">${SIMP_PRESETS.map((q,i)=>`<button class="btn" data-pre="${i}" title="${q.tip}">${q.name}</button>`).join('')}</div></div>
+    <label>Quick style<select id="smStyle"><option value="">Choose…</option>${SIMP_PRESETS.map((q,i)=>`<option value="${i}" title="${q.tip}">${q.name}: ${q.tip}</option>`).join('')}</select></label></div>
     <div class="grp"><h3>Size</h3><p class="hint" style="font-family:var(--f-mono)">Original: ${W} × ${H} px · ${mp(W*H)}</p>
-    <label>Size preset<select id="smPreset"><option value="original">Original Size</option>${SIMP_SIZES.map(([w,h])=>`<option value="${w}x${h}">${w} × ${h}</option>`).join('')}<option value="custom">Custom</option></select></label>
+    <div class="smEq" style="display:grid;grid-template-columns:18px 1fr;gap:4px 6px;align-items:center;margin:6px 0"><span></span><label>Starting pixels<input id="smStart" readonly value="${(W*H).toLocaleString()}"></label><span aria-hidden="true">×</span><label>Percent of the pixels<input type="number" id="smAreaPct" min="0.0001" step="any" aria-label="Percent of the pixels to keep"></label><span aria-hidden="true">=</span><label>Ending pixels<input type="number" id="smTotal" min="1" max="64000000" step="1" aria-label="Ending total pixels"></label></div><p class="hint">Percent is of the total pixels: 50% keeps half of them. Type either the percent or the ending pixels; width and height follow.</p>
+    <label>Size preset<select id="smPreset"><option value="original">Original Size</option>${SIMP_SIZES.map(([w,h,n])=>`<option value="${w}x${h}">${w} × ${h}${n?' · '+n:''}</option>`).join('')}<option value="custom">Custom</option></select></label>
     <div class="crop-grid"><label>Width (px)<input type="number" id="smW" min="1" max="16384" value="${tw}"></label><label>Height (px)<input type="number" id="smH" min="1" max="16384" value="${th}"></label>
     <label>Width (%)<input type="number" id="smPct" min="${100/W}" max="${1638400/W}" step="any" value="${+(tw/W*100).toFixed(4)}"></label><label>Height (%)<input type="number" id="smHPct" min="${100/H}" max="${1638400/H}" step="any" value="${+(th/H*100).toFixed(4)}"></label></div>
     <label class="chk"><input type="checkbox" id="smLock" ${o.lock?'checked':''}> Keep proportions</label><p class="hint" id="smRatio">Percentages use the original dimensions.</p>
@@ -1465,18 +1466,20 @@ function toolPanel(P,it){const t=S.tool;if(!['fill','erase','cutout','simplify']
     $('#cutApply').onclick=e=>{const q=cutRegion();if(!q||e.currentTarget.disabled)return;e.currentTarget.disabled=true;S.cutRect=null;applyCut(q.axis,q.a,q.b)};
     $('#cutCancel').onclick=()=>{S.cutRect=null;S.drag=null;setTool('select')}}
   if(t==='simplify'){const o=S.simp,sync=()=>{const {w,h}=simpDims(it,o),saved=100-Math.round(w*h/(W*H)*100);
-      $('#smW').value=w;$('#smH').value=h;$('#smPct').value=+(w/W*100).toFixed(4);$('#smHPct').value=+(h/H*100).toFixed(4);$('#smLock').checked=!!o.lock;
+      $('#smW').value=w;$('#smH').value=h;$('#smTotal').value=w*h;$('#smAreaPct').value=+(w*h/(W*H)*100).toFixed(4);$('#smPct').value=+(w/W*100).toFixed(4);$('#smHPct').value=+(h/H*100).toFixed(4);$('#smLock').checked=!!o.lock;
       $('#smPreset').value=w===W&&h===H?'original':SIMP_SIZES.some(([a,b])=>a===w&&b===h)?`${w}x${h}`:'custom';
       $('#smSize').textContent=`New: ${w} × ${h} px · ${(w*h/1e6).toFixed(2)} MP${saved>0?` · ${saved}% fewer pixels`:''}`;$('#smApply').disabled=false;$('#smRatio').textContent=o.lock?'Percentages use the original dimensions.':'Proportions unlocked; width and height change independently.'};
     const setSize=(w,h)=>{if(!validSimpSize(w,h)){$('#smApply').disabled=true;$('#smRatio').textContent='Use 1–16,384 whole pixels per side, up to 64 million pixels.';return false}
       o.width=w;o.height=h;o.scale=w/W*100;sync();simpPreview();simpEstimate();return true};
     const edit=(axis,percent,e)=>{const n=e.target.valueAsNumber;if(!Number.isFinite(n)||n<=0){$('#smApply').disabled=true;$('#smRatio').textContent='Enter a positive dimension.';return}
       let {w,h}=simpDims(it,o);if(axis==='w'){w=Math.round(percent?W*n/100:n);if(o.lock)h=Math.max(1,Math.round(w*H/W))}else{h=Math.round(percent?H*n/100:n);if(o.lock)w=Math.max(1,Math.round(h*W/H))}setSize(w,h)};
+    const fromTotal=T=>{if(!Number.isFinite(T)||T<=0){$('#smApply').disabled=true;$('#smRatio').textContent='Enter a positive number.';return}const c=simpDims(it,o),ratio=o.lock?W/H:c.w/c.h,h=Math.max(1,Math.round(Math.sqrt(T/ratio))),w=Math.max(1,Math.round(h*ratio));setSize(w,h)};
+    $('#smAreaPct').onchange=e=>fromTotal(W*H*e.target.valueAsNumber/100);$('#smTotal').onchange=e=>fromTotal(e.target.valueAsNumber);
     $('#smW').onchange=e=>edit('w',false,e);$('#smH').onchange=e=>edit('h',false,e);$('#smPct').onchange=e=>edit('w',true,e);$('#smHPct').onchange=e=>edit('h',true,e);
     $('#smLock').onchange=e=>{o.lock=e.target.checked;const {w,h}=simpDims(it,o);setSize(w,o.lock?Math.max(1,Math.round(w*H/W)):h)};
     $('#smPreset').onchange=e=>{const v=e.target.value;if(v==='custom')return;if(v==='original'){o.lock=true;setSize(W,H);return}const [w,h]=v.split('x').map(Number);if(Math.abs(w*H-h*W)>Math.max(W,H)/2)o.lock=false;setSize(w,h)};
     P.querySelectorAll('[data-sm]').forEach(i=>i.oninput=()=>{o[i.dataset.sm]=+i.value;simpPreview();simpEstimate()});$('#smLevels').onchange=e=>{o.levels=+e.target.value;simpPreview();simpEstimate()};$('#smOut').onchange=e=>{o.outline=e.target.checked;simpPreview();simpEstimate()};
-    P.querySelectorAll('[data-pre]').forEach(b=>b.onclick=()=>{const preset=SIMP_PRESETS[+b.dataset.pre].set;Object.assign(o,preset);o.lock=true;o.width=Math.max(1,Math.round(W*preset.scale/100));o.height=Math.max(1,Math.round(H*preset.scale/100));renderProps();simpPreview()});
+    $('#smStyle').onchange=e=>{if(e.target.value==='')return;const preset=SIMP_PRESETS[+e.target.value].set;Object.assign(o,preset);o.lock=true;o.width=Math.max(1,Math.round(W*preset.scale/100));o.height=Math.max(1,Math.round(H*preset.scale/100));renderProps();simpPreview()};
     $('#smCancel').onclick=()=>{S.simp=null;setTool('select')};$('#smApply').onclick=e=>{if(!e.currentTarget.disabled)applySimplify(it,o)};sync();simpEstimate()}
   numify(P);return true}
 function delSel(){const G=grpList();if(G.length>1){snap();const a=shapesOf(S.cur);G.forEach(q=>{const i=a.indexOf(q);if(i>=0)a.splice(i,1)});S.grp=[];S.sel=null;renumber();render();renderProps();changed();return}
