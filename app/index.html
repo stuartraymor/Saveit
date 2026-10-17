@@ -2532,12 +2532,12 @@ const ICO92={eye:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" st
   off:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 5.4-1.6"/></svg>',
   lock:LOCK_ON87.replace('width="14" height="14"','width="15" height="15"'),unlock:LOCK_OFF87.replace('width="14" height="14"','width="15" height="15"')};
 function layersPanel92(P,it){const a=it.shapes,n=a.length,sel=new Set(selectedShapes()),gids=[...new Set(a.map(s=>s.groupId).filter(v=>v!=null))];
-  const rows=a.map((s,i)=>({s,i})).reverse().map(({s,i})=>`<div class="ly92${sel.has(s)?' on':''}${s.hidden9?' hid':''}" draggable="true" data-i="${i}" title="Layer ${i+1} of ${n}">
+  const rows=a.map((s,i)=>({s,i})).reverse().map(({s,i})=>`<div class="ly92${sel.has(s)?' on':''}${s.hidden9?' hid':''}" data-i="${i}" title="Layer ${i+1} of ${n}">
     <span class="ln92">${i+1}</span><span class="th92" data-th="${i}"></span><span class="nm92" data-nm="${i}">${escH(lname92(s))}${s.groupId!=null?`<em> · group ${gids.indexOf(s.groupId)+1}</em>`:''}</span>
     <button class="btn ic92" data-eye="${i}" aria-label="${s.hidden9?'Show':'Hide'} layer" title="${s.hidden9?'Show':'Hide'}">${s.hidden9?ICO92.off:ICO92.eye}</button><button class="btn ic92" data-lk="${i}" aria-pressed="${!!s.locked9}" aria-label="${s.locked9?'Unlock':'Lock'} layer" title="${s.locked9?'Unlock':'Lock'} (a locked layer can't be clicked on the canvas)">${s.locked9?ICO92.lock:ICO92.unlock}</button></div>`).join('');
   const one=sel.size>0,dis=one?'':'disabled';
-  P.innerHTML=`<style>.lylist92{display:flex;flex-direction:column;gap:3px;max-height:46vh;overflow:auto;margin:6px 0}.ly92{display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;cursor:pointer;background:var(--panel-2)}.ly92.on{border-color:var(--accent,#2fb8a6);box-shadow:inset 0 0 0 1px var(--accent,#2fb8a6)}.ly92.hid{opacity:.5}.ly92.drop{border-top:2px solid var(--accent,#2fb8a6)}.ln92{width:18px;text-align:right;font:11px var(--f-mono);color:var(--muted)}.th92 canvas{display:block;border-radius:4px;background:repeating-conic-gradient(#ffffff22 0 25%,transparent 0 50%) 0/8px 8px}.nm92{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.nm92 em{color:var(--muted);font-style:normal}.nm92 input{width:100%;font:inherit}.ic92{padding:2px 4px!important;min-width:0!important;height:24px}.ly92 .ic92[aria-pressed=true]{color:var(--accent,#2fb8a6)}</style>
-  <div class="grp"><h3>Layers</h3><p class="hint" style="margin:0">${n} layer${n===1?'':'s'}, top first. Click to select the active layer · Shift or Ctrl+click for more · double-click a name to rename · drag to reorder.</p>
+  P.innerHTML=`<style>.lylist92{display:flex;flex-direction:column;gap:3px;max-height:46vh;overflow:auto;margin:6px 0}.ly92{display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;cursor:pointer;background:var(--panel-2)}.ly92.on{border-color:var(--accent,#2fb8a6);box-shadow:inset 0 0 0 1px var(--accent,#2fb8a6)}.ly92.hid{opacity:.5}.ly92{touch-action:none;user-select:none;position:relative}.ly92.drag{opacity:.4}.ly92.dropt::before,.ly92.dropb::after{content:'';position:absolute;left:-2px;right:-2px;height:3px;border-radius:2px;background:var(--accent,#2fb8a6)}.ly92.dropt::before{top:-4px}.ly92.dropb::after{bottom:-4px}.lyghost92{position:fixed;z-index:200;pointer-events:none;padding:4px 10px;border-radius:7px;background:var(--accent,#2fb8a6);color:#fff;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.4)}.lylist92.dragging,.lylist92.dragging *{cursor:grabbing!important}.ln92{width:18px;text-align:right;font:11px var(--f-mono);color:var(--muted)}.th92 canvas{display:block;border-radius:4px;background:repeating-conic-gradient(#ffffff22 0 25%,transparent 0 50%) 0/8px 8px}.nm92{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.nm92 em{color:var(--muted);font-style:normal}.nm92 input{width:100%;font:inherit}.ic92{padding:2px 4px!important;min-width:0!important;height:24px}.ly92 .ic92[aria-pressed=true]{color:var(--accent,#2fb8a6)}</style>
+  <div class="grp"><h3>Layers</h3><p class="hint" style="margin:0">${n} layer${n===1?'':'s'}, top first. Click a layer to select it · Shift or Ctrl+click for more · drag layers up or down to reorder · double-click a name to rename.</p>
     <div class="lylist92" id="lyList92">${rows||'<p class="hint">No layers yet. Draw something or use Add picture.</p>'}</div>
     <div class="ly92" style="cursor:default;opacity:.8" title="The canvas itself"><span class="ln92">0</span><span class="nm92">Background · ${it.base.width} × ${it.base.height}${it.fx.bg?' · '+escH(it.fx.bg):' · transparent'}</span></div></div>
   <div class="grp"><h3>Order</h3><div class="row"><button class="btn" id="l92fwd" ${dis} title="Ctrl+]">Bring forward</button><button class="btn" id="l92back" ${dis} title="Ctrl+[">Send backward</button></div>
@@ -2554,19 +2554,29 @@ function layersPanel92(P,it){const a=it.shapes,n=a.length,sel=new Set(selectedSh
     let done=false;const fin=ok=>{if(done)return;done=true;const v=inp.value.trim();if(ok&&v!==lname92(s)){snap();if(v)s.name9=v.slice(0,60);else delete s.name9;changed()}renderProps()};
     inp.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter')fin(true);if(e.key==='Escape')fin(false)};inp.onblur=()=>fin(true);inp.onclick=e=>e.stopPropagation()};
   if(L){
+  const pick=(e,s)=>{if(e.shiftKey||e.ctrlKey||e.metaKey){const cur=selectedShapes();const L2=cur.includes(s)?cur.filter(q=>q!==s):[...cur,s];if(L2.length===1){S.sel=L2[0];S.grp=[]}else if(L2.length){S.sel=null;S.grp=a.filter(q=>L2.includes(q))}else{S.sel=null;S.grp=[]}}else{S.sel=s;S.grp=[]}};
   L.onclick=e=>{const row=e.target.closest('[data-i]');if(!row||e.target.closest('input'))return;const i=idx(row),s=a[i];
     if(e.target.closest('[data-eye]')){snap();if(s.hidden9)delete s.hidden9;else s.hidden9=true;if(s.hidden9){if(S.sel===s)S.sel=null;S.grp=grpList().filter(q=>q!==s)}changed();refresh();return}
     if(e.target.closest('[data-lk]')){snap();if(s.locked9)delete s.locked9;else s.locked9=true;changed();refresh();return}
-    if(e.shiftKey||e.ctrlKey||e.metaKey){const cur=selectedShapes();const L2=cur.includes(s)?cur.filter(q=>q!==s):[...cur,s];if(L2.length===1){S.sel=L2[0];S.grp=[]}else if(L2.length){S.sel=null;S.grp=a.filter(q=>L2.includes(q))}else{S.sel=null;S.grp=[]}}
-    else{S.sel=s;S.grp=[]}refresh()};
+  };
   L.ondblclick=e=>{const nm=e.target.closest('[data-nm]');if(nm)rename(+nm.dataset.nm)};
-  let from=null;
-  L.ondragstart=e=>{const r=e.target.closest('[data-i]');if(!r)return;from=idx(r);e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','layer')};
-  L.ondragover=e=>{if(from==null)return;e.preventDefault();L.querySelectorAll('.drop').forEach(x=>x.classList.remove('drop'));e.target.closest('[data-i]')?.classList.add('drop')};
-  L.ondrop=e=>{e.preventDefault();const r=e.target.closest('[data-i]');const f=from;from=null;if(f==null)return;
-    // dropping on a row puts the dragged layer just above that row (the list is top first); below the rows = bottom
-    let to=r?idx(r):-1;const s=a[f];if(r&&to===f){refresh();return}snap();a.splice(f,1);if(to>f)to--;a.splice(to+1,0,s);S.sel=s;S.grp=[];changed();refresh();layerToast9()};
-  L.ondragend=()=>{from=null;L.querySelectorAll('.drop').forEach(x=>x.classList.remove('drop'))};}
+  // 9.2.1: press a layer and drag it up or down; every selected layer moves with it. A line shows where they will land.
+  L.onpointerdown=e=>{const row=e.target.closest('[data-i]');if(!row||e.button!==0||e.target.closest('button,input'))return;const s=a[idx(row)];
+    const y0=e.clientY;let on=false,slot=-1,ghost=null,moving=[],rest=[],scrollT=null;
+    const rowsOf=()=>[...L.querySelectorAll('[data-i]')];
+    const begin=()=>{on=true;if(!selectedShapes().includes(s)){S.sel=s;S.grp=[]}const chosen=new Set(selectedShapes());
+      rowsOf().forEach(r=>{const q=a[idx(r)];if(chosen.has(q)){moving.push(r);r.classList.add('drag')}else rest.push(r)});
+      L.classList.add('dragging');ghost=document.createElement('div');ghost.className='lyghost92';ghost.textContent=moving.length>1?`${moving.length} layers`:lname92(s);document.body.append(ghost);render()};
+    const place=ev=>{ghost.style.left=(ev.clientX+14)+'px';ghost.style.top=(ev.clientY-10)+'px';rest.forEach(r=>r.classList.remove('dropt','dropb'));
+      slot=rest.filter(r=>{const b=r.getBoundingClientRect();return b.top+b.height/2<ev.clientY}).length;
+      if(rest.length){if(slot<rest.length)rest[slot].classList.add('dropt');else rest[rest.length-1].classList.add('dropb')}
+      const lb=L.getBoundingClientRect();clearInterval(scrollT);const d=ev.clientY<lb.top+24?-8:ev.clientY>lb.bottom-24?8:0;if(d)scrollT=setInterval(()=>{L.scrollTop+=d},16)};
+    const move=ev=>{if(!on){if(Math.abs(ev.clientY-y0)<5)return;begin()}ev.preventDefault();place(ev)};
+    const up=ev=>{removeEventListener('pointermove',move,true);removeEventListener('pointerup',up,true);removeEventListener('pointercancel',up,true);clearInterval(scrollT);if(!on){pick(ev,s);refresh();return}
+      ghost.remove();L.classList.remove('dragging');
+      const top=r=>a[idx(r)],ordered=[...rest.slice(0,slot).map(top),...moving.map(top),...rest.slice(slot).map(top)].reverse();
+      if(ordered.some((q,i)=>q!==a[i])){snap();a.splice(0,a.length,...ordered);changed();refresh();layerToast9()}else refresh()};
+    addEventListener('pointermove',move,true);addEventListener('pointerup',up,true);addEventListener('pointercancel',up,true)};}
   const b=(id,f)=>{const el=document.getElementById(id);if(el)el.onclick=f};
   const each=f=>()=>{const x=selectedShapes();if(!x.length)return;snap();x.forEach(f);changed();refresh()};
   b('l92fwd',()=>orderStep9(1));b('l92back',()=>orderStep9(-1));b('l92front',()=>orderSelection(true));b('l92bot',()=>orderSelection(false));
