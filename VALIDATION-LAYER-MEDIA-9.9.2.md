@@ -1,5 +1,7 @@
 # Layer, media and audio-effects follow-up
 
+Update: the two outstanding audio pitch assertions below were resolved as test measurement defects. See [audio pitch verification](VALIDATION-AUDIO-PITCH-9.9.2.md) for the current 82/82 result and native playback evidence. Results below describe the earlier run.
+
 Starting point: `18cf3f3be3edba6b311605a6d83a8b28c8187036`. Branch: `codex/9.9.2-layer-media-polish`. October 17, 2026.
 
 ## Findings and changes

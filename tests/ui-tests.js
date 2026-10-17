@@ -91,7 +91,7 @@ async 'Audio: capture bar, two mics, record, mix, library'(){const q=s=>document
   check('Each mic is its own track',it.tracks.length===2&&it.tracks.every(t=>t.blob.size>1000),it.tracks.map(t=>t.name).join(' | '));
   await sleep(500);check('Mic bars come back after recording',window.__openMics===2,'open mics '+window.__openMics);
   check('Drawing tools are greyed out on audio',[...document.querySelectorAll('#rail .tool[data-t]')].every(b=>b.disabled));
-  const hz=async()=>{__saved.length=0;await T().save('wav');await until(()=>__saved.length,8000);const b=await AEdit.decode(new Blob([__saved[0].data],{type:'audio/wav'})),d=b.getChannelData(0);let z=0;for(let i=1;i<b.sampleRate;i++)if((d[i-1]<0)!==(d[i]<0))z++;return{hz:Math.round(z/2),dur:b.duration}};
+  const hz=async()=>{__saved.length=0;await T().save('wav');await until(()=>__saved.length,8000);const b=await AEdit.decode(new Blob([__saved[0].data],{type:'audio/wav'})),r=QA.toneAnalysis(b,0,Math.min(1,b.duration));check('Saved microphone tone has stable full-amplitude cycles',r.stable>.95&&r.cycles>300&&r.rms>.05,JSON.stringify(r));return{hz:r.hz,dur:b.duration}};
   it.tracks[1].mute=true;let r=await hz();check('Save WAV with Mic 2 muted has only Mic 1 (440 Hz)',Math.abs(r.hz-440)<15,r.hz+' Hz, '+r.dur.toFixed(2)+' s');
   it.tracks[1].mute=false;it.tracks[1].solo=true;r=await hz();check('Save WAV with Mic 2 solo has only Mic 2 (660 Hz)',Math.abs(r.hz-660)<15,r.hz+' Hz');it.tracks[1].solo=false;
   check('Saved WAV length matches the recording',Math.abs(r.dur-it.dur)<0.1,r.dur.toFixed(2)+' vs '+it.dur.toFixed(2));

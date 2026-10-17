@@ -1,5 +1,7 @@
 # SaveIt 9.9.2 validation and handoff
 
+Update: the two outstanding audio pitch assertions below were resolved as test measurement defects. See [audio pitch verification](VALIDATION-AUDIO-PITCH-9.9.2.md) for the current 82/82 result and native playback evidence. Results below describe the earlier run.
+
 October 17, 2026. Starting commit: `46d1df7a54d69794455b8717e13c9a1ca6f783a4`. Development branch: `codex/9.9.2-final-polish`.
 
 ## Result

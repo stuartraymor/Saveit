@@ -39,4 +39,16 @@ window.QA={
 QA.toneWav=async(freqs=[300,500,700],sec=1)=>{const sr=48000,off=new OfflineAudioContext(1,sr*sec*freqs.length,sr);freqs.forEach((f,i)=>{const o=off.createOscillator();o.frequency.value=f;o.connect(off.destination);o.start(i*sec);o.stop((i+1)*sec)});return AEdit.wav(await off.startRendering())};
 // pitch (Hz) of an audio buffer between two times, by counting zero crossings
 QA.pitch=(buf,t0,t1)=>{const d=buf.getChannelData(0),a=Math.floor(t0*buf.sampleRate),b=Math.floor(t1*buf.sampleRate);let z=0;for(let i=a+1;i<b;i++)if((d[i-1]<0)!==(d[i]<0))z++;return Math.round(z/2/(t1-t0))};
+// Test tones only: hysteresis rejects near-zero codec startup noise. Measure full
+// periods rather than counting every sign change (including quantized silence).
+// No expected frequency is used, so sample-rate and playback-speed errors remain visible.
+QA.toneAnalysis=(buf,t0=0,t1=buf.duration,channel=0)=>{
+ const d=buf.getChannelData(channel),sr=buf.sampleRate,a=Math.max(0,Math.floor(t0*sr)),b=Math.min(d.length,Math.floor(t1*sr));
+ let peak=0,power=0;for(let i=a;i<b;i++){peak=Math.max(peak,Math.abs(d[i]));power+=d[i]*d[i]}
+ const rms=Math.sqrt(power/Math.max(1,b-a));if(peak<1e-4)return{hz:0,rms,peak,cycles:0,stable:0};
+ const gate=peak*.1,crossings=[];let armed=false;
+ for(let i=a;i<b;i++){if(d[i]<-gate)armed=true;if(armed&&d[i]>gate){crossings.push(i-1+(gate-d[i-1])/(d[i]-d[i-1]));armed=false}}
+ const periods=crossings.slice(1).map((v,i)=>v-crossings[i]).sort((x,y)=>x-y),median=periods[Math.floor(periods.length/2)];
+ return{hz:median?sr/median:0,rms,peak,cycles:periods.length,stable:periods.length?periods.filter(p=>Math.abs(p-median)<=Math.max(2,median*.03)).length/periods.length:0}
+};
 QA.savedWav=async()=>AEdit.decode(new Blob([__saved[__saved.length-1].data],{type:'audio/wav'}));
