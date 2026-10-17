@@ -76,4 +76,31 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
   await fresh('callout',{x2:520,y2:300,tx:410,ty:380});await ev(()=>{sh.rot=30;__T.render()});const tail0=await handle('tail'),axis=await ev(()=>{const b=__T.bbox(sh);return b.x+b.w/2});
   await ev(()=>{__T.setTool('image')});await page.locator('#imFlipH').click();await page.waitForTimeout(150);
   const t=await ev(id=>{const s=__T.S.cur.shapes.find(q=>q.id===id),h=__T.handles(s).find(q=>q[0]==='tail');return{x:h[1],y:h[2],rot:s.rot}},sid());near(t.rot,330,.01);near(t.x,2*axis-tail0.x,1.5);near(t.y,tail0.y,1.5)});
+ // ---- groups (10.0.7)
+ const group=async types=>{await ev(types=>{document.querySelectorAll('.modal').forEach(m=>m.remove());const T=__T,it=T.addImage(QA.canvas(1000,600,'#ffffff'),'grp rot',{flat:true});T.openItem(it);T.S.zoom=.8;T.setTool('select');
+   const geo={rect:{x1:300,y1:200,x2:420,y2:260,fill:'#ff0000'},ellipse:{x1:480,y1:260,x2:600,y2:340,fill:'#00aa00'},arrow:{x1:320,y1:380,x2:560,y2:420},blur:{x1:300,y1:440,x2:400,y2:500}},list=[];
+   for(const t of types){const s=T.newShape(t,geo[t].x1,geo[t].y1);Object.assign(s,geo[t]);it.shapes.push(s);list.push(s)}T.S.sel=null;T.S.grp=list;T.render();window.gl=list;window.git=it},types)};
+ const gbox=()=>ev(()=>{const bs=gl.map(s=>__T.bbox(s)),x=Math.min(...bs.map(b=>b.x)),y=Math.min(...bs.map(b=>b.y)),R=Math.max(...bs.map(b=>b.x+b.w)),B=Math.max(...bs.map(b=>b.y+b.h));return{x,y,w:R-x,h:B-y,k:__T.scale()}});
+ const snapshot=()=>ev(()=>gl.map(s=>({t:s.t,x1:s.x1,y1:s.y1,x2:s.x2,y2:s.y2,rot:s.rot||0})));
+ await test('A group turns together about its centre: shapes get the angle, arrows move their end points, Undo is one step',async()=>{
+  await group(['rect','ellipse','arrow']);const b0=await gbox(),pv={x:b0.x+b0.w/2,y:b0.y+b0.h/2},before=await snapshot(),handle={x:pv.x,y:b0.y-26/b0.k};
+  await dragTo(handle,toward(pv,90),null);
+  const after=await snapshot(),R=(x,y)=>({x:pv.x+(x-pv.x)*0-(y-pv.y)*1,y:pv.y+(x-pv.x)*1+(y-pv.y)*0}); // 90 degrees clockwise
+  near(after[0].rot,90,.6);near(after[1].rot,90,.6);
+  const rc=R((before[0].x1+before[0].x2)/2,(before[0].y1+before[0].y2)/2),nc=await ev(()=>{const s=gl[0];return{x:(s.x1+s.x2)/2,y:(s.y1+s.y2)/2}});near(nc.x,rc.x,1.5);near(nc.y,rc.y,1.5);
+  const a1=R(before[2].x1,before[2].y1),a2=R(before[2].x2,before[2].y2);near(after[2].x1,a1.x,1.5);near(after[2].y1,a1.y,1.5);near(after[2].x2,a2.x,1.5);near(after[2].y2,a2.y,1.5);near(after[2].rot,0,.01);
+  await ev(()=>__T.undo());const back=await ev(()=>__T.S.cur.shapes.map(s=>({t:s.t,x1:s.x1,y1:s.y1,x2:s.x2,y2:s.y2,rot:s.rot||0})));for(let i=0;i<3;i++){near(back[i].x1,before[i].x1,.01);near(back[i].y1,before[i].y1,.01);near(back[i].rot,0,.01)}});
+ await test('Shift snaps a group turn to 15°, and a group with a blur has no rotate handle',async()=>{
+  await group(['rect','ellipse']);let b=await gbox(),pv={x:b.x+b.w/2,y:b.y+b.h/2};await dragTo({x:pv.x,y:b.y-26/b.k},toward(pv,37),'Shift');near(await ev(()=>gl[0].rot),30,.6);
+  await group(['rect','blur']);b=await gbox();pv={x:b.x+b.w/2,y:b.y+b.h/2};const before=await snapshot();await dragTo({x:pv.x,y:b.y-26/b.k},toward(pv,60),null);const after=await snapshot();assert.deepEqual(after.map(s=>s.rot),[0,0])});
+ // ---- edge cases
+ await test('Rotated text, step and stamp resize from a corner without error and keep their angle',async()=>{
+  for(const [t,p] of [['text',{x1:300,y1:250,txt:'Resize me',fs:40,c:'#000'}],['step',{x1:400,y1:300,fs:30,n:1}],['stamp',{x1:400,y1:300,sz:60,kind:'click'}]]){
+   await fresh(t,p);await ev(()=>{sh.rot=35;sh._w=null;__T.render()});const se=await handle('se'),before=await ev(()=>({fs:sh.fs,sz:sh.sz}));
+   await dragTo(se,{x:se.x+40,y:se.y+30});const after=await ev(id=>{const s=__T.S.cur.shapes.find(q=>q.id===id);return{fs:s.fs,sz:s.sz,rot:s.rot}},sid());near(after.rot,35,.01);
+   assert.ok((t==='stamp'?after.sz>before.sz:after.fs>before.fs),t+' grew')}});
+ await test('With no room above, the rotate handle moves below the object and still turns it',async()=>{
+  await fresh('rect',{x1:300,y1:0,x2:500,y2:100});const h=await handle('rot'),p=await pivot();assert.ok(h.y>p.y,'no room above, so the handle goes below');await dragTo(h,toward(p,60));near(await rot(),240,3)});
+ await test('Hidden or locked objects do not turn',async()=>{
+  await fresh('rect',{x2:500,y2:300});await ev(()=>{sh.locked9=true;__T.render()});const h=await handle('rot'),p=await pivot();await dragTo(h,toward(p,60));near(await rot(),0,.01)});
  console.log(JSON.stringify({passed:results.filter(Boolean).length,failed:results.filter(x=>!x).length,errors}));await browser.close();process.exit(results.includes(0)||errors.length?1:0)})();

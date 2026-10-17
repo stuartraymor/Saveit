@@ -655,11 +655,16 @@ const rotOK103=s=>!!s&&FREE103.includes(s.t),rotated103=s=>!!(s&&s.rot&&FREE103.
 const pivot103=s=>{const b=s.t==='callout'?norm(s):BBOX_LOCAL103(s);return{x:b.x+b.w/2,y:b.y+b.h/2}};
 const rotPt103=(x,y,p,deg)=>{const a=deg*Math.PI/180,co=Math.cos(a),si=Math.sin(a),dx=x-p.x,dy=y-p.y;return{x:p.x+dx*co-dy*si,y:p.y+dx*si+dy*co}};
 // the rotate handle: a short stem above the top-middle of the frame
-function rotTop103(s){const b=selBox(s),p=pivot103(s),a={x:b.x+b.w/2,y:b.y},h={x:b.x+b.w/2,y:b.y-ROT_STEM103/scale()};return s.rot?{a:rotPt103(a.x,a.y,p,s.rot),h:rotPt103(h.x,h.y,p,s.rot)}:{a,h}}
+function rotTop103(s){const b=selBox(s),p=pivot103(s),z=scale(),it=S.cur,pd={x:padX(),y:padY()},W=it&&it.base?it.base.width:1e9,H=it&&it.base?it.base.height:1e9,m=7/z,cx=b.x+b.w/2;
+  const tf=(x,y)=>s.rot?rotPt103(x,y,p,s.rot):{x,y},ok=q=>q.x>=-pd.x+m&&q.x<=W+pd.x-m&&q.y>=-pd.y+m&&q.y<=H+pd.y-m;
+  const a=tf(cx,b.y),h=tf(cx,b.y-ROT_STEM103/z);if(ok(h))return{a,h,flip:false};
+  const a2=tf(cx,b.y+b.h),h2=tf(cx,b.y+b.h+ROT_STEM103/z);if(ok(h2))return{a:a2,h:h2,flip:true};
+  return{a,h:{x:Math.min(W+pd.x-m,Math.max(-pd.x+m,h.x)),y:Math.min(H+pd.y-m,Math.max(-pd.y+m,h.y))},flip:false}}
 function rotHandles103(s,hs){const p=pivot103(s),out=hs.map(([k,x,y])=>{if(!s.rot)return[k,x,y];const q=rotPt103(x,y,p,s.rot);return[k,q.x,q.y]});const t=rotTop103(s);out.push(['rot',t.h.x,t.h.y]);return out}
 function rotDrag103(s,d,x,y,shift){const P=d._pv||(d._pv=pivot103(d.s0));
   // the handle follows the pointer: straight up from the centre is 0 degrees
-  let deg=Math.atan2(y-P.y,x-P.x)*180/Math.PI+90;deg=((deg%360)+360)%360;
+  if(d._flip==null)d._flip=!!rotTop103(d.s0).flip;
+  let deg=Math.atan2(y-P.y,x-P.x)*180/Math.PI+(d._flip?-90:90);deg=((deg%360)+360)%360;
   if(shift)deg=Math.round(deg/15)*15;else{const n=Math.round(deg/45)*45;if(Math.abs(deg-n)<3)deg=n}
   s.rot=Math.round((deg%360)*10)/10}
 function selBox(s){return BOXY.includes(s.t)?norm(s):BBOX_LOCAL103(s)}
@@ -2684,6 +2689,18 @@ renderProps();
 const multi91=()=>{let G=grpList();if(G.length<2&&S._grpHold)G=S._grpHold.filter(q=>S.cur?.shapes?.includes(q));return G.length>1?G:null};
 function box91(G){const bs=G.map(bbox),x=Math.min(...bs.map(b=>b.x)),y=Math.min(...bs.map(b=>b.y));return{x,y,w:Math.max(...bs.map(b=>b.x+b.w))-x,h:Math.max(...bs.map(b=>b.y+b.h))-y}}
 function hpts91(b){const mx=b.x+b.w/2,my=b.y+b.h/2,R=b.x+b.w,B=b.y+b.h;return[['nw',b.x,b.y],['n',mx,b.y],['ne',R,b.y],['e',R,my],['se',R,B],['s',mx,B],['sw',b.x,B],['w',b.x,my]]}
+// 10.0.7: several selected objects turn together about the centre of their common box.
+// Objects that can turn get their own angle and a new centre; arrows and lines have their end points moved.
+const grpRotOK103=G=>!!G&&G.length>1&&G.every(s=>!s.locked9&&!s.hidden9&&(rotOK103(s)||s.t==='arrow'||s.t==='line'));
+function hptsR103(G,b){const h=hpts91(b);if(!rzOn80()&&grpRotOK103(G)){const it=S.cur,z=scale(),py=it&&it.base?-padY()+7/z:-1e9;h.push(['rot',b.x+b.w/2,Math.max(py,b.y-ROT_STEM103/z)])}return h}
+function rotateGroup103(d,p,shift){const pv=d.pv;let deg=Math.atan2(p.y-pv.y,p.x-pv.x)*180/Math.PI+90;deg=((deg%360)+360)%360;if(deg>180)deg-=360;
+  if(shift)deg=Math.round(deg/15)*15;else{const n=Math.round(deg/45)*45;if(Math.abs(deg-n)<3)deg=n}
+  d.deg=deg;
+  d.G.forEach((m,i)=>{const o=d.S0[i];
+    if(m.t==='arrow'||m.t==='line'){for(const [a,c] of [['x1','y1'],['x2','y2'],['cx','cy']])if(o[a]!=null&&o[c]!=null){const q=rotPt103(o[a],o[c],pv,deg);m[a]=q.x;m[c]=q.y}return}
+    for(const k of ['x1','y1','x2','y2','tx','ty','cx','cy'])if(o[k]!=null)m[k]=o[k];if(o.pts)m.pts=o.pts.map(q=>[q[0],q[1]]);
+    const P=pivot103(o),Q=rotPt103(P.x,P.y,pv,deg);moveShape(m,Q.x-P.x,Q.y-P.y);m.rot=Math.round(((((o.rot||0)+deg)%360)+360)%360*10)/10;m._w=null});
+  d.nb=box91(d.G);d.moved=Math.abs(deg)>.01}
 function scale91(G,S0,b,nb){const sx=nb.w/(b.w||1),sy=nb.h/(b.h||1),k=Math.sqrt(Math.abs(sx*sy))||1,X=v=>nb.x+(v-b.x)*sx,Y=v=>nb.y+(v-b.y)*sy;
   G.forEach((s,i)=>{const o=S0[i];
     if(s.t==='text'){const q=bbox0(o),cx=q.x+q.w/2,cy=q.y+q.h/2;s.fs=Math.max(4,o.fs*k);if(o.tw)s.tw=o.tw*k;s._w=null;const n=bbox0(s),dx=X(cx)-n.w/2-n.x,dy=Y(cy)-n.h/2-n.y;s.x1=o.x1;s.y1=o.y1;s.x2=o.x2;s.y2=o.y2;s.x1+=dx;s.y1+=dy;s.x2+=dx;s.y2+=dy;return}
@@ -2699,10 +2716,12 @@ function fit91(b,k,x,y,shift){let L=b.x,T=b.y,R=b.x+b.w,B=b.y+b.h;const corner=k
 let gdrag91=null;
 window.grpOutline9=function(c,G,z){c.save();c.globalAlpha=.75;c.lineWidth=1/z;c.setLineDash([3/z,3/z]);G.forEach(q=>{const b=bbox(q);c.strokeRect(b.x-3/z,b.y-3/z,b.w+6/z,b.h+6/z)});c.restore(); // each selected item gets its own dotted box (no handles)
   if(rzOn80())return true;const b=gdrag91?gdrag91.nb:box91(G),hs=4.5/z;c.strokeRect(b.x,b.y,b.w,b.h);c.setLineDash([]);
-  for(const [,x,y] of hpts91(b)){c.fillStyle='#fff';c.beginPath();c.rect(x-hs,y-hs,hs*2,hs*2);c.fill();c.stroke()}
+  for(const [k,x,y] of hptsR103(G,b)){if(k==='rot'){c.beginPath();c.moveTo(x,b.y);c.lineTo(x,y);c.stroke();c.fillStyle='#2db3a0';c.strokeStyle='#fff';c.lineWidth=1.6/z;c.beginPath();c.arc(x,y,5.6/z,0,7);c.fill();c.stroke();c.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--sel');c.lineWidth=1/z;
+      if(gdrag91&&gdrag91.k==='rot'){c.font=`600 ${12/z}px sans-serif`;const lbl=Math.round(gdrag91.deg||0)+'°',tw=c.measureText(lbl).width;c.fillStyle='rgba(22,24,26,.9)';c.fillRect(x+10/z,y-9/z,tw+8/z,16/z);c.fillStyle='#fff';c.fillText(lbl,x+14/z,y+4/z)}continue}
+    c.fillStyle='#fff';c.beginPath();c.rect(x-hs,y-hs,hs*2,hs*2);c.fill();c.stroke()}
   if(gdrag91){const t=`${Math.round(b.w)} × ${Math.round(b.h)}`;c.font=`${12/z}px sans-serif`;const tw=c.measureText(t).width+10/z,th=18/z;c.fillStyle='rgba(0,0,0,.75)';c.fillRect(b.x,b.y-th-4/z,tw,th);c.fillStyle='#fff';c.textBaseline='middle';c.fillText(t,b.x+5/z,b.y-th/2-4/z)}
   return true};
-const hit91=(G,p)=>{const r=(rzOn80()?10:9)/scale();for(const [k,x,y] of hpts91(box91(G)))if(Math.abs(p.x-x)<=r&&Math.abs(p.y-y)<=r)return k;return null};
+const hit91=(G,p)=>{const r=(rzOn80()?10:9)/scale();{const b=box91(G);for(const [k,x,y] of hptsR103(G,b))if(Math.abs(p.x-x)<=r&&Math.abs(p.y-y)<=r)return k}return null};
 // the Image tab's own picture box follows the group, and its handles hand over to the group resize
 const rzBox0=rzBox88;rzBox88=function(){const G=multi91();if(G){const b=gdrag91?gdrag91.nb:box91(G);return{L:b.x,T:b.y,R:b.x+b.w,B:b.y+b.h}}return rzBox0()};
 const rzHit0=rzHit80;rzHit80=function(p,rz){return multi91()?null:rzHit0(p,rz)};
@@ -2712,11 +2731,11 @@ const setBox0=setPictureBox88;setPictureBox88=async function(L,T,R,B){const G=mu
   snap();scale91(G,G.map(s=>clone(s)),b,{x:L,y:T,w,h});S.rz=null;render();renderProps();changed();toast(`Resized ${G.length} items to ${w} × ${h}. Ctrl+Z to undo.`)};
 cv.addEventListener('pointerdown',e=>{const it=S.cur,G=multi91();if(!G||e.button!==0||it?.kind!=='image'||!/^(select|image)$/.test(S.tool))return;const p=pt(e),k=hit91(G,p);if(!k){if(nearBorder(p.x,p.y,box91(G),6/scale())&&G.every(s=>!s.locked9&&!s.hidden9)){
     e.preventDefault();e.stopImmediatePropagation();snap();S.drag={mode:'move',s:G[0],list:G,lx:p.x,ly:p.y,moved:false};cv.setPointerCapture(e.pointerId)}return}
-  e.preventDefault();e.stopImmediatePropagation();if(S.zoom==='fit'){S.zoom=scale();applyZoom()}snap();const b=box91(G);gdrag91={k,b,nb:b,G,S0:G.map(s=>{const c=clone(s);if(s.src)c.src=s.src;return c})};cv.setPointerCapture(e.pointerId)},true);
-cv.addEventListener('pointermove',e=>{const G=multi91();if(gdrag91){e.stopImmediatePropagation();const p=pt(e),d=gdrag91;d.nb=fit91(d.b,d.k,p.x,p.y,e.shiftKey);scale91(d.G,d.S0,d.b,d.nb);
+  e.preventDefault();e.stopImmediatePropagation();if(S.zoom==='fit'){S.zoom=scale();applyZoom()}snap();const b=box91(G);gdrag91={k,b,nb:b,G,pv:{x:b.x+b.w/2,y:b.y+b.h/2},S0:G.map(s=>{const c=clone(s);if(s.src)c.src=s.src;return c})};if(k==='rot')cv.style.cursor='grabbing';cv.setPointerCapture(e.pointerId)},true);
+cv.addEventListener('pointermove',e=>{const G=multi91();if(gdrag91){e.stopImmediatePropagation();const p=pt(e),d=gdrag91;if(d.k==='rot'){rotateGroup103(d,p,e.shiftKey);S.rz=null;render();return}d.nb=fit91(d.b,d.k,p.x,p.y,e.shiftKey);scale91(d.G,d.S0,d.b,d.nb);
     const fw=document.getElementById('resW87'),fh=document.getElementById('resH87');if(fw)fw.value=Math.round(d.nb.w);if(fh)fh.value=Math.round(d.nb.h);S.rz=null;render();return}
   if(!S.drag&&G&&/^(select|image)$/.test(S.tool)&&S.cur?.kind==='image'){const k=hit91(G,pt(e));if(k){cv.style.cursor=HANDLE_CURSOR[k];e.stopImmediatePropagation()}else if(nearBorder(pt(e).x,pt(e).y,box91(G),6/scale())&&G.every(s=>!s.locked9&&!s.hidden9)){cv.style.cursor='move';e.stopImmediatePropagation()}}},true);
-const end91=e=>{if(!gdrag91)return;e.stopImmediatePropagation();const d=gdrag91;gdrag91=null;const same=['x','y','w','h'].every(q=>Math.round(d.nb[q])===Math.round(d.b[q]));if(same)S.cur.undo.pop();else changed();S.rz=null;render();renderProps()};
+const end91=e=>{if(!gdrag91)return;e.stopImmediatePropagation();const d=gdrag91;gdrag91=null;const same=d.k==='rot'?!d.moved:['x','y','w','h'].every(q=>Math.round(d.nb[q])===Math.round(d.b[q]));if(same)S.cur.undo.pop();else changed();S.rz=null;render();renderProps()};
 cv.addEventListener('pointerup',end91,true);cv.addEventListener('pointercancel',end91,true);
 
 // ---------- 9.2: Layers panel ----------
