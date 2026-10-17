@@ -9,7 +9,7 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
  // a fresh 1000x600 image at 80% zoom with one shape of the given type selected
  const fresh=async(type,props={})=>{sh_id=await ev(({type,props})=>{document.querySelectorAll('.modal').forEach(m=>m.remove());const T=__T,it=T.addImage(QA.canvas(1000,600,'#ffffff'),'rot test',{flat:true});T.openItem(it);T.S.zoom=.8;T.setTool('select');
    const s=T.newShape(type,props.x1??300,props.y1??200);Object.assign(s,{x2:300,y2:200},props);it.shapes.push(s);T.S.sel=s;T.render();window.sh=s;window.it0=it;return s.id},{type,props});return sh_id};
- const at=(x,y)=>ev(({x,y})=>{const cv=document.querySelector('#cv'),r=cv.getBoundingClientRect(),k=cv.width/r.width;return{x:r.left+x/k,y:r.top+y/k}},{x,y});
+ const at=(x,y)=>ev(({x,y})=>{const cv=document.querySelector('#cv'),r=cv.getBoundingClientRect(),k=cv.width/r.width;return{x:r.left+(x+__T.padX())/k,y:r.top+(y+__T.padY())/k}},{x,y});
  const handle=k=>ev(k=>{const h=__T.handles(sh).find(q=>q[0]===k);return h?{x:h[1],y:h[2]}:null},k);
  const sid=()=>sh_id;
  const pivot=()=>ev(()=>{const b=__T.selBox(sh);return{x:b.x+b.w/2,y:b.y+b.h/2}});
@@ -103,4 +103,32 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
   await fresh('rect',{x1:300,y1:0,x2:500,y2:100});const h=await handle('rot'),p=await pivot();assert.ok(h.y>p.y,'no room above, so the handle goes below');await dragTo(h,toward(p,60));near(await rot(),240,3)});
  await test('Hidden or locked objects do not turn',async()=>{
   await fresh('rect',{x2:500,y2:300});await ev(()=>{sh.locked9=true;__T.render()});const h=await handle('rot'),p=await pivot();await dragTo(h,toward(p,60));near(await rot(),0,.01)});
+ // ---- pictures (10.0.8)
+ // a picture object that is red on its left half and blue on its right half
+ const freshPic=async(props={})=>{sh_id=await ev(async props=>{document.querySelectorAll('.modal').forEach(m=>m.remove());const T=__T,it=T.addImage(QA.canvas(1000,600,'#ffffff'),'pic rot',{flat:true});T.openItem(it);T.S.zoom=.8;T.setTool('select');
+   const c=document.createElement('canvas');c.width=200;c.height=100;const g=c.getContext('2d');g.fillStyle='#ff0000';g.fillRect(0,0,100,100);g.fillStyle='#0000ff';g.fillRect(100,0,100,100);
+   const s=T.newShape('img',300,200);Object.assign(s,{x2:500,y2:300,src:c.toDataURL('image/png'),op:1,sh:false,c:'#000',w:1},props);const im=new Image();im.src=s.src;await im.decode();it.shapes.push(s);T.S.sel=s;T.render();await new Promise(r=>setTimeout(r,150));T.render();window.sh=s;window.it0=it;return s.id},props);return sh_id};
+ const px=(x,y)=>ev(({x,y})=>{const g=__T.exportCanvas().getContext('2d');return[...g.getImageData(x,y,1,1).data]},{x,y});
+ await test('Pictures turn with the rotate handle in Move / Select and are drawn and clicked where they really are',async()=>{
+  await freshPic();let h=await handle('rot');assert.ok(h,'a picture has a rotate handle');const p=await pivot();await dragTo(h,toward(p,90));near(await rot(),90,.6);
+  await ev(()=>{__T.S.sel=null;__T.render()});await page.waitForTimeout(100);
+  // turned 90 degrees clockwise: the red left half is now on top (y 150-250), the blue right half below
+  const top=await px(400,190),bottom=await px(400,310),away=await px(320,250);assert.ok(top[0]>200&&top[2]<60,'top '+top);assert.ok(bottom[2]>200&&bottom[0]<60,'bottom '+bottom);assert.ok(away[0]>240&&away[1]>240&&away[2]>240,'outside '+away);
+  let q=await at(400,330);await page.mouse.click(q.x,q.y);assert.equal(await ev(()=>__T.S.sel&&__T.S.sel.t),'img');await ev(()=>{__T.S.sel=null;__T.render()});q=await at(320,250);await page.mouse.click(q.x,q.y);assert.equal(await ev(()=>!!(__T.S.sel&&__T.S.sel.t==='img')),false)});
+ await test('Image tab: a picture gets a rotate handle; its box and handles turn with it and resizing keeps the opposite edge',async()=>{
+  await freshPic();await ev(()=>{sh.rot=0;__T.setTool('image')});await page.waitForTimeout(200);const h=await handle('rot');assert.ok(h,'rotate handle in the Image tab');const p=await pivot();
+  await dragTo(h,toward(p,90));near(await rot(),90,.6);
+  const w0=await handle('w'),e0=await handle('e');await dragTo(e0,{x:e0.x,y:e0.y+50});await page.waitForTimeout(150);const w1=await handle('w');near(w1.x,w0.x,2);near(w1.y,w0.y,2);near(await ev(id=>{const s=__T.S.cur.shapes.find(q=>q.id===id);return Math.abs(s.x2-s.x1)},sid()),250,3);near(await rot(),90,.6);
+  await ev(()=>__T.undo());await ev(()=>__T.undo());near(await rot(),0,.6)});
+ await test('Image tab: typing a size for a turned picture keeps its centre; Rotate and Flip buttons turn and mirror it',async()=>{
+  await freshPic();await ev(()=>{sh.rot=30;__T.setTool('image')});await page.waitForTimeout(200);const c0=await pivot();
+  await page.locator('#resW87').fill('300');await page.locator('#resW87').press('Tab');await page.waitForTimeout(200);near(await ev(id=>{const s=__T.S.cur.shapes.find(q=>q.id===id);return Math.abs(s.x2-s.x1)},sid()),300,3);const c1=await pivot();near(c1.x,c0.x,2);near(c1.y,c0.y,2);
+  const leftPixel=()=>ev(async id=>{const s=__T.S.cur.shapes.find(q=>q.id===id),im=new Image();im.src=s.src;await im.decode();const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;const g=c.getContext('2d');g.drawImage(im,0,0);return[...g.getImageData(5,c.height/2,1,1).data]},sid());
+  assert.ok((await leftPixel())[0]>200,'left is red');
+  await page.locator('#imRotR').click();await page.waitForTimeout(300);near(await rot(),120,.01);assert.ok((await leftPixel())[0]>200,'turning does not change the pixels');
+  await page.locator('#imFlipH').click();await page.waitForTimeout(400);near(await rot(),240,.01);const lp=await leftPixel();assert.ok(lp[2]>200&&lp[0]<60,'flip mirrors the pixels '+lp)});
+ await test('A group with a picture turns together',async()=>{
+  await freshPic();await ev(()=>{const T=__T,r=T.newShape('rect',560,220);Object.assign(r,{x2:700,y2:300,fill:'#00aa00'});__T.S.cur.shapes.push(r);T.S.sel=null;T.S.grp=[sh,r];T.render()});
+  const b=await ev(()=>{const bs=[sh,__T.S.cur.shapes[1]].map(s=>__T.bbox(s)),x=Math.min(...bs.map(q=>q.x)),y=Math.min(...bs.map(q=>q.y)),R=Math.max(...bs.map(q=>q.x+q.w)),B=Math.max(...bs.map(q=>q.y+q.h));return{x,y,w:R-x,h:B-y,k:__T.scale()}});
+  const pv={x:b.x+b.w/2,y:b.y+b.h/2};await dragTo({x:pv.x,y:b.y-26/b.k},toward(pv,90));near(await rot(),90,.6)});
  console.log(JSON.stringify({passed:results.filter(Boolean).length,failed:results.filter(x=>!x).length,errors}));await browser.close();process.exit(results.includes(0)||errors.length?1:0)})();
