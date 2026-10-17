@@ -2,14 +2,18 @@
 <html><head><meta charset="utf-8"><title>Webcam preview</title>
 <style>
 html,body{margin:0;height:100%;background:transparent;overflow:hidden}
-video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);background:#111;box-sizing:border-box}
+video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#111;box-sizing:border-box}
 </style></head>
 <body><video id="v" autoplay muted playsinline></video>
 <script>
 const q=new URLSearchParams(location.search),v=document.getElementById('v');
-v.style.borderRadius=q.get('shape')==='circle'?'50%':(q.get('corners')==='rounded'?'14%':'0');
-if(q.get('border')==='1')v.style.border='2px solid #fff';
+// Corners, border and mirroring come from the recording's webcam settings (worked out in main.js), so this matches the video.
+const rad=q.get('radius'),bw=+q.get('bw')||0;
+v.style.borderRadius=rad==='circle'?'50%':(+rad||0)+'px';
+if(bw)v.style.border=bw+'px solid '+(q.get('bc')||'#fff');
+if(q.get('mirror')!=='0')v.style.transform='scaleX(-1)';
 const dev=q.get('dev');
-const open=id=>navigator.mediaDevices.getUserMedia({video:id?{deviceId:{exact:id},width:{ideal:640},height:{ideal:360}}:{width:{ideal:640},height:{ideal:360}},audio:false});
+// Same camera mode as the recorder (index.html openCam / autoCam), so the framing is the same.
+const open=id=>navigator.mediaDevices.getUserMedia({video:id?{deviceId:{exact:id},width:{ideal:1280},height:{ideal:720}}:{width:{ideal:1280},height:{ideal:720}},audio:false});
 open(dev).catch(()=>open('')).then(s=>{v.srcObject=s}).catch(()=>{});
 </script></body></html>
