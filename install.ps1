@@ -15,7 +15,7 @@ $startMenu = Join-Path ([Environment]::GetFolderPath('Programs')) 'Saveit.lnk'
 $desktop   = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Saveit.lnk'
 
 Write-Host ''
-Write-Host "  Saveit Setup  (version 9.9.4)" -ForegroundColor Cyan
+Write-Host "  Saveit Setup  (version 10.0.7)" -ForegroundColor Cyan
 Write-Host ''
 if (-not (Test-Path (Join-Path $PSScriptRoot 'app\main.js'))) {
   Write-Host '  The app files were not found next to this script.' -ForegroundColor Yellow
@@ -51,8 +51,6 @@ if ((Get-FileHash $zip -Algorithm SHA256).Hash -ne $runtimeHash) {
 # 2. Install
 Write-Host '  Installing...'
 Get-Process -Name 'Saveit','Capture Bench' -ErrorAction SilentlyContinue | Stop-Process -Force
-# Wait until Saveit has really closed (its files stay locked for a moment after it is stopped)
-for ($i = 0; $i -lt 40 -and (Get-Process -Name 'Saveit','Capture Bench' -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 250 }
 # Remove the earlier version (Capture Bench). Saved captures are kept.
 $old = Join-Path $env:LOCALAPPDATA 'Programs\Capture Bench'
 if (Test-Path $old) { Remove-Item $old -Recurse -Force -ErrorAction SilentlyContinue }
@@ -61,17 +59,7 @@ Remove-Item (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Capture Bench.
 Remove-Item 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\CaptureBench' -Recurse -Force -ErrorAction SilentlyContinue
 Remove-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'CaptureBench' -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
-if (Test-Path $dest) {
-  # A file still in use is retried for a few seconds instead of stopping the update halfway
-  for ($try = 1; $try -le 12; $try++) {
-    try { Remove-Item $dest -Recurse -Force -ErrorAction Stop; break }
-    catch {
-      if ($try -eq 12) { throw 'Saveit could not be updated because a file is still in use. Close Saveit (also from the tray) and run Install again.' }
-      Get-Process -Name 'Saveit','Capture Bench' -ErrorAction SilentlyContinue | Stop-Process -Force
-      Start-Sleep -Milliseconds 500
-    }
-  }
-}
+if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
 New-Item -ItemType Directory -Path $dest -Force | Out-Null
 Expand-Archive -Path $zip -DestinationPath $dest -Force
 Remove-Item (Join-Path $dest 'resources\default_app.asar') -Force -ErrorAction SilentlyContinue
@@ -104,7 +92,7 @@ $uns.TargetPath = (Join-Path $dest 'Uninstall.cmd'); $uns.WorkingDirectory = $de
 $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Saveit'
 New-Item -Path $key -Force | Out-Null
 Set-ItemProperty $key DisplayName $app
-Set-ItemProperty $key DisplayVersion '9.9.4'
+Set-ItemProperty $key DisplayVersion '10.0.7'
 Set-ItemProperty $key Publisher 'Saveit'
 Set-ItemProperty $key DisplayIcon $icon
 Set-ItemProperty $key InstallLocation $dest

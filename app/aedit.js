@@ -53,7 +53,7 @@ async function thumbFor(it){const bufs=await buffers(it),ed=editOf(it,durOf(bufs
 // o: {mics:[deviceId,...], sys, onLevel(levels), warn(msg)}. Resolves with a controller once every input is open.
 async function record(o){const parts=[];
   try{for(let i=0;i<o.mics.length;i++){const {stream,fellBack}=await DEVICES.open('mic',o.mics[i]||'',{echoCancellation:o.mics.length<2,noiseSuppression:true,autoGainControl:o.mics.length<2});
-      const lab=(stream.getAudioTracks()[0]||{}).label||('Microphone '+(i+1));parts.push({name:(o.mics.length>1?'Mic '+(i+1)+' · ':'')+lab.replace(/^Default\s*-\s*/,''),stream});if(fellBack&&o.warn)o.warn('Microphone '+(i+1)+' was not found, so the Windows default microphone is used.')}
+      const lab=(stream.getAudioTracks()[0]||{}).label||('Microphone '+(i+1));parts.push({name:o.mics.length>1?'Mic '+(i+1):'Microphone',device:lab.replace(/^Default\s*-\s*/,''),stream});if(fellBack&&o.warn)o.warn('Microphone '+(i+1)+' was not found, so the Windows default microphone is used.')}
     if(o.sys){try{const ds=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});ds.getVideoTracks().forEach(t=>t.stop());const at=ds.getAudioTracks();if(at.length)parts.push({name:'Computer sound',stream:new MediaStream(at)});else if(o.warn)o.warn('Computer sound is not available here, so only the microphone is recorded.')}catch(_){if(o.warn)o.warn('Computer sound could not be started, so only the microphone is recorded.')}}
   }catch(e){parts.forEach(p=>p.stream.getTracks().forEach(t=>t.stop()));throw e}
   const ctx=new AudioContext(),mime=['audio/webm;codecs=opus','audio/webm'].find(m=>MediaRecorder.isTypeSupported(m))||'';

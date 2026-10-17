@@ -1,0 +1,7 @@
+# Saveit 10.0.3 — Fixes from the 9.9.4 company review
+
+- **Top bar follows what is open.** Opening an audio, video or image item (from Recent, the Library or a recording) now switches Image | Video | Audio to match, so an open audio item shows Record audio and the microphone controls instead of Capture. Not while recording.
+- **Fill stays inside the area you click.** The default "Similar colours" was 20, which on a white table cell leaked into pale grey neighbours and filled about 70% of the picture. It is now 5 (one cell fills about 6%). You can still raise it for gradients and soft edges.
+- **Annotations count is honest.** A new capture is a picture on a white base, so it used to show "Annotations 1". The status bar now counts only real annotations (and shows "Pictures n" when there is more than one). The checkered border around a capture is the room for moving the picture; it is not saved.
+- **Undo works from the top bar in Audio and Video.** The top-bar Undo and Redo buttons now use the audio or video editor's own history. Before, they did nothing there, so Undo after Split looked broken unless you used the small audio-bar arrows.
+- Tests: new `tests/review103-tests.cjs` (5 checks). Polish 35/35, audio timeline 24/24, MP3/M4A 6/6, pitch checks and the full 82-check suite pass. The old 9.9.2 `layer-media-tests.cjs` audio checks fail the same 8 ways as before this change (they test the audio screen replaced in 9.9.4).

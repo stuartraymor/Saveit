@@ -1,4 +1,4 @@
-SAVEIT 9.9.4 - WINDOWS SETUP
+SAVEIT 10.0.7 - WINDOWS SETUP
 ============================
 
 INSTALL
@@ -24,7 +24,10 @@ WHAT IT DOES
 - Record the screen with optional microphone, system audio and webcam.
 - Mark up: arrows, callouts, text, shapes, steps, stamps, highlight, pen, blur,
   spotlight, magnify, fill, erase, cut out, simplify, crop, effects, Smart Move.
+  Select an object and drag the round rotate handle above it to turn it (Shift = 15 degree steps).
 - Step guides: build illustrated work instructions and export them.
+- Audio: record one or two microphones and the computer's sound, edit on a multitrack
+  timeline, and save as WAV, MP3 or M4A.
 - Video editor: multi-clip timeline, trim and move clips, transitions, captions and
   on-screen arrows/text that appear and disappear, audio tracks, voice-over, equalizer
   and effects, export to video or GIF.

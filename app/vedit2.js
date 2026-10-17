@@ -399,8 +399,7 @@ function mount(host,it,api){css();HK=api;
     g.fillStyle='rgba(255,255,255,.55)';g.strokeStyle='rgba(255,255,255,.3)';g.lineWidth=1;g.font='10px monospace';
     const steps=[.1,.25,.5,1,2,5,10,15,30,60,120,300,600],stp=steps.find(s=>xOf(s)-xOf(0)>=64)||600,T=D();
     for(let t=0;t<=T+1e-6;t+=stp){const x=Math.round(xOf(t))+.5;g.beginPath();g.moveTo(x,10);g.lineTo(x,17);g.stroke();g.fillText(fmt(t),x+3,14)}
-    g.fillStyle='rgba(255,255,255,.45)';g.font='10px sans-serif';for(const gr of lay.G)g.fillText(gr.name,4,gr.y);
-    g.fillStyle='rgba(90,162,255,.16)';g.fillRect(xOf(inT),18,xOf(outT)-xOf(inT),H-18);
+        g.fillStyle='rgba(90,162,255,.16)';g.fillRect(xOf(inT),18,xOf(outT)-xOf(inT),H-18);
     for(const x of L){const x0=xOf(x.t0),x1=Math.max(x0+4,xOf(x.t1)),s=isSel(x),y=x.y,h=x.h,ym=y+h/2;
       let col=x.type==='clip'?PALETTE[srcIdx(x.ref.src)%PALETTE.length]:x.type==='aud'?'#8c6bd8':x.type==='cap'?'#f5c400':x.type==='zoom'?'#4cc16b':x.type==='vfx'?(x.ref.off?'#6a5a86':'#b07cf5'):'#e5483b';
       g.globalAlpha=.9;g.fillStyle=col;g.beginPath();(g.roundRect?g.roundRect(x0,y,x1-x0,h,4):g.rect(x0,y,x1-x0,h));g.fill();g.globalAlpha=1;
@@ -415,6 +414,7 @@ function mount(host,it,api){css();HK=api;
     g.strokeStyle='#5aa2ff';g.lineWidth=1.5;for(const t of [inT,outT]){const x=xOf(t);g.beginPath();g.moveTo(x,17);g.lineTo(x,H-2);g.stroke()}
     circ(xOf(inT),9,6,'#5aa2ff','#fff');circ(xOf(outT),9,6,'#5aa2ff','#fff');g.fillStyle='#fff';g.font='bold 8px sans-serif';g.fillText('I',xOf(inT)-2,12);g.fillText('O',xOf(outT)-3,12);
     const px=xOf(eng.t);g.fillStyle='#fff';g.fillRect(px-1,0,2,H);g.beginPath();g.moveTo(px-6,0);g.lineTo(px+6,0);g.lineTo(px,8);g.fill();
+    g.font='10px sans-serif';for(const gr of lay.G){const tw=g.measureText(gr.name).width;g.fillStyle='rgba(22,24,26,.85)';g.fillRect(2,gr.y-10,tw+8,13);g.fillStyle='rgba(255,255,255,.8)';g.fillText(gr.name,6,gr.y)}
     if(zoom>1&&eng.playing){const w=tl.parentElement;if(px<w.scrollLeft+20||px>w.scrollLeft+w.clientWidth-20)w.scrollLeft=Math.max(0,px-w.clientWidth*.3)}}
 
   // ----- timeline interaction -----
