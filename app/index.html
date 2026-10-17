@@ -2246,7 +2246,7 @@ const props86=renderProps;renderProps=function(){props86();syncWs80();
 const drawUIbefore810=drawUI;drawUI=function(c,it){drawUIbefore810(c,it);if(it!==S.cur||it.kind!=='image'||!it.shapes.some(x=>x.t==='img'))return;
   const k=1/scale(),W=it.base.width,H=it.base.height;
   if(!rzOn80()){c.save();c.strokeStyle='rgba(255,255,255,.35)';c.lineWidth=1*k;c.setLineDash([4*k,3*k]);c.strokeRect(0,0,W,H);c.restore()}
-  const s=S.sel;if(s&&s.t==='img'&&it.shapes.includes(s)&&!rzOn80()){const r=norm(s),txt=`${Math.round(r.w)} × ${Math.round(r.h)}  at ${Math.round(r.x)}, ${Math.round(r.y)}  ·  layer ${it.shapes.indexOf(s)+1} of ${it.shapes.length}`;
+  const s=S.sel;if(s&&s.t==='img'&&it.shapes.includes(s)&&!rzOn80()){const r=norm(s),txt=`${Math.round(r.w)} × ${Math.round(r.h)}  at ${Math.round(r.x)}, ${Math.round(r.y)}  ·  layer ${it.shapes.length-it.shapes.indexOf(s)} of ${it.shapes.length}`;
     c.save();c.font=`${12*k}px sans-serif`;const tw=c.measureText(txt).width+10*k,th=18*k,tx=Math.max(0,Math.min(W-tw,r.x)),ty=r.y-th-4*k>0?r.y-th-4*k:r.y+4*k;
     c.fillStyle='rgba(0,0,0,.75)';c.fillRect(tx,ty,tw,th);c.fillStyle='#fff';c.textBaseline='middle';c.fillText(txt,tx+5*k,ty+th/2);c.restore()}};
 // Zoom box: type an exact percentage, step with -/+, or fit the window. The old dropdown stays hidden for compatibility.
@@ -2402,13 +2402,13 @@ const dupSel0=dupSel;dupSel=function(){const it=S.cur,before=new Set(it?.shapes|
 const paste0=pasteAnnotations;pasteAnnotations=async function(sh){const it=S.cur,before=new Set(it?.shapes||[]);const r=await paste0(sh);if(it?.shapes)regroup9(it.shapes.filter(s=>!before.has(s)));return r};
 
 // ---------- 9.05: layer order and Flatten selected ----------
-window.layerOf9=s=>{const a=S.cur.shapes;return{n:a.indexOf(s)+1,of:a.length}};
-function layerToast9(){const a=expand9(selectedShapes());renderProps();if(!a.length)return;const L=a.map(s=>layerOf9(s).n),of=S.cur.shapes.length;toast(a.length===1?`Now on layer ${L[0]} of ${of} (1 = bottom).`:`Now on layers ${Math.min(...L)}–${Math.max(...L)} of ${of} (1 = bottom).`)}
+window.layerOf9=s=>{const a=S.cur.shapes;return{n:a.length-a.indexOf(s),of:a.length}};
+function layerToast9(){const a=expand9(selectedShapes());renderProps();if(!a.length)return;const L=a.map(s=>layerOf9(s).n),of=S.cur.shapes.length;toast(a.length===1?`Now on layer ${L[0]} of ${of} (1 = top).`:`Now on layers ${Math.min(...L)}–${Math.max(...L)} of ${of} (1 = top).`)}
 window.orderStep9=function(dir){const it=S.cur;if(it?.kind!=='image')return;const sel=new Set(expand9(selectedShapes()));if(!sel.size){toast('Select something first.');return}
   const a=it.shapes.slice();let moved=false;
   if(dir>0){for(let i=a.length-2;i>=0;i--)if(sel.has(a[i])&&!sel.has(a[i+1])){[a[i],a[i+1]]=[a[i+1],a[i]];moved=true}}
   else{for(let i=1;i<a.length;i++)if(sel.has(a[i])&&!sel.has(a[i-1])){[a[i],a[i-1]]=[a[i-1],a[i]];moved=true}}
-  if(!moved){toast(dir>0?`Already on the top layer (${it.shapes.length} of ${it.shapes.length}).`:'Already on the bottom layer (1).');return}snap();it.shapes.splice(0,it.shapes.length,...a);render();changed();layerToast9()};
+  if(!moved){toast(dir>0?`Already on the top layer (1).`:'Already on the bottom layer (${it.shapes.length} of ${it.shapes.length}).');return}snap();it.shapes.splice(0,it.shapes.length,...a);render();changed();layerToast9()};
 const order0=orderSelection;orderSelection=function(front){const a=expand9(selectedShapes());if(a.length>1&&S.sel){S.grp=a;S.sel=null}const r=order0(front);layerToast9();return r};
 window.flattenSel9=async function(){const it=S.cur;if(it?.kind!=='image')return;commitText();const a=expand9(selectedShapes());if(!a.length){toast('Select the items to flatten.');return}
   await readyShapes(a);const m=Math.ceil(Math.max(4,...a.map(s=>+s.w||0)))+16,bs=a.map(bbox);
@@ -2520,7 +2520,7 @@ const lname92=s=>s.name9||((s.t==='text'||s.t==='callout')&&(s.txt||'').trim()&&
 const hitL92=hit;hit=function(x,y){const it=S.cur,a=it.shapes;if(!a.some(s=>s.hidden9||s.locked9))return hitL92(x,y);it.shapes=a.filter(s=>!s.hidden9&&!s.locked9);try{return hitL92(x,y)}finally{it.shapes=a}};
 const lyBtn92=document.createElement('button');lyBtn92.className='tool';lyBtn92.id='layersBtn92';lyBtn92.title='Layers: see, name, select and reorder every layer';lyBtn92.setAttribute('aria-pressed','false');
 lyBtn92.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 4.5 9-4.5" opacity=".55"/></svg><span>Layers</span>';
-image34.after(lyBtn92);
+vidBtn80.after(lyBtn92);
 let keepLayers92=false;
 const setToolL92=setTool;setTool=function(t){if(!keepLayers92&&S.layersOpen){S.layersOpen=false}return setToolL92(t)};
 lyBtn92.onclick=()=>{if(S.cur?.kind!=='image'||S.cur.guide){toast('Open an image first.');return}
@@ -2531,15 +2531,16 @@ function thumb92(s,it){const c=document.createElement('canvas');c.width=44;c.hei
 const ICO92={eye:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   off:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 5.4-1.6"/></svg>',
   lock:LOCK_ON87.replace('width="14" height="14"','width="15" height="15"'),unlock:LOCK_OFF87.replace('width="14" height="14"','width="15" height="15"')};
+let last92=null;
 function layersPanel92(P,it){const a=it.shapes,n=a.length,sel=new Set(selectedShapes()),gids=[...new Set(a.map(s=>s.groupId).filter(v=>v!=null))];
-  const rows=a.map((s,i)=>({s,i})).reverse().map(({s,i})=>`<div class="ly92${sel.has(s)?' on':''}${s.hidden9?' hid':''}" data-i="${i}" title="Layer ${i+1} of ${n}">
-    <span class="ln92">${i+1}</span><span class="th92" data-th="${i}"></span><span class="nm92" data-nm="${i}">${escH(lname92(s))}${s.groupId!=null?`<em> · group ${gids.indexOf(s.groupId)+1}</em>`:''}</span>
+  const rows=a.map((s,i)=>({s,i})).reverse().map(({s,i})=>`<div class="ly92${sel.has(s)?' on':''}${s.hidden9?' hid':''}" data-i="${i}" title="Layer ${n-i} of ${n}">
+    <span class="ln92">${n-i}</span><span class="th92" data-th="${i}"></span><span class="nm92" data-nm="${i}">${escH(lname92(s))}${s.groupId!=null?`<em> · group ${gids.indexOf(s.groupId)+1}</em>`:''}</span>
     <button class="btn ic92" data-eye="${i}" aria-label="${s.hidden9?'Show':'Hide'} layer" title="${s.hidden9?'Show':'Hide'}">${s.hidden9?ICO92.off:ICO92.eye}</button><button class="btn ic92" data-lk="${i}" aria-pressed="${!!s.locked9}" aria-label="${s.locked9?'Unlock':'Lock'} layer" title="${s.locked9?'Unlock':'Lock'} (a locked layer can't be clicked on the canvas)">${s.locked9?ICO92.lock:ICO92.unlock}</button></div>`).join('');
   const one=sel.size>0,dis=one?'':'disabled';
   P.innerHTML=`<style>.lylist92{display:flex;flex-direction:column;gap:3px;max-height:46vh;overflow:auto;margin:6px 0}.ly92{display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;cursor:pointer;background:var(--panel-2)}.ly92.on{border-color:var(--accent,#2fb8a6);box-shadow:inset 0 0 0 1px var(--accent,#2fb8a6)}.ly92.hid{opacity:.5}.ly92{touch-action:none;user-select:none;position:relative}.ly92.drag{opacity:.4}.ly92.dropt::before,.ly92.dropb::after{content:'';position:absolute;left:-2px;right:-2px;height:3px;border-radius:2px;background:var(--accent,#2fb8a6)}.ly92.dropt::before{top:-4px}.ly92.dropb::after{bottom:-4px}.lyghost92{position:fixed;z-index:200;pointer-events:none;padding:4px 10px;border-radius:7px;background:var(--accent,#2fb8a6);color:#fff;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.4)}.lylist92.dragging,.lylist92.dragging *{cursor:grabbing!important}.ln92{width:18px;text-align:right;font:11px var(--f-mono);color:var(--muted)}.th92 canvas{display:block;border-radius:4px;background:repeating-conic-gradient(#ffffff22 0 25%,transparent 0 50%) 0/8px 8px}.nm92{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.nm92 em{color:var(--muted);font-style:normal}.nm92 input{width:100%;font:inherit}.ic92{padding:2px 4px!important;min-width:0!important;height:24px}.ly92 .ic92[aria-pressed=true]{color:var(--accent,#2fb8a6)}</style>
-  <div class="grp"><h3>Layers</h3><p class="hint" style="margin:0">${n} layer${n===1?'':'s'}, top first. Click a layer to select it · Shift or Ctrl+click for more · drag layers up or down to reorder · double-click a name to rename.</p>
+  <div class="grp"><h3>Layers</h3><p class="hint" style="margin:0">${n} layer${n===1?'':'s'}, top first. Layer 1 is on top. Click a layer to select it · Shift or Ctrl+click for more · drag layers up or down to reorder · double-click a name to rename.</p>
     <div class="lylist92" id="lyList92">${rows||'<p class="hint">No layers yet. Draw something or use Add picture.</p>'}</div>
-    <div class="ly92" style="cursor:default;opacity:.8" title="The canvas itself"><span class="ln92">0</span><span class="nm92">Background · ${it.base.width} × ${it.base.height}${it.fx.bg?' · '+escH(it.fx.bg):' · transparent'}</span></div></div>
+    <div class="ly92" style="cursor:default;opacity:.8" title="The canvas itself"><span class="ln92"></span><span class="nm92">Background · ${it.base.width} × ${it.base.height}${it.fx.bg?' · '+escH(it.fx.bg):' · transparent'}</span></div></div>
   <div class="grp"><h3>Order</h3><div class="row"><button class="btn" id="l92fwd" ${dis} title="Ctrl+]">Bring forward</button><button class="btn" id="l92back" ${dis} title="Ctrl+[">Send backward</button></div>
     <div class="row"><button class="btn" id="l92front" ${dis} title="Ctrl+Shift+]">Bring to front</button><button class="btn" id="l92bot" ${dis} title="Ctrl+Shift+[">Send to back</button></div></div>
   <div class="grp"><h3>Selected layer${sel.size>1?'s':''}</h3><div class="row"><button class="btn" id="l92ren" ${sel.size===1?'':'disabled'}>Rename</button><button class="btn" id="l92dup" ${dis}>Duplicate</button><button class="btn" id="l92del" ${dis}>Delete</button></div>
@@ -2572,7 +2573,7 @@ function layersPanel92(P,it){const a=it.shapes,n=a.length,sel=new Set(selectedSh
       if(rest.length){if(slot<rest.length)rest[slot].classList.add('dropt');else rest[rest.length-1].classList.add('dropb')}
       const lb=L.getBoundingClientRect();clearInterval(scrollT);const d=ev.clientY<lb.top+24?-8:ev.clientY>lb.bottom-24?8:0;if(d)scrollT=setInterval(()=>{L.scrollTop+=d},16)};
     const move=ev=>{if(!on){if(Math.abs(ev.clientY-y0)<5)return;begin()}ev.preventDefault();place(ev)};
-    const up=ev=>{removeEventListener('pointermove',move,true);removeEventListener('pointerup',up,true);removeEventListener('pointercancel',up,true);clearInterval(scrollT);if(!on){pick(ev,s);refresh();return}
+    const up=ev=>{removeEventListener('pointermove',move,true);removeEventListener('pointerup',up,true);removeEventListener('pointercancel',up,true);clearInterval(scrollT);if(!on){if(!(ev.shiftKey||ev.ctrlKey||ev.metaKey)&&last92&&last92.s===s&&Date.now()-last92.t<500){last92=null;rename(a.indexOf(s));return}last92={s,t:Date.now()};pick(ev,s);refresh();return}
       ghost.remove();L.classList.remove('dragging');
       const top=r=>a[idx(r)],ordered=[...rest.slice(0,slot).map(top),...moving.map(top),...rest.slice(slot).map(top)].reverse();
       if(ordered.some((q,i)=>q!==a[i])){snap();a.splice(0,a.length,...ordered);changed();refresh();layerToast9()}else refresh()};
