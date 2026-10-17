@@ -282,6 +282,8 @@ details.more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size
 <script src="audio-project.js"></script>
 <script src="audio-engine.js"></script>
 <script src="audio-editor.js"></script>
+<script src="third-party/lame.min.js"></script>
+<script src="audio-export.js"></script>
 <script src="fxui.js"></script>
 <script src="devices.js"></script>
 <script src="camdraw.js"></script>
@@ -386,8 +388,8 @@ function addVideo(blob,name,thumb){
   S.items.unshift(it); openItem(it); persist(it); return it;
 }
 const FORMATS={image:[['png','PNG image'],['jpg','JPG image'],['webp','WebP image'],['bmp','BMP image'],['ico','Icon (.ico)'],['svg','SVG picture'],['html','Web page (.html)'],['pdf','PDF'],['docx','Word document'],['saveit','Saveit file']],guide:[['docx','Word document'],['pdf','PDF'],['jpg','JPG image'],['png','PNG image'],['saveit','Saveit file']],video:[['mp4','MP4 video'],['webm','WebM video'],['gif','Animated GIF']]};
-FORMATS.audio=[['wav','WAV audio']];
-const FMT_NOTE={wav:'Full quality, plays everywhere',png:'Sharp, keeps transparency',jpg:'Small file, good for email',webp:'Small and sharp, modern',bmp:'Plain uncompressed bitmap',ico:'Windows icon, up to 256 px',svg:'Picture wrapper for web and docs',html:'One self-contained page',pdf:'Print-ready document',docx:'Word document; screenshots go in as pictures',saveit:'Reopen here for more editing',mp4:'Plays almost everywhere',webm:'Web video',gif:'Animated picture for docs and chat'};
+FORMATS.audio=[['wav','WAV audio'],['mp3','MP3 audio'],['m4a','M4A audio']];
+const FMT_NOTE={wav:'Full quality, plays everywhere',mp3:'Small file, plays everywhere, good for email',m4a:'Small file, good for phones and Apple devices',png:'Sharp, keeps transparency',jpg:'Small file, good for email',webp:'Small and sharp, modern',bmp:'Plain uncompressed bitmap',ico:'Windows icon, up to 256 px',svg:'Picture wrapper for web and docs',html:'One self-contained page',pdf:'Print-ready document',docx:'Word document; screenshots go in as pictures',saveit:'Reopen here for more editing',mp4:'Plays almost everywhere',webm:'Web video',gif:'Animated picture for docs and chat'};
 const lastFmt={};let saveQuality=.92;try{const q=+localStorage.getItem('saveit.quality');if(q>=.5&&q<=1)saveQuality=q}catch(e){}
 function syncFormats(){const it=S.cur,f=$('#fmt'),k=it?(it.kind==='image'&&it.guide?'image':it.kind):'image',list=FORMATS[k]||FORMATS.image,cur=lastFmt[k]||list[0][0];
   f.innerHTML=list.map(([v,l])=>`<option value="${v}" ${v===cur?'selected':''}>${l}</option>`).join('');f.onchange=()=>{lastFmt[k]=f.value};
@@ -886,7 +888,7 @@ async function save(fmtArg){const it=S.cur;if(!it)return;commitText();saveTarget
     toast('Saving your edited video'+lenT+'… keep this window open and in front. It takes as long as the video. Cancel is in Export.',9000);
     (async()=>{try{const o=await ctl97.renderBlob();if(!o){toast('Save cancelled. Nothing was written.',5000);return}const b2=fmt==='mp4'?o.mp4:(o.webm||o.mp4);if(!b2){toast('MP4 could not be made here. Choose WebM.',6000);return}saveTarget9=tgt;saveOwner9=own;saveBlob(b2,fileName(fmt),'Saved the edited video'+lenT+' to')}catch(e){toast('Could not save: '+(e.message||e),6000)}})();return}
   const b=fmt==='mp4'?it.mp4:it.webm;if(!b){toast(fmt==='mp4'?'This recording was made without MP4. Choose WebM, or record again in this version to get both.':'This recording only has MP4. Choose MP4.',6000);return}saveBlob(b,fileName(fmt));return}
-  if(it.kind==='audio'){const tgt=saveTarget9,own=saveOwner9;saveTarget9=null;saveOwner9=null;toast('Mixing the audio…',3000);try{const b=await AEdit.renderWav(it);saveTarget9=tgt;saveOwner9=own;await saveBlob(b,fileName('wav'),'Saved the audio ('+AEdit.fmt(it.dur||0)+') to')}catch(e){toast('Could not save the audio: '+(e.message||e),6000)}return}
+  if(it.kind==='audio'){const tgt=saveTarget9,own=saveOwner9;saveTarget9=null;saveOwner9=null;const af=fmt==='mp3'||fmt==='m4a'?fmt:'wav';toast(af==='m4a'?'Making the M4A… it takes as long as the audio, so keep this window open.':af==='mp3'?'Making the MP3…':'Mixing the audio…',af==='m4a'?9000:3000);try{const b=await AEdit.renderAs(it,af);saveTarget9=tgt;saveOwner9=own;await saveBlob(b,fileName(af),'Saved the audio ('+AEdit.fmt(it.dur||0)+') to')}catch(e){toast('Could not save the audio: '+(e.message||e),6000)}return}
   if(fmt==='saveit')return saveSaveit(it.guide&&false?it.guide:it);
   if(it.kind==='guide'){if(fmt==='docx')return exportDocx(it);if(fmt==='pdf')return exportPdf(it);if(fmt==='jpg')return exportGuideJpg(it);if(fmt==='png'){const pc=renderPageCanvas(it,2);pc.canvas.toBlob(b=>saveBlob(b,safeName(it.title)+'.png'),'image/png');return}return}
   const c=exportCanvas();
@@ -903,9 +905,9 @@ function saveAs(){const it=S.cur;if(!it){toast('Open something first.');return}i
   const k=it.kind==='image'&&it.guide?'image':it.kind,list=FORMATS[k]||FORMATS.image,m=document.createElement('div');m.className='modal';m.id='saveAsModal';
   const cur=lastFmt[k]||list[0][0];
   m.innerHTML=`<div class="box" role="dialog" aria-label="Save as" style="width:min(640px,100%)"><div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">Save as</h2><button class="btn" data-x>Cancel</button></div><p class="hint" style="margin:0 0 10px">Choose a file type. Your Windows save dialog opens next, so you can pick the folder and name.</p><div class="saf">${list.map(([v,l])=>`<button class="btn" data-f="${v}" aria-pressed="${v===cur}"><b>${l}</b><span>${FMT_NOTE[v]||''}</span></button>`).join('')}</div>
-    <div class="grp" style="margin-top:14px">${k==='image'?`<div class="row"><span>JPG and WebP quality</span><input type="range" id="saQ" min="50" max="100" value="${Math.round(saveQuality*100)}" aria-label="JPG and WebP quality"><span class="val" id="saQv">${Math.round(saveQuality*100)}%</span></div>`:''}<label class="chk"><input type="checkbox" id="saDef" checked> Use this file type for the Save button</label></div></div>`;
+    <div class="grp" style="margin-top:14px">${k==='audio'?`<div class="row"><span>MP3 and M4A quality</span><select id="saKb" aria-label="MP3 and M4A quality">${AEdit.audioKbps.list.map(v=>`<option value="${v}" ${v===AEdit.audioKbps.get()?'selected':''}>${v} kbps${v===192?' (good)':v===320?' (best)':v===96?' (smallest)':''}</option>`).join('')}</select></div>`:''}${k==='image'?`<div class="row"><span>JPG and WebP quality</span><input type="range" id="saQ" min="50" max="100" value="${Math.round(saveQuality*100)}" aria-label="JPG and WebP quality"><span class="val" id="saQv">${Math.round(saveQuality*100)}%</span></div>`:''}<label class="chk"><input type="checkbox" id="saDef" checked> Use this file type for the Save button</label></div></div>`;
   document.body.appendChild(m);const close=()=>{m.remove();document.removeEventListener('keydown',esc,true)},esc=e=>{if(e.key==='Escape'){e.stopPropagation();close()}};document.addEventListener('keydown',esc,true);
-  const q=m.querySelector('#saQ');if(q)q.oninput=()=>{saveQuality=+q.value/100;m.querySelector('#saQv').textContent=q.value+'%';try{localStorage.setItem('saveit.quality',saveQuality)}catch(e){}};
+  const kb=m.querySelector('#saKb');if(kb)kb.onchange=()=>AEdit.audioKbps.set(kb.value);const q=m.querySelector('#saQ');if(q)q.oninput=()=>{saveQuality=+q.value/100;m.querySelector('#saQv').textContent=q.value+'%';try{localStorage.setItem('saveit.quality',saveQuality)}catch(e){}};
   m.onclick=e=>{if(e.target===m||e.target.closest('[data-x]')){close();return}const b=e.target.closest('[data-f]');if(b){const useDef=m.querySelector('#saDef').checked;close();if(useDef){lastFmt[k]=b.dataset.f;syncFormats()}save(b.dataset.f)}}}
 $('#saveAsBtn').onclick=saveAs;
 function copy(){const it=S.cur;if(!it||it.kind!=='image')return;commitText();const c=exportCanvas();
@@ -1647,7 +1649,7 @@ function renderLib(){const m=$('#libModal');if(!m)return;
 // Save or move several items at once
 function libBatch(move){const l=libChosen();if(!l.length)return;if($('#libBatch'))return;
   const groups={image:l.filter(i=>kindOf(i)==='image'),guide:l.filter(i=>kindOf(i)==='guide'),video:l.filter(i=>kindOf(i)==='video'),audio:l.filter(i=>kindOf(i)==='audio')};
-  const OPT={image:[['png','PNG'],['jpg','JPG'],['webp','WebP'],['bmp','BMP'],['pdf','PDF'],['docx','Word'],['saveit','Saveit file']],guide:[['docx','Word'],['pdf','PDF'],['saveit','Saveit file']],video:[['mp4','MP4'],['webm','WebM']],audio:[['wav','WAV']]},LBL={image:'Images',guide:'Guides',video:'Videos',audio:'Audio'};
+  const OPT={image:[['png','PNG'],['jpg','JPG'],['webp','WebP'],['bmp','BMP'],['pdf','PDF'],['docx','Word'],['saveit','Saveit file']],guide:[['docx','Word'],['pdf','PDF'],['saveit','Saveit file']],video:[['mp4','MP4'],['webm','WebM']],audio:[['wav','WAV'],['mp3','MP3'],['m4a','M4A']]},LBL={image:'Images',guide:'Guides',video:'Videos',audio:'Audio'};
   const m=document.createElement('div');m.className='modal';m.id='libBatch';
   m.innerHTML=`<div class="box" role="dialog" aria-label="${move?'Move':'Save'} items" style="width:min(480px,100%)"><h2>${move?'Move':'Save'} ${l.length} item${l.length>1?'s':''}</h2><p class="hint">${move?'Files are saved to the folder you pick, then removed from the library. You can still use Undo delete in this session.':'Files are saved to the folder you pick. Each file is named by its date and time.'}</p>
    ${Object.keys(groups).filter(k=>groups[k].length).map(k=>`<div class="row" style="margin:8px 0"><span style="width:120px">${LBL[k]} (${groups[k].length})</span><select data-g="${k}">${OPT[k].map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></div>`).join('')}
@@ -1666,7 +1668,7 @@ function libBatch(move){const l=libChosen();if(!l.length)return;if($('#libBatch'
     renderLib()}}
 async function blobFor(it,fmt){await hydrate(it);
   if(it.kind==='video')return fmt==='mp4'?it.mp4:it.webm;
-  if(it.kind==='audio')return AEdit.renderWav(it);
+  if(it.kind==='audio')return AEdit.renderAs(it,fmt);
   if(fmt==='saveit')return saveitBlob(it);
   if(it.kind==='guide')return fmt==='docx'?await exportDocx(it,true):fmt==='pdf'?await exportPdf(it,true):null;
   const c=exportFor(it);
