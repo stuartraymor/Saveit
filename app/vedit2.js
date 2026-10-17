@@ -363,7 +363,7 @@ function mount(host,it,api){css();HK=api;
   const q=s=>host.querySelector(s),qa=s=>[...host.querySelectorAll(s)],R=n=>q(`[data-r="${n}"]`),prev=q('.vprev'),ov=q('.vov'),tl=q('.vtl');
   const pg=prev.getContext('2d');
   let eng=null,e=null,rt={src:{}},sel=null,inT=0,outT=0,hist=[],fut=[],zdrag=null,zoom=1,L=[],tdrag=null,tsnap=false,otool=null,crop=null,pane='video',odrag=null,playRange=null,dead=false,raf=0,exp=null,tab='clip',rec=null,ready=false;
-  const toast=api.toast;
+  const toast=api.toast,pasteUrls=new Set();let pasteBusy=false;
   const D=()=>Math.max(total(e||{clips:[],aud:[]}),0.1);
   const selVfx=()=>sel&&sel.type==='vfx'?sel.ref:null,selZoom=()=>sel&&sel.type==='zoom'?sel.ref:null,zedit=()=>!!(selZoom()&&tab==='zoom'&&!crop),selOv=()=>sel&&sel.type==='ov'?sel.ref:null,selCap=()=>sel&&sel.type==='cap'?sel.ref:null,selClip=()=>sel&&(sel.type==='clip'||sel.type==='aud')?sel.ref:null;
   const snap=()=>{hist.push(JSON.stringify(e));if(hist.length>100)hist.shift();fut=[]};
@@ -431,7 +431,7 @@ function mount(host,it,api){css();HK=api;
     else if(d.edge===0){ref.t0=clamp(snapT(t,ref),0,ref.t1-.1);eng.seek(ref.t0)}else{ref.t1=Math.max(ref.t0+.1,snapT(t,ref));eng.seek(Math.max(0,ref.t1-.02))}}
   function dragMove(d,t){const ref=d.it.ref,len=d.len;let na=Math.max(0,t-d.off);const s1=snapT(na,ref),s2=snapT(na+len,ref)-len;na=Math.abs(s1-na)<=Math.abs(s2-na)?s1:s2;na=Math.max(0,na);
     if(d.it.type==='clip'||d.it.type==='aud')ref.start=na;else{ref.t0=na;ref.t1=na+len}}
-  tl.addEventListener('pointerdown',ev=>{if(!ready)return;tl.setPointerCapture(ev.pointerId);tsnap=ev.altKey;const x=ev.offsetX,y=ev.offsetY,h=hitTl(x,y);
+  tl.addEventListener('pointerdown',ev=>{if(!ready||ev.button!==0)return;tl.setPointerCapture(ev.pointerId);tsnap=ev.altKey;const x=ev.offsetX,y=ev.offsetY,h=hitTl(x,y);
     if(h.kind==='in'||h.kind==='out'){select(null);playRange=null;tdrag={k:h.kind};return}
     if(h.kind==='edge'){select(h.it.type,h.it.ref);tdrag={k:'edge',it:h.it,edge:h.edge,moved:false};return}
     if(h.kind==='body'){select(h.it.type,h.it.ref);const [a,b]=tget(h.it);tdrag={k:'move',it:h.it,off:tOf(x)-a,len:b-a,moved:false};playRange=null;return}
@@ -448,6 +448,12 @@ function mount(host,it,api){css();HK=api;
   tl.addEventListener('pointerup',()=>{const d=tdrag;tdrag=null;if(d&&d.moved){changed();eng.seek(eng.t);refreshProps();if(d.it&&d.it.type==='cap')caplist();if(d.it&&d.it.type==='ov')ovui();if(d.it&&d.it.type==='vfx')vfxui()}});
   tl.parentElement.addEventListener('wheel',ev=>{if(!ev.ctrlKey||!ready)return;ev.preventDefault();zoom=ev.deltaY<0?Math.min(16,zoom*1.25):Math.max(1,zoom/1.25);if(zoom<1.05)zoom=1;keepHead()},{passive:false});
 
+  tl.oncontextmenu=ev=>api.mediaMenu?.(ev);
+  function insertGap(at,len){for(const key of ['clips','aud']){const right=[];for(const c of e[key]){const end=clipEnd(c);if(c.start>=at)c.start+=len;else if(end>at+.000001){const b=clone(c);b.id=newId(e,key==='clips'?'c':'a');b.a=c.a+(at-c.start)*(c.speed||1);b.start=at+len;b.afi=0;if(b.trans)b.trans={type:'none'};c.b=b.a;c.afo=0;right.push(b)}}e[key].push(...right)}
+    for(const key of ['caps','ovs','zooms','vfx']){const right=[];for(const f of e[key]){if(f.t0>=at){f.t0+=len;f.t1+=len}else if(f.t1>at){const b=clone(f);b.id=newId(e,'i');b.t0=at+len;b.t1+=len;f.t1=at;right.push(b)}}e[key].push(...right)}}
+  async function insertClip(media,mode='stack',at=eng?.t||0){if(!ready||dead||exp||pasteBusy)throw Error('Wait until the video editor is ready.');pasteBusy=true;const url=URL.createObjectURL(media.blob);let committed=false;try{const meta=await loadMeta(url);if(dead)throw Error('The video editor was closed.');eng.pause();at=clamp(at,0,D());snap();if(mode==='insert')insertGap(at,meta.dur);const id=newId(e,'s');e.srcs.push({id,name:media.name||'Pasted video',kind:'video'});it._edBlobs[id]=media.blob;rt.src[id]={url,blob:media.blob,dur:meta.dur,w:meta.w,h:meta.h};pasteUrls.add(url);committed=true;
+    const c={id:newId(e,'c'),src:id,a:0,b:meta.dur,start:at,speed:1,vol:1,mute:false,crop:{l:0,t:0,r:0,b:0},trans:{type:'none'},afi:0,afo:0};e.clips.push(c);eng.sync();outT=D();refreshAll();select('clip',c);changed();eng.seek(at).catch(err=>{if(!dead)toast(err.message)});return c
+   }finally{pasteBusy=false;if(!committed)URL.revokeObjectURL(url)}}
   // ----- editing actions -----
   function removeSpan(a,b){const gap=b-a;if(gap<=0)return;
     for(const key of ['clips','aud']){const out=[];for(const c of e[key]){const s=c.start,en=clipEnd(c),sp=c.speed||1;
@@ -700,6 +706,7 @@ function mount(host,it,api){css();HK=api;
     finally{exp=null;bar.hidden=true;stopB.hidden=true;try{eng.seek(0)}catch(_){}}}
   // ----- keys -----
   const key=ev=>{if(dead||!ready||!host.isConnected||!host.offsetParent||document.querySelector('.modal'))return;if(ev.target.matches&&ev.target.matches('input,select,textarea,[contenteditable],[contenteditable] *'))return;const k=ev.key.toLowerCase();if(crop&&(k==='enter'||k==='escape')){cropStop(k==='enter');ev.preventDefault();ev.stopPropagation();return}
+    if((ev.ctrlKey||ev.metaKey)&&!ev.altKey&&k==='v'){ev.preventDefault();ev.stopPropagation();api.pasteMedia?.(ev.shiftKey?'insert':'stack');return}
     if((ev.ctrlKey||ev.metaKey)&&!ev.altKey&&(k==='z'||k==='y')){ev.preventDefault();if(k==='y'||ev.shiftKey)act.redo();else act.undo()}
     else if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
     else if(k==='home'){ev.preventDefault();eng.pause();eng.seek(0)}else if(k==='end'){ev.preventDefault();eng.pause();eng.seek(D())}
@@ -736,8 +743,14 @@ function mount(host,it,api){css();HK=api;
   raf=requestAnimationFrame(tick);
   // 8.0: the side panel shows one view at a time (video, effects or drawing tools); the editor's toolbar buttons pick it.
   const showPane=k=>{if(crop&&k!=='video')cropStop(true);pane=k;qa('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==k);if(k==='effects'&&e)refreshProps()};
-  return{info:q('.vinfo'),video:prev,pane:k=>{if(k)showPane(k);return pane},tool:t=>{if(t!==undefined){if(crop)cropStop(true);otool=t;if(!otool&&sel&&sel.type==='ov')select(null);ovui()}return otool},destroy(){dead=true;fitObs.disconnect();cancelAnimationFrame(raf);document.removeEventListener('keydown',key,true);if(exp)exp.cancel=true;try{rec&&rec.mr.stop()}catch(_){}if(eng)eng.destroy()},saveGif:()=>run('gif'),needsRender:()=>!!(e&&eng&&(eng.hasCam()||(e.look&&(lookOf(e).layout!=='full'||lookOf(e).bg!=='black'))||isEdited())),isEdited:()=>!!(e&&eng&&isEdited()),duration:()=>D(),
+  return{insertClip,get time(){return eng?.t||0},pause:()=>eng?.pause(),seek:t=>eng?.seek(t),undo:()=>act.undo(),redo:()=>act.redo(),info:q('.vinfo'),video:prev,pane:k=>{if(k)showPane(k);return pane},tool:t=>{if(t!==undefined){if(crop)cropStop(true);otool=t;if(!otool&&sel&&sel.type==='ov')select(null);ovui()}return otool},destroy(){dead=true;fitObs.disconnect();cancelAnimationFrame(raf);document.removeEventListener('keydown',key,true);if(exp)exp.cancel=true;try{rec&&rec.mr.stop()}catch(_){}if(eng)eng.destroy();pasteUrls.forEach(url=>URL.revokeObjectURL(url))},saveGif:()=>run('gif'),needsRender:()=>!!(e&&eng&&(eng.hasCam()||(e.look&&(lookOf(e).layout!=='full'||lookOf(e).bg!=='black'))||isEdited())),isEdited:()=>!!(e&&eng&&isEdited()),duration:()=>D(),
     renderBlob:async()=>{if(exp)throw new Error('An export is already running.');exp={cancel:false};eng.pause();const bar=R('prog'),fill=bar.firstElementChild,stopB=q('[data-a="stop"]');bar.hidden=false;stopB.hidden=false;fill.style.width='0';
       try{return await eng.exportRun((e.W&~1)||2,(e.H&~1)||2,p=>{fill.style.width=Math.round(p*100)+'%'},exp)}finally{exp=null;bar.hidden=true;stopB.hidden=true;try{await eng.seek(0)}catch(_){}}},grab:()=>eng?eng.snapshot(e.W,e.H):null,getProject:()=>e}}
-root.VEdit={mount,pack,Core:{clipLen,clipEnd,total,ensureProject,makeEngine}};
+// Copy edited Library videos as they currently look/sound, without opening them in the destination editor.
+async function copyClip(item,api,onProgress){const source=item.mp4||item.webm||item.blob;if(!item.edit)return source;const previousHK=HK,copyHK={...HK,...api};HK=copyHK;const urls=[],urlFor=blob=>{const u=URL.createObjectURL(blob);urls.push(u);return u};let engine=null;
+  try{const url=urlFor(item.blob),meta=await loadMeta(url),temp={...item,edit:clone(item.edit)},e=ensureProject(temp,meta),rt={src:{}};
+    for(const s of e.srcs){let blob=s.self?item.blob:item._edBlobs?.[s.id];if(!blob&&s.itemId){const other=api.itemById(s.itemId);if(other){await api.hydrate(other);blob=other.blob}}if(!blob)throw Error('A source clip for this edited video could not be found.');const u=s.self?url:urlFor(blob),m=await loadMeta(u,s.kind==='audio');rt.src[s.id]={url:u,blob,dur:m.dur,w:m.w,h:m.h}}
+    engine=makeEngine({e,rt});const result=await engine.exportRun((e.W&~1)||2,(e.H&~1)||2,onProgress,{cancel:false});return result.mp4||result.webm
+  }finally{engine?.destroy();urls.forEach(u=>URL.revokeObjectURL(u));if(HK===copyHK)HK=previousHK}}
+root.VEdit={mount,pack,copyClip,Core:{clipLen,clipEnd,total,ensureProject,makeEngine}};
 })(window);
