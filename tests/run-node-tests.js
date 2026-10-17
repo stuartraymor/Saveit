@@ -10,5 +10,8 @@ for(const f of fs.readdirSync(APP).filter(f=>f.endsWith('.html'))){const h=fs.re
 {const h=fs.readFileSync(path.join(APP,'index.html'),'utf8');for(const m of h.matchAll(/<script src="([^"]+)"/g)){fs.existsSync(path.join(APP,m[1]))?ok('exists: '+m[1]):bad('missing script '+m[1])}}
 // line endings stay as they were (these files are CRLF in the repository)
 for(const f of ['main.js','preload.js']){const s=fs.readFileSync(path.join(APP,f),'latin1'),lf=(s.match(/[^\r]\n/g)||[]).length;lf?bad(f+' has '+lf+' LF-only lines (should be CRLF)'):ok('CRLF kept: '+f)}
+// version numbers follow VERSIONING.md and every file agrees
+{const V=require('../tools/version.js');try{const c=V.check();c.bad.length?c.bad.forEach(b=>bad('version '+c.cur+' but '+b.f+' says '+b.v)):ok('version '+c.cur+' in every file');
+  const want={'10.0.0':'10.0.1','10.0.11':'10.0.12','10.0.12':'10.1.0','10.12.12':'11.0.0'},wrong=Object.keys(want).filter(k=>V.next(k)!==want[k]);wrong.length?bad('version rule wrong for '+wrong):ok('version rule')}catch(e){bad('version: '+e.message)}}
 try{console.log(cp.execFileSync(process.execPath,[path.join(__dirname,'stitch.test.js')]).toString().trim());ok('stitch tests')}catch(e){bad('stitch tests\n'+(e.stdout||'')+(e.stderr||''))}
 console.log(fail?`\n${fail} FAILED`:'\nALL NODE TESTS PASSED');process.exit(fail?1:0);
