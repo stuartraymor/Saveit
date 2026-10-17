@@ -2499,7 +2499,7 @@ function syncZoomBox(){const i=$('#zPct');if(!i||document.activeElement===i)retu
  const st=document.createElement('style');st.textContent=`.zoombox{gap:6px}.zc{display:flex;align-items:stretch;height:32px;border:1px solid var(--line);border-radius:7px;background:var(--panel-2);overflow:hidden}
   .zc input{width:44px;border:0;background:transparent;color:var(--fg);font:inherit;font-family:var(--f-mono);font-size:12px;text-align:right;padding:0 4px;outline:none}.zc input:focus{background:var(--panel)}
   .zspin{display:flex;flex-direction:column;border-left:1px solid var(--line)}.zc button{border:0;background:transparent;color:var(--muted);padding:0;cursor:pointer;line-height:1}
-  .zspin button{flex:1;width:16px;font-size:7px}.zc button:hover:not(:disabled){color:var(--fg);background:var(--panel)}#zMenu{width:20px;border-left:1px solid var(--line);font-size:11px}.zc button:disabled{opacity:.35;cursor:default}`;document.head.append(st);
+  .zspin button{flex:1;width:16px;font-size:7px}.zc button:hover:not(:disabled){color:var(--fg);background:var(--panel)}#zMenu{width:20px;border-left:1px solid var(--line);font-size:11px}.zc button:disabled{opacity:.35;cursor:default}.vmode .zoombox{display:none}`;document.head.append(st);
  const pct=()=>Math.round(scale()*100),inp=$('#zPct');
  $('#zIn').onclick=e=>{e.preventDefault();zoomAtCentre((ZOOM_STEPS.find(v=>v>pct())||800)/100)};$('#zOut').onclick=e=>{e.preventDefault();zoomAtCentre(([...ZOOM_STEPS].reverse().find(v=>v<pct())||10)/100)};
  $('#zMenu').onclick=e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();menuAt(r.right-180,r.bottom+4,'Zoom',[['Fit to window',()=>{const z=$('#zoom');z.value='fit';z.dispatchEvent(new Event('change'))}],null,...[25,50,75,100,150,200,400,800].map(p=>[p+'%',()=>zoomAtCentre(p/100)])])};
@@ -2546,7 +2546,11 @@ function sync80(){const c=vctl80(),pane=c?c.pane():null,img=S.cur?.kind==='image
   for(const [b,v] of on){b.classList.toggle('on80',v);b.setAttribute('aria-pressed',v)}
   // Grey out whichever of Image / Video doesn't match what is open in the viewer.
   image34.disabled=!img;vidBtn80.disabled=!c;
-  const cur=c?(pane==='tools'?c.tool():null):S.tool;document.querySelectorAll('#rail .tool[data-t]').forEach(b=>{if(b!==image34)b.setAttribute('aria-pressed',b.dataset.t===cur)})}
+  const cur=c?(pane==='tools'?c.tool():null):S.tool;document.querySelectorAll('#rail .tool[data-t]').forEach(b=>{if(b===image34)return;b.setAttribute('aria-pressed',b.dataset.t===cur);
+    // 10.0.11: tools that do not apply to a video are greyed out, with the reason in their tooltip
+    const off=!!c&&!VIDEO_TOOLS80.includes(b.dataset.t);
+    if(off){if(!b.dataset.vdis){b.dataset.vdis='1';b.dataset.t0=b.title;b.title=(b.dataset.t0||label(b.dataset.t))+' (works on images, not on a video)'}b.disabled=true}
+    else if(!off&&b.dataset.vdis){delete b.dataset.vdis;b.disabled=false;b.title=b.dataset.t0||b.title;delete b.dataset.t0}})}
 function videoPane80(k){const c=vctl80();if(!c)return;c.pane(k);sync80()}
 const setTool79=setTool;
 setTool=function(t){const c=vctl80();
@@ -2569,7 +2573,10 @@ sync80();
 // 10.0.3: the top-bar Undo / Redo buttons use the history of the audio or video editor that is open (Ctrl+Z already did)
 {const hist103=(k)=>()=>{const it=S.cur,c=it?.kind==='audio'?(typeof aud!=='undefined'&&aud?aud.ctl:null):it?.kind==='video'?(vid&&vid._ctl):null;if(c&&c[k]){c[k]();return}(k==='undo'?undo:redo)()};$('#undoBtn').onclick=hist103('undo');$('#redoBtn').onclick=hist103('redo')}
 // 10.0.3: the top bar follows what is open. Opening an audio, video or image item switches Image | Video | Audio to match (not while recording).
-{const open103=openItem;openItem=function(it){const r=open103.apply(this,arguments);try{const m=it&&(it.kind==='audio'||it.kind==='video'||it.kind==='image')?it.kind:null;if(m&&S.mode!==m&&!rec)setMode98(m)}catch(e){}return r}}
+{const open103=openItem;openItem=function(it){const r=open103.apply(this,arguments);try{const m=it&&(it.kind==='audio'||it.kind==='video'||it.kind==='image')?it.kind:null;if(m&&S.mode!==m&&!rec)setMode98(m)}catch(e){}
+  // 10.0.11: a video's controller is ready a moment after it opens, so re-check which tools apply until it is
+  if(it&&it.kind==='video'){let n=0;const t=setInterval(()=>{try{sync80()}catch(e){}if(++n>40||(vctl80()&&n>3))clearInterval(t)},100)}
+  return r}}
 // Saveit 9.0: editor workflow. Selecting and moving in the Image tab, rotate/flip/crop that keep objects separate,
 // groups and layer order, and pixel tools that work on the picture you see. Loaded after the main editor script.
 (()=>{

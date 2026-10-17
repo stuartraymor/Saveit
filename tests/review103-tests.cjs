@@ -40,4 +40,12 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
   assert.deepEqual(r[1],['Microphone']);assert.deepEqual(r[2],['Mic 1','Mic 2']);
   const hint=await ev(async()=>{const it=__T.addAudio([{name:'Microphone',blob:await QA.toneWav([300],1),vol:1,mute:false,solo:false}],'pan');await QA.until(()=>__T.S.cur===it&&__T.audio?.getProject?.());await new Promise(r=>setTimeout(r,300));const e=document.querySelector('.alane .arow .hint');return[e.textContent,e.title,e.getAttribute('aria-label')]});
   assert.deepEqual(hint,['Pan C','Pan: centre','Pan: centre'])});
+ await test('10.0.11: in a video, tools that do not apply are greyed out with the reason; the Zoom box is hidden; an image brings everything back',async()=>{
+  await ev(async()=>{await QA.openVideo(1)});await page.waitForFunction(()=>document.querySelector('#rail .tool[data-t="fill"]')?.disabled===true,null,{timeout:8000}).catch(async e=>{throw new Error('not greyed: '+JSON.stringify(await ev(()=>({kind:__T.S.cur&&__T.S.cur.kind,mode:__T.S.mode,tool:__T.S.tool,ctl:!!(__T.vid&&__T.vid._ctl),pane:__T.vid&&__T.vid._ctl&&__T.vid._ctl.pane&&__T.vid._ctl.pane(),rail:[...document.querySelectorAll('#rail .tool[data-t]')].map(b=>b.dataset.t+':'+(b.disabled?1:0)+(b.dataset.vdis?'v':'')+'@'+b.getAttribute('aria-pressed')).join(' ')}))))});
+  const state=()=>ev(()=>{const o={};for(const b of document.querySelectorAll('#rail .tool[data-t]'))o[b.dataset.t]={off:b.disabled,title:b.title};return{tools:o,zoom:getComputedStyle(document.querySelector('.zoombox')).display}});
+  let v=await state();for(const t of ['selection','callout','pen','spotlight','magnify','fill','erase','cutout','simplify','crop','ocr'])assert.equal(v.tools[t].off,true,t+' should be off in a video');
+  for(const t of ['select','arrow','rect','ellipse','line','highlight','text','step','stamp','blur'])assert.equal(v.tools[t].off,false,t+' should work in a video');
+  assert.match(v.tools.fill.title,/works on images/);assert.equal(v.zoom,'none');
+  await ev(()=>__T.openItem(__T.S.items.find(i=>i.kind==='image')));await page.waitForTimeout(400);
+  v=await state();for(const t of Object.keys(v.tools))assert.equal(v.tools[t].off,false,t+' is back on for an image');assert.ok(!/works on images/.test(v.tools.fill.title),'title restored: '+v.tools.fill.title);assert.notEqual(v.zoom,'none')});
  console.log(JSON.stringify({passed:results.filter(Boolean).length,failed:results.filter(x=>!x).length,errors}));await browser.close();process.exit(results.includes(0)||errors.length?1:0)})();
