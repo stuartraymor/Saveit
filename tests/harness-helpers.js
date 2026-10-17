@@ -28,6 +28,15 @@ window.QA={
   overlaps(){const top=document.querySelector('.top');const els=[...top.querySelectorAll('button,select,label,input')].filter(e=>e.offsetParent&&(!e.closest('label')||e.tagName==='LABEL'));const box=e=>e.getBoundingClientRect(),nm=e=>(e.id||e.textContent.trim().slice(0,14)||e.className).replace(/\s+/g,' ');const hits=new Set();
     for(let i=0;i<els.length;i++)for(let j=i+1;j<els.length;j++){const a=els[i],b=els[j];if(a.contains(b)||b.contains(a))continue;const A=box(a),B=box(b);if(Math.min(A.right,B.right)-Math.max(A.left,B.left)>3&&Math.min(A.bottom,B.bottom)-Math.max(A.top,B.top)>3)hits.add(nm(a)+' X '+nm(b))}
     return{w:innerWidth,hits:[...hits],offscreen:els.filter(e=>box(e).right>innerWidth+1).map(nm)}},
+  // every visible control in a capture bar, measured from its logo: used to check the widget matches the top bar
+  barLayout(root){root=typeof root==='string'?document.querySelector(root):root;const logo=root.querySelector('.brand i').getBoundingClientRect();
+    const name=e=>(e.id==='widgetBtn'||e.id==='ed'?'[Widget/Editor]':e.id==='capBtn'||e.id==='ok'?'[Capture]':(e.getAttribute('aria-label')||e.textContent||e.title||e.tagName).trim().replace(/\s+/g,' ').slice(0,28));
+    return [...root.querySelectorAll('button,select,input[type=checkbox],canvas.ameter')].filter(e=>e.offsetParent!==null&&e.getBoundingClientRect().width>0).map(e=>{const r=e.getBoundingClientRect();return{n:name(e),x:Math.round(r.left-logo.left),y:Math.round(r.top-logo.top),w:Math.round(r.width),h:Math.round(r.height)}})},
   results:[],
   check(name,ok,detail){QA.results.push({name,ok:!!ok,detail:detail===undefined?'':detail});return !!ok},
 };
+// A WAV with three one-second tones (300, 500, 700 Hz), so cuts can be checked by pitch.
+QA.toneWav=async(freqs=[300,500,700],sec=1)=>{const sr=48000,off=new OfflineAudioContext(1,sr*sec*freqs.length,sr);freqs.forEach((f,i)=>{const o=off.createOscillator();o.frequency.value=f;o.connect(off.destination);o.start(i*sec);o.stop((i+1)*sec)});return AEdit.wav(await off.startRendering())};
+// pitch (Hz) of an audio buffer between two times, by counting zero crossings
+QA.pitch=(buf,t0,t1)=>{const d=buf.getChannelData(0),a=Math.floor(t0*buf.sampleRate),b=Math.floor(t1*buf.sampleRate);let z=0;for(let i=a+1;i<b;i++)if((d[i-1]<0)!==(d[i]<0))z++;return Math.round(z/2/(t1-t0))};
+QA.savedWav=async()=>AEdit.decode(new Blob([__saved[__saved.length-1].data],{type:'audio/wav'}));
