@@ -49,7 +49,8 @@ function smart(base,x,y){const W=base.width,H=base.height,img=gd(base).getImageD
 // Simplify: soften fine detail, reduce colours, optionally outline edges and shrink the resolution.
 function simplify(base,o){const W=base.width,H=base.height,out=mk(W,H),g=out.getContext('2d');
   const blur=(o.detail||0)/100*2.5;g.imageSmoothingQuality='high';
-  if(o.scale&&o.scale<100){const k=o.scale/100,t=mk(Math.max(1,Math.round(W*k)),Math.max(1,Math.round(H*k)));const tg=t.getContext('2d');tg.imageSmoothingQuality='high';tg.drawImage(base,0,0,t.width,t.height);g.imageSmoothingEnabled=true;g.drawImage(t,0,0,W,H)}else g.drawImage(base,0,0);
+  const tw=o.width??Math.max(1,Math.round(W*(o.scale||100)/100)),th=o.height??Math.max(1,Math.round(H*(o.scale||100)/100));
+  if(tw!==W||th!==H){const t=mk(tw,th);const tg=t.getContext('2d');tg.imageSmoothingQuality='high';tg.drawImage(base,0,0,t.width,t.height);g.imageSmoothingEnabled=true;g.drawImage(t,0,0,W,H)}else g.drawImage(base,0,0);
   if(blur>0.05){const t=mk(W,H);t.getContext('2d').drawImage(out,0,0);g.clearRect(0,0,W,H);g.filter=`blur(${blur}px)`;g.drawImage(t,0,0);g.filter='none'}
   const L=Math.max(2,Math.min(32,o.levels||32));
   if(L<32||o.outline){const img=g.getImageData(0,0,W,H),d=img.data,step=255/(L-1);
