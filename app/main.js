@@ -327,6 +327,19 @@ ipcMain.on('rec-ui', (e, on, info, extra) => {
   closeRecWins();
   if (!on) { showWindow(); return; }
   const d = activeDisplay();
+  // 9.9: audio recording: only the small recording bar (timer, a live bar per track, Pause, Stop), centred at the top.
+  if (extra && extra.audio) {
+    if (win) win.hide();
+    const names = Array.isArray(extra.tracks) ? extra.tracks.slice(0, 3).map(s => String(s).slice(0, 60)) : [];
+    const W = 300 + names.length * 64, H = 48, x = Math.round(d.bounds.x + d.bounds.width / 2 - W / 2), y = d.bounds.y + 12;
+    const rb = new BrowserWindow({ x, y, width: W, height: H, frame: false, backgroundColor: '#16181a', alwaysOnTop: true, skipTaskbar: true, resizable: false, hasShadow: false, show: false,
+      webPreferences: { preload: asset('recbar-preload.js'), contextIsolation: true } });
+    rb.setAlwaysOnTop(true, 'screen-saver');
+    rb.loadFile(asset('recbar.html'), { query: { audio: '1', tracks: JSON.stringify(names), countdown: String(Math.max(0, Math.min(10, +extra.countdown || 0))) } });
+    rb.once('ready-to-show', () => rb.showInactive());
+    recWins.push(rb);
+    return;
+  }
   const region = info && info.w ? info : null;
   // Full-screen recordings say which display they record; use it rather than the display the pointer is on.
   const area = region || (info && info.display && info.display.w ? info.display : { x: d.bounds.x, y: d.bounds.y, w: d.bounds.width, h: d.bounds.height });
@@ -377,6 +390,7 @@ ipcMain.on('rec-cmd', (e, c) => {
   if (c === 'stop') setTimeout(() => { if (recWins.length) { closeRecWins(); showWindow(); } }, 4000);
 });
 ipcMain.on('rec-state', (e, st) => { for (const w of recWins) if (!w.isDestroyed()) w.webContents.send('state', st); });
+ipcMain.on('rec-level', (e, lv) => { if (!Array.isArray(lv)) return; const v = lv.slice(0, 3).map(x => Math.max(0, Math.min(1, +x || 0))); for (const w of recWins) if (!w.isDestroyed()) w.webContents.send('level', v); });
 
 // ---------- step capture: a screenshot on every click ----------
 let steps = null; // { bar, helper, count, paused, busy, display }
@@ -498,11 +512,11 @@ ipcMain.handle('print-pdf', async (e, html, name) => {
   } finally { pw.destroy(); try { fs.unlinkSync(tmp); } catch (_) { } }
 });
 
-const FILTERS = { pptx:'PowerPoint presentation',saveitbackup:'Saveit library backup',png: 'PNG image', jpg: 'JPEG image', webm: 'WebM video', mp4: 'MP4 video', docx: 'Word document', pdf: 'PDF document', saveit: 'Saveit file', webp: 'WebP image', bmp: 'BMP image', ico: 'Icon', svg: 'SVG picture', html: 'Web page', gif: 'Animated GIF' };
+const FILTERS = { pptx:'PowerPoint presentation',saveitbackup:'Saveit library backup',png: 'PNG image', jpg: 'JPEG image', webm: 'WebM video', mp4: 'MP4 video', docx: 'Word document', pdf: 'PDF document', saveit: 'Saveit file', webp: 'WebP image', bmp: 'BMP image', ico: 'Icon', svg: 'SVG picture', html: 'Web page', gif: 'Animated GIF', wav: 'WAV audio' };
 // 9.01: pick a file path with every file type offered (first one is the default)
 ipcMain.handle('save-pick', async (e, name, exts) => {
   const ext = (exts && exts[0]) || 'png';
-  const dir = ['webm', 'mp4', 'gif'].includes(ext) ? app.getPath('videos') : ['docx', 'pdf', 'saveit','pptx','saveitbackup'].includes(ext) ? app.getPath('documents') : app.getPath('pictures');
+  const dir = ['wav'].includes(ext) ? app.getPath('music') : ['webm', 'mp4', 'gif'].includes(ext) ? app.getPath('videos') : ['docx', 'pdf', 'saveit','pptx','saveitbackup'].includes(ext) ? app.getPath('documents') : app.getPath('pictures');
   const r = await dialog.showSaveDialog(win, { defaultPath: path.join(dir, name + '.' + ext), filters: exts.map(x => ({ name: FILTERS[x] || x.toUpperCase(), extensions: [x] })) });
   if (r.canceled || !r.filePath) return null;
   let fp = r.filePath; const got = path.extname(fp).slice(1).toLowerCase();
@@ -512,7 +526,7 @@ ipcMain.handle('save-pick', async (e, name, exts) => {
 ipcMain.handle('save', async (e, name, buf, target) => {
   if (target) { await fs.promises.writeFile(target, Buffer.from(buf)); return target; }
   const ext = (name.split('.').pop() || 'png').toLowerCase();
-  const dir = ['webm', 'mp4'].includes(ext) ? app.getPath('videos') : ['docx', 'pdf', 'saveit','pptx','saveitbackup'].includes(ext) ? app.getPath('documents') : app.getPath('pictures');
+  const dir = ['wav'].includes(ext) ? app.getPath('music') : ['webm', 'mp4'].includes(ext) ? app.getPath('videos') : ['docx', 'pdf', 'saveit','pptx','saveitbackup'].includes(ext) ? app.getPath('documents') : app.getPath('pictures');
   const r = await dialog.showSaveDialog(win, { defaultPath: path.join(dir, name), filters: [{ name: FILTERS[ext] || ext.toUpperCase(), extensions: [ext] }] });
   if (r.canceled || !r.filePath) return null;
   await fs.promises.writeFile(r.filePath, Buffer.from(buf));

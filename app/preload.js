@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('bench', {
   copyFile: (name, data) => ipcRenderer.invoke('copy-file', name, data),
   recUI: (on, info, extra) => ipcRenderer.send('rec-ui', on, info, extra),
   recState: st => ipcRenderer.send('rec-state', st),
+  recLevel: lv => ipcRenderer.send('rec-level', lv),
   startSteps: delay => ipcRenderer.invoke('steps-start', delay),
   onStepShot: fn => ipcRenderer.on('step-shot', (e, d) => fn(d)),
   onStepInfo: fn => ipcRenderer.on('step-info', (e, d) => fn(d)),

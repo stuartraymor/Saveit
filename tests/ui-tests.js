@@ -76,6 +76,27 @@ async 'Human: toolbar, zoom keys, captions, narrow window'(){const it=fresh('hum
   const ov=QA.overlaps();check('top bar: no controls on top of each other at this window width ('+ov.w+' px)',!ov.hits.length&&!ov.offscreen.length,ov.hits.join('; '));
   await QA.openVideo(2);document.querySelector('[data-tab="caps"]').click();await sleep(80);document.querySelector('[data-a="addcap"]').click();await sleep(120);const ae=document.activeElement;
   check('Add caption puts you straight into typing',ae.tagName==='INPUT'&&ae.type==='text'&&ae.selectionEnd-ae.selectionStart===ae.value.length,ae.tagName+' '+ae.type)},
+async 'Audio: capture bar, two mics, record, mix, library'(){const q=s=>document.querySelector(s),vis=s=>{const e=q(s);return !!e&&e.offsetParent!==null};
+  q('#mAud').click();await sleep(700);
+  check('Audio mode: button says Record audio',q('#capLbl').textContent==='Record audio');
+  check('Audio mode: only audio settings shown',vis('.top .amic[data-n="1"]')&&vis('.top .asys')&&vis('#delay')&&!vis('#area')&&!vis('#curWrap')&&!vis('#clipWrap')&&!vis('#fxWrap'));
+  check('Audio mode: logo only, no Saveit text',!/Saveit/.test(q('.top .brand').textContent));
+  if(!vis('.top .amic[data-n="2"]')){q('.top .aadd').click();await sleep(900)}
+  const s1=q('.top .amic[data-n="1"] select'),s2=q('.top .amic[data-n="2"] select');
+  check('Mic 2 is a different microphone from Mic 1',s2.value&&s2.value!=='micA'&&[...s2.options].filter(o=>o.disabled).length>=1,s1.value+' / '+s2.value);
+  await sleep(300);const lv=[...document.querySelectorAll('.top .ameter')].map(c=>+c.getAttribute('aria-valuenow'));check('Both level bars move while Audio is chosen',lv.length===2&&lv.every(v=>v>0),lv.join(','));
+  const n0=S().items.length;q('#capBtn').click();await sleep(500);check('Recording: button turns into Stop',q('#capLbl').textContent==='Stop');await sleep(1500);q('#capBtn').click();
+  await until(()=>S().items.length>n0,8000);await until(()=>document.querySelectorAll('.alane').length,8000);const it=S().cur;
+  check('Stop opens the new recording in the Audio screen',it.kind==='audio'&&document.querySelectorAll('.alane').length===2,it.kind+' lanes '+document.querySelectorAll('.alane').length);
+  check('Each mic is its own track',it.tracks.length===2&&it.tracks.every(t=>t.blob.size>1000),it.tracks.map(t=>t.name).join(' | '));
+  await sleep(500);check('Mic bars come back after recording',window.__openMics===2,'open mics '+window.__openMics);
+  check('Drawing tools are greyed out on audio',[...document.querySelectorAll('#rail .tool[data-t]')].every(b=>b.disabled));
+  const hz=async()=>{__saved.length=0;await T().save('wav');await until(()=>__saved.length,8000);const b=await AEdit.decode(new Blob([__saved[0].data],{type:'audio/wav'})),d=b.getChannelData(0);let z=0;for(let i=1;i<b.sampleRate;i++)if((d[i-1]<0)!==(d[i]<0))z++;return{hz:Math.round(z/2),dur:b.duration}};
+  it.tracks[1].mute=true;let r=await hz();check('Save WAV with Mic 2 muted has only Mic 1 (440 Hz)',Math.abs(r.hz-440)<15,r.hz+' Hz, '+r.dur.toFixed(2)+' s');
+  it.tracks[1].mute=false;it.tracks[1].solo=true;r=await hz();check('Save WAV with Mic 2 solo has only Mic 2 (660 Hz)',Math.abs(r.hz-660)<15,r.hz+' Hz');it.tracks[1].solo=false;
+  check('Saved WAV length matches the recording',Math.abs(r.dur-it.dur)<0.1,r.dur.toFixed(2)+' vs '+it.dur.toFixed(2));
+  T().openLibrary();await sleep(300);const chip=[...document.querySelectorAll('#libChips button')].find(b=>b.dataset.f==='audio');check('Library has an Audio filter',!!chip&&/Audio · \d+/.test(chip.textContent),chip&&chip.textContent);closeModal();
+  q('#mImg').click();await sleep(300);check('Back to Image: mic bars switch off',window.__openMics===0,'open mics '+window.__openMics);check('Back to Image: Capture button and image settings return',q('#capLbl').textContent==='Capture'&&vis('#area')&&vis('#fxWrap'))},
 async 'Regression: image editing and export'(){const it=fresh('QA regress',640,360,'#2a7');await sleep(150);T().snap();const a=T().newShape('arrow',50,50);a.x2=300;a.y2=200;it.shapes.push(a);T().render();
   const n=it.shapes.length;T().undo();check('Undo removes the arrow',it.shapes.length===n-1);T().redo();check('Redo restores the arrow',it.shapes.length===n);
   __saved.length=0;await T().save('png');await until(()=>__saved.length,5000);const b=new Blob([__saved[0].data],{type:'image/png'}),im=await createImageBitmap(b);check('PNG export has the picture size',im.width===640&&im.height===360,im.width+'x'+im.height);
