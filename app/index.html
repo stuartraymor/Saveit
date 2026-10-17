@@ -362,7 +362,9 @@ async function bootLibrary(){const db=await idb();let metas=await new Promise((r
 }
 
 // ---------- helpers ----------
-function toast(msg,ms=3200){document.querySelectorAll('.toast').forEach(x=>x.remove());const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.setAttribute('aria-live','polite');t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),ms);}
+function toast(msg,ms=3200){document.querySelectorAll('.toast').forEach(x=>x.remove());const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.setAttribute('aria-live','polite');t.textContent=msg;document.body.appendChild(t);if(ms>0)setTimeout(()=>t.remove(),ms);}
+// 10.0.9: "Saved to" message with an Open folder button
+function toastSaved(msg,file,ms=7000){toast(msg,ms);const t=document.querySelector('.toast');if(!t||!file||!window.bench?.revealFile)return;const b=document.createElement('button');b.className='btn';b.textContent='Open folder';b.style.marginLeft='12px';b.onclick=()=>window.bench.revealFile(file);t.appendChild(b)}
 function canvasFrom(src,w,h){const c=document.createElement('canvas');c.width=w||src.naturalWidth||src.videoWidth||src.width;c.height=h||src.naturalHeight||src.videoHeight||src.height;c.getContext('2d').drawImage(src,0,0,c.width,c.height);return c;}
 function nameStamp(){return new Date().toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit'})}
 function stamp(){const d=new Date();return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});}
@@ -902,7 +904,7 @@ function resizeImg(pct,skipSnap){const it=S.cur,k=pct/100;if(!k||k===1)return;if
 function exportCanvas(){const it=S.cur,p=padFor(it.fx),c=document.createElement('canvas');c.width=it.base.width+p*2;c.height=it.base.height+p*2;drawComposite(c.getContext('2d'),it,p,false);return c}
 let dl=null;(async()=>{try{dl=await window.claude?.use?.('downloads')}catch(e){dl=null}})();
 async function saveBlob(blob,name,label){
-  if(window.bench){const tgt=saveTarget9,owner=saveOwner9;saveTarget9=null;saveOwner9=null;try{const r=await window.bench.save(name,await blob.arrayBuffer(),tgt);if(r){toast((label||'Saved to')+' '+r,label?7000:undefined);if(owner&&r===tgt&&owner.savedPath!==r){owner.savedPath=r;persist(owner)}}}catch(e){toast('Could not save the file.')}return}
+  if(window.bench){const tgt=saveTarget9,owner=saveOwner9;saveTarget9=null;saveOwner9=null;try{const r=await window.bench.save(name,await blob.arrayBuffer(),tgt);if(r){toastSaved((label||'Saved to')+' '+r,r,label?7000:6000);if(owner&&r===tgt&&owner.savedPath!==r){owner.savedPath=r;persist(owner)}}else document.querySelectorAll('.toast').forEach(x=>x.remove())}catch(e){toast('Could not save the file.')}return}
   if(dl){try{const r=await dl.save({filename:name,data:blob});toast('Saved '+name);return}catch(e){if(e&&e.code==='declined')return;if(e&&e.code==='rate_limited'){toast('A save prompt is already open.');return}}}
   try{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);}catch(e){toast('Saving is not available in this view.')}
 }
@@ -919,9 +921,11 @@ async function icoBlob(c){const k=Math.min(1,256/Math.max(c.width,c.height)),w=M
   return new Blob([hd,png],{type:'image/x-icon'})}
 // 9.01: the first Save opens the Windows dialog with every file type (Saveit file first); after that Save writes over the same file.
 let saveTarget9=null,saveOwner9=null;
+// 10.0.9: Save asks once per session per item before it starts writing over the same file
+const sessionSaved34=new Set();
 function saveExts9(it){const k=it.kind==='image'&&it.guide?'image':it.kind,l=(FORMATS[k]||FORMATS.image).map(x=>x[0]);if(it.kind==='video')return l.filter(x=>x==='mp4'?it.mp4:x==='webm'?it.webm:false);if(it.kind==='audio')return l;return['saveit',...l.filter(x=>x!=='saveit')]}
 async function save(fmtArg){const it=S.cur;if(!it)return;commitText();saveTarget9=null;saveOwner9=null;let fmt=typeof fmtArg==='string'?fmtArg:$('#fmt').value;
-  if(typeof fmtArg!=='string'&&window.bench?.savePick){let p=it.savedPath;if(!p){p=await window.bench.savePick(baseName(it),saveExts9(it));if(!p)return}fmt=p.split('.').pop().toLowerCase();saveTarget9=p;saveOwner9=it}
+  if(typeof fmtArg!=='string'&&window.bench?.savePick){let p=it.savedPath;if(!p||!sessionSaved34.has(it.id)){const ex=saveExts9(it),pe=p?p.split('.').pop().toLowerCase():'';if(pe&&ex.includes(pe)){ex.splice(ex.indexOf(pe),1);ex.unshift(pe)}p=await window.bench.savePick(p?p.replace(/\.[^.\\]+$/,''):baseName(it),ex);if(!p)return;sessionSaved34.add(it.id)}fmt=p.split('.').pop().toLowerCase();saveTarget9=p;saveOwner9=it}
   if(it.kind==='video'){if(fmt==='gif'){saveTarget9=null;saveOwner9=null;if(vid&&vid._ctl)vid._ctl.saveGif();return}const ctl97=vid&&vid._ctl;if(ctl97&&ctl97.needsRender&&ctl97.needsRender()){const tgt=saveTarget9,own=saveOwner9,len=ctl97.duration?ctl97.duration():0,lenT=len?' ('+Math.floor(len/60)+':'+String((len%60).toFixed(1)).padStart(4,'0')+')':'';saveTarget9=null;saveOwner9=null;
     toast('Saving your edited video'+lenT+'… keep this window open and in front. It takes as long as the video. Cancel is in Export.',9000);
     (async()=>{try{const o=await ctl97.renderBlob();if(!o){toast('Save cancelled. Nothing was written.',5000);return}const b2=fmt==='mp4'?o.mp4:(o.webm||o.mp4);if(!b2){toast('MP4 could not be made here. Choose WebM.',6000);return}saveTarget9=tgt;saveOwner9=own;saveBlob(b2,fileName(fmt),'Saved the edited video'+lenT+' to')}catch(e){toast('Could not save: '+(e.message||e),6000)}})();return}
@@ -1688,7 +1692,7 @@ function renderLib(){const m=$('#libModal');if(!m)return;
 // Save or move several items at once
 function libBatch(move){const l=libChosen();if(!l.length)return;if($('#libBatch'))return;
   const groups={image:l.filter(i=>kindOf(i)==='image'),guide:l.filter(i=>kindOf(i)==='guide'),video:l.filter(i=>kindOf(i)==='video'),audio:l.filter(i=>kindOf(i)==='audio')};
-  const OPT={image:[['png','PNG'],['jpg','JPG'],['webp','WebP'],['bmp','BMP'],['pdf','PDF'],['docx','Word'],['saveit','Saveit file']],guide:[['docx','Word'],['pdf','PDF'],['saveit','Saveit file']],video:[['mp4','MP4'],['webm','WebM']],audio:[['wav','WAV'],['mp3','MP3'],['m4a','M4A']]},LBL={image:'Images',guide:'Guides',video:'Videos',audio:'Audio'};
+  const OPT={image:[['png','PNG'],['jpg','JPG'],['webp','WebP'],['bmp','BMP'],['pdf','PDF'],['docx','Word'],['saveit','Saveit file']],guide:[['docx','Word'],['pdf','PDF'],['pptx','PowerPoint'],['png','PNG'],['jpg','JPG'],['saveit','Saveit file']],video:[['mp4','MP4'],['webm','WebM']],audio:[['wav','WAV'],['mp3','MP3'],['m4a','M4A']]},LBL={image:'Images',guide:'Guides',video:'Videos',audio:'Audio'};
   const m=document.createElement('div');m.className='modal';m.id='libBatch';
   m.innerHTML=`<div class="box" role="dialog" aria-label="${move?'Move':'Save'} items" style="width:min(480px,100%)"><h2>${move?'Move':'Save'} ${l.length} item${l.length>1?'s':''}</h2><p class="hint">${move?'Files are saved to the folder you pick, then removed from the library. You can still use Undo delete in this session.':'Files are saved to the folder you pick. Each file is named by its date and time.'}</p>
    ${Object.keys(groups).filter(k=>groups[k].length).map(k=>`<div class="row" style="margin:8px 0"><span style="width:120px">${LBL[k]} (${groups[k].length})</span><select data-g="${k}">${OPT[k].map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></div>`).join('')}
@@ -1709,7 +1713,8 @@ async function blobFor(it,fmt){await hydrate(it);
   if(it.kind==='video')return fmt==='mp4'?it.mp4:it.webm;
   if(it.kind==='audio')return AEdit.renderAs(it,fmt);
   if(fmt==='saveit')return saveitBlob(it);
-  if(it.kind==='guide')return fmt==='docx'?await exportDocx(it,true):fmt==='pdf'?await exportPdf(it,true):null;
+  if(it.kind==='guide'){if(fmt==='docx')return await exportDocx(it,true);if(fmt==='pdf')return await exportPdf(it,true);if(fmt==='pptx')return await pptx33(it,true);
+    if(fmt==='png'||fmt==='jpg'){const pc=renderPageCanvas(it,2);return new Promise(r=>pc.canvas.toBlob(r,fmt==='png'?'image/png':'image/jpeg',.9))}return null}
   const c=exportFor(it);
   if(fmt==='jpg'){const j=document.createElement('canvas');j.width=c.width;j.height=c.height;const g=j.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,j.width,j.height);g.drawImage(c,0,0);return new Promise(r=>j.toBlob(r,'image/jpeg',.92))}
   if(fmt==='webp')return new Promise(r=>c.toBlob(r,'image/webp',.95));
@@ -2053,14 +2058,16 @@ function renderGuideProps(P,g){
     <div class="row"><button class="btn" id="gSteps" title="Capture several steps by clicking">Capture more steps</button><button class="btn" id="gPasteEnd" ${S.stepClip?'':'disabled'} title="Paste the copied step after the last step">Paste at end</button></div>
     <p class="hint">Draw arrows, boxes, text and stamps anywhere on the page with the tools in the ribbon. Markup stays with the step it starts on when steps move.</p></div>
   <div class="grp"><h3>Step numbers</h3><div class="sw">${COLORS.slice(0,8).map(c=>`<button style="background:${c}" data-c="${c}" aria-label="${c}" aria-pressed="${g.numColor===c}"></button>`).join('')}</div></div>
-  <div class="grp"><h3>Save as</h3><div class="row"><button class="btn pri" id="gDocx">Word</button><button class="btn" id="gPdf">PDF</button><button class="btn" id="gJpg">JPG</button><button class="btn" id="gSaveit">Saveit file</button></div>
+  <div class="grp"><h3>Save as</h3><div class="row"><button class="btn pri" id="gDocx">Word</button><button class="btn" id="gPdf">PDF</button><button class="btn" id="gPptx">PowerPoint</button><button class="btn" id="gPng">PNG</button><button class="btn" id="gJpg">JPG</button><button class="btn" id="gSaveit">Saveit file</button></div>
     <p class="hint">Word keeps titles and instructions as editable text, with markup that sits on a screenshot included in that picture. PDF and JPG show the page exactly as you see it. A Saveit file reopens here for more editing.</p></div>
   ${nameGrp({name:g.title})}`;
   P.querySelectorAll('.sw button').forEach(b=>b.onclick=()=>{g.numColor=b.dataset.c;persist(g);renderGuide();renderGuideProps(P,g)});
+  // 10.0.9: the panel is rebuilt after every step, so restore the chosen mode each time
+  {const am=$('#gAddMode');let saved=null;try{saved=localStorage.getItem('saveit.guideAddMode')}catch(e){}am.value=g.addMode||saved||'region';if(!am.value)am.value='region';am.onchange=()=>{g.addMode=am.value;try{localStorage.setItem('saveit.guideAddMode',am.value)}catch(e){}}}
   $('#gAdd').onclick=async()=>{const mode=$('#gAddMode').value;if(!window.bench){$('#file').dataset.guide=g.id;$('#file').click();return}
     try{const u=await window.bench.capture(mode,0);if(!u||u.redirect)return;makeStep(g,await dataUrlCanvas(typeof u==='string'?u:u.url));persist(g);openItem(g);toast('Step added')}catch(e){toast('Capture failed: '+(e.message||e))}};
   $('#gSteps').onclick=()=>{if(!window.bench){toast('Click capture needs the desktop app.');return}startSteps(g)};
-  $('#gDocx').onclick=()=>exportDocx(g);$('#gPdf').onclick=()=>exportPdf(g);$('#gJpg').onclick=()=>exportGuideJpg(g);$('#gSaveit').onclick=()=>saveSaveit(g);
+  $('#gDocx').onclick=()=>exportDocx(g);$('#gPdf').onclick=()=>exportPdf(g);$('#gJpg').onclick=()=>exportGuideJpg(g);$('#gSaveit').onclick=()=>saveSaveit(g);$('#gPptx').onclick=()=>pptx33().catch(actionError);$('#gPng').onclick=()=>{toast('Preparing the PNG\u2026',0);save('png')};
   $('#gPasteEnd').onclick=()=>pasteStep(g,null);
   const n=$('#nm');if(n){n.onchange=()=>{g.title=n.value.trim()||g.title;persist(g);renderGuide()};}
 }
@@ -2135,15 +2142,16 @@ function buildDocx(title,subtitle,sections,numColor){const W='http://schemas.ope
     ['word/_rels/document.xml.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>${rels.join('')}</Relationships>`],
     ...files])}
 const canvasPng=async c=>new Uint8Array(await (await new Promise(r=>c.toBlob(r,'image/png'))).arrayBuffer());
-async function exportDocx(g,asBlob){toast('Building the Word document…',1500);const pc=renderPageCanvas(g,1.5),sections=[];
+async function exportDocx(g,asBlob){if(asBlob!=='sections')toast('Preparing the Word document…',0);const pc=renderPageCanvas(g,1.5),sections=[];
   for(const [i,sec] of pc.sections.entries()){const st=g.steps[i],k=pc.k,r=sec.img;const crop=document.createElement('canvas');
     // the screenshot plus any page markup drawn on it, at full resolution
     const full=exportFor(st),sx=full.width/r.w;crop.width=full.width;crop.height=full.height;const cx=crop.getContext('2d');cx.drawImage(full,0,0);
     cx.save();cx.scale(sx,sx);cx.translate(-r.x,-r.y);cx.beginPath();cx.rect(r.x,r.y,r.w,r.h);cx.clip();paintPageShapes(cx,{...g,pageShapes:g.pageShapes},anchorTops(),false);cx.restore();
     sections.push({heading:'Step '+(i+1),title:st.title,text:st.text,png:await canvasPng(crop),w:crop.width,h:crop.height})}
+  if(asBlob==='sections')return sections; // 10.0.9
   const dx=buildDocx(g.title||'Work instruction',`${g.steps.length} steps · ${new Date().toLocaleDateString()}`,sections,g.numColor);if(asBlob)return dx;saveBlob(dx,safeName(g.title)+'.docx')}
 function safeName(t){return (t||'guide').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-')||'guide'}
-async function exportGuideJpg(g){const pc=renderPageCanvas(g,2);pc.canvas.toBlob(b=>saveBlob(b,safeName(g.title)+'.jpg'),'image/jpeg',.9)}
+async function exportGuideJpg(g){toast('Preparing the JPG\u2026',0);const pc=renderPageCanvas(g,2);pc.canvas.toBlob(b=>saveBlob(b,safeName(g.title)+'.jpg'),'image/jpeg',.9)}
 async function pdfBlob(canvases){const enc=t=>new TextEncoder().encode(t),parts=[],offs=[];let len=0;const push=x=>{parts.push(x);len+=x.length};
   const jpgs=[];for(const c of canvases){const t=document.createElement('canvas');t.width=c.width;t.height=c.height;const g=t.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,t.width,t.height);g.drawImage(c,0,0);jpgs.push(new Uint8Array(await (await new Promise(r=>t.toBlob(r,'image/jpeg',.92))).arrayBuffer()))}
   const n=canvases.length;push(enc('%PDF-1.4\n%âãÏÓ\n'));
@@ -2156,7 +2164,16 @@ async function pdfBlob(canvases){const enc=t=>new TextEncoder().encode(t),parts=
   const xr=len,tot=3*n+3;let x='xref\n0 '+tot+'\n0000000000 65535 f \n';for(let id=1;id<tot;id++)x+=String(offs[id]).padStart(10,'0')+' 00000 n \n';
   push(enc(x+`trailer\n<< /Size ${tot} /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF`));return new Blob(parts,{type:'application/pdf'})}
 async function pdfFromImages(canvases,title,name){toast('Building the PDF…',1500);try{saveBlob(await pdfBlob(canvases),name)}catch(e){toast('Could not build the PDF: '+(e.message||e))}}
-async function exportPdf(g,asBlob){const pc=renderPageCanvas(g,2),k=pc.k,pageH=pc.W*(10/7.5);const out=[];let start=0;
+// 10.0.9: real, searchable text. One block per step that never splits across pages.
+function guideHtml34(g,secs){const e=escH,c=g.numColor||'#e5372a',b64=u=>{let s='';for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s)};
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${e(g.title||'Step guide')}</title><style>@page{size:Letter;margin:.6in}body{font-family:'Segoe UI',Arial,sans-serif;color:#1d2327}h1{font-size:24pt;margin:0 0 4pt}.sub{color:#5b6670;margin:0 0 18pt}.st{break-inside:avoid;page-break-inside:avoid;margin:0 0 18pt}.st h2{font-size:14pt;margin:0 0 6pt}.n{display:inline-block;min-width:22pt;height:22pt;border-radius:11pt;background:${c};color:#fff;text-align:center;line-height:22pt;font-size:11pt;margin-right:8pt}.st p{margin:0 0 6pt;white-space:pre-wrap}.st img{max-width:100%;max-height:7in;border:1px solid #d0d5da}</style></head><body><h1>${e(g.title||'Step guide')}</h1><p class="sub">${g.steps.length} step${g.steps.length===1?'':'s'} \u00b7 ${new Date().toLocaleDateString()}</p>${secs.map((s,i)=>`<div class="st"><h2><span class="n">${i+1}</span>${e(s.title||s.heading)}</h2>${s.text?`<p>${e(s.text)}</p>`:''}<img alt="${e(s.title||s.heading)}" src="data:image/png;base64,${b64(s.png)}"></div>`).join('')}</body></html>`}
+async function exportPdf(g,asBlob){if(!window.bench?.printPdf)return exportPdfImages34(g,asBlob);
+  if(!asBlob)toast('Preparing the PDF\u2026',0);
+  try{const secs=await exportDocx(g,'sections'),html=guideHtml34(g,secs),name=safeName(g.title)+'.pdf';
+    if(asBlob){const buf=await window.bench.printPdf(html,name,true);return new Blob([buf],{type:'application/pdf'})}
+    const r=await window.bench.printPdf(html,name);if(r)toastSaved('Saved to '+r,r);else document.querySelectorAll('.toast').forEach(x=>x.remove())}
+  catch(err){toast('Could not build the PDF: '+(err.message||err),6000)}}
+async function exportPdfImages34(g,asBlob){const pc=renderPageCanvas(g,2),k=pc.k,pageH=pc.W*(10/7.5);const out=[];let start=0;
   const cutAt=y=>{const h=Math.max(1,Math.round((y-start)*k)),c=document.createElement('canvas');c.width=pc.canvas.width;c.height=h;c.getContext('2d').drawImage(pc.canvas,0,-Math.round(start*k));out.push(c);start=y};
   for(const sec of pc.sections){if(sec.bottom-start>pageH&&sec.top>start+1)cutAt(sec.top);while(sec.bottom-start>pageH)cutAt(start+pageH)}
   if(pc.H>start+1)cutAt(pc.H);
@@ -2170,7 +2187,7 @@ function saveitBlob(it){let doc={app:'Saveit',format:1,kind:it.kind,saved:new Da
   else if(it.kind==='guide')Object.assign(doc,{title:it.title,numColor:it.numColor,pageShapes:it.pageShapes||[],steps:it.steps.map(st=>({id:st.id,title:st.title,text:st.text,png:st.base.toDataURL('image/png'),shapes:st.shapes,fx:st.fx}))});
   else return null;
   return new Blob([JSON.stringify(doc)],{type:'application/json'})}
-async function saveSaveit(it){toast('Saving…',1200);const blob=saveitBlob(it);if(!blob){toast('Recordings save as MP4 or WebM.');return}
+async function saveSaveit(it){toast('Saving…',0);const blob=saveitBlob(it);if(!blob){toast('Recordings save as MP4 or WebM.');return}
   const name=(it.kind==='guide'?safeName(it.title):fileName('x').replace(/\.x$/,''))+(window.bench?'.saveit':'.saveit.json');
   saveBlob(blob,name)}
 async function openSaveit(f){try{const d=JSON.parse(await f.text());if(d.app!=='Saveit')throw 0;
@@ -2236,7 +2253,7 @@ const bar33=document.createElement('div');bar33.className='workflow-bar';bar33.i
 document.addEventListener('keydown',e=>{if(textTarget(e.target)||editing||document.querySelector('.modal'))return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='p'){e.preventDefault();e.stopImmediatePropagation();print33().catch(actionError)}},true);
 loadWorkflows33().catch(actionError);
 quickMark33=async function(url,preset){const result=await window.bench.quickMarkup(url);if(!result)return;const c=await dataUrlCanvas(result.url);addImage(c,'Quick markup '+stamp());if(result.action==='copy')await window.bench.copyImage(result.url);if(preset.folder)await window.bench.workflowSaveFile(preset.folder,'quick-'+Date.now()+'.png',await (await new Promise(r=>c.toBlob(r))).arrayBuffer())};
-let pptxLoading33=null;async function pptx33(){if(!S.cur)return;const it=await hydrate(S.cur);if(it.kind==='video'||it.kind==='audio'){toast('Open an image or step guide for PowerPoint export.');return}if(!pptxLoading33)pptxLoading33=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='pptxgen.bundle.js';script.onload=resolve;script.onerror=()=>reject(Error('PowerPoint library could not be loaded.'));document.head.append(script)});await pptxLoading33;const Constructor=window.pptxgen||window.PptxGenJS,ppt=new Constructor();ppt.layout='LAYOUT_WIDE';ppt.author='Saveit';ppt.subject='Editable guide export';ppt.title=itemName(it);const title=ppt.addSlide();title.background={color:'163B36'};title.addText(itemName(it),{x:.7,y:2,w:12,h:2,fontFace:'Segoe UI',fontSize:34,bold:true,color:'FFFFFF',breakLine:false});const steps=it.kind==='guide'?it.steps:[it];for(let i=0;i<steps.length;i++){const st=steps[i];await readyShapes(st.shapes);const c=exportFor(st),slide=ppt.addSlide();slide.addText(st.title||'Step '+(i+1),{x:.5,y:.25,w:12.3,h:.65,fontFace:'Segoe UI',fontSize:26,bold:true,color:'173C36'});const maxW=12.3,maxH=4.9,k=Math.min(maxW/c.width,maxH/c.height),w=c.width*k,h=c.height*k;slide.addImage({data:c.toDataURL(),x:(13.333-w)/2,y:1.05+(maxH-h)/2,w,h,altText:st.title||'Step '+(i+1)});slide.addText(st.text||'',{x:.6,y:6.15,w:12.1,h:1,fontFace:'Segoe UI',fontSize:16,color:'263744',valign:'top',fit:'shrink'});slide.addNotes(st.text||'')}const blob=await ppt.write({outputType:'blob',compression:true});await saveBlob(blob,baseName(it)+'.pptx')}
+let pptxLoading33=null;async function pptx33(forItem,asBlob){const src=forItem||S.cur;if(!src)return;const it=await hydrate(src);if(!asBlob)toast('Preparing the PowerPoint\u2026',0);if(it.kind==='video'||it.kind==='audio'){toast('Open an image or step guide for PowerPoint export.');return}if(!pptxLoading33)pptxLoading33=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='pptxgen.bundle.js';script.onload=resolve;script.onerror=()=>reject(Error('PowerPoint library could not be loaded.'));document.head.append(script)});await pptxLoading33;const Constructor=window.pptxgen||window.PptxGenJS,ppt=new Constructor();ppt.layout='LAYOUT_WIDE';ppt.author='Saveit';ppt.subject='Editable guide export';ppt.title=itemName(it);const title=ppt.addSlide();title.background={color:'163B36'};title.addText(itemName(it),{x:.7,y:2,w:12,h:2,fontFace:'Segoe UI',fontSize:34,bold:true,color:'FFFFFF',breakLine:false});const steps=it.kind==='guide'?it.steps:[it];for(let i=0;i<steps.length;i++){const st=steps[i];await readyShapes(st.shapes);const c=exportFor(st),slide=ppt.addSlide();slide.addText(st.title||'Step '+(i+1),{x:.5,y:.25,w:12.3,h:.65,fontFace:'Segoe UI',fontSize:26,bold:true,color:'173C36'});const maxW=12.3,maxH=4.9,k=Math.min(maxW/c.width,maxH/c.height),w=c.width*k,h=c.height*k;slide.addImage({data:c.toDataURL(),x:(13.333-w)/2,y:1.05+(maxH-h)/2,w,h,altText:st.title||'Step '+(i+1)});slide.addText(st.text||'',{x:.6,y:6.15,w:12.1,h:1,fontFace:'Segoe UI',fontSize:16,color:'263744',valign:'top',fit:'shrink'});slide.addNotes(st.text||'')}const blob=await ppt.write({outputType:'blob',compression:true});if(asBlob)return blob;await saveBlob(blob,baseName(it)+'.pptx')}
 const editBtn33=document.createElement('button');editBtn33.className='btn';editBtn33.id='editMenu33';editBtn33.textContent='Edit ▾';editBtn33.onclick=e=>{if(S.cur?.kind!=='image'){toast('Open an image first.');return}const r=e.target.getBoundingClientRect();menuAt(r.left,r.bottom,'Editing tools',[
  ['Edit captured text…',()=>ocrEditor33(false)],['Redact sensitive text…',()=>ocrEditor33(true)],['My annotation styles',styles33],['My stamps',stamps33],['Group selection',()=>group33(),'',selectedShapes().length>1],['Ungroup selection',()=>group33(true),'',selectedShapes().length>0],['Align left',()=>align33('left'),'',selectedShapes().length>1],['Distribute horizontally',()=>align33('distribute'),'',selectedShapes().length>2]])};workflowBar.prepend(editBtn33);
 const pptxButton33=document.createElement('button');pptxButton33.className='btn';pptxButton33.id='pptx33';pptxButton33.textContent='PowerPoint';pptxButton33.title='Export an image or guide with editable slide text';pptxButton33.onclick=()=>pptx33().catch(actionError);bar33.append(pptxButton33);
