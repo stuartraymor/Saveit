@@ -25,6 +25,6 @@ html=html.slice(0,i)+handle+html.slice(i);
 // record toasts for assertions
 html=html.replace('function toast(msg,ms=3200){','function toast(msg,ms=3200){try{window.__toasts.push(String(msg))}catch(_){}');
 for(const f of ['harness-helpers.js','ui-tests.js'])fs.copyFileSync(path.join(__dirname,f),path.join(OUT,f));
-{const b=html.lastIndexOf('</body>');html=html.slice(0,b)+'<script src="harness-helpers.js"></script>\n<script src="ui-tests.js"></script>\n'+html.slice(b)}
+{const b=html.lastIndexOf('</body>');html=html.slice(0,b)+`<script src="harness-helpers.js?v=${Date.now()}"></script>\n<script src="ui-tests.js?v=${Date.now()}"></script>\n`+html.slice(b)}
 fs.writeFileSync(path.join(OUT,'index.html'),html);
 console.log('harness written to',OUT);

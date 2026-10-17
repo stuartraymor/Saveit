@@ -99,6 +99,11 @@ video.player{max-width:100%;max-height:100%;margin:auto;display:block;background
 .props{grid-area:props;background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:18px}
 .props h3{margin:0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .grp{display:flex;flex-direction:column;gap:9px}
+.top .tleft,.top .optcol{min-width:0}
+.top .capbar .optrow{flex-wrap:wrap!important;row-gap:5px}
+.top .capbar .optcol{grid-template-rows:none!important;grid-auto-rows:auto;height:auto!important}
+.top .capbar .optrow{height:auto!important;min-height:24px}
+.top,.top .tleft{height:auto!important}
 .grp.fxfoot{position:sticky;bottom:-14px;z-index:3;background:var(--panel);padding:10px 0 14px;margin-bottom:-14px;border-top:1px solid var(--line);box-shadow:0 -8px 12px -8px rgba(0,0,0,.45)}
 .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .row > span{min-width:58px;color:var(--muted);font-weight:600}
@@ -487,7 +492,13 @@ function drawComposite(c,it,p,ui){
    const one=(g,s,src)=>{if(s.t==='img'&&flt!=='none'){g.save();g.filter=flt;drawShape(g,s,src);g.restore()}else drawShape(g,s,src)};
    const solo=last>=0&&!(ui&&S.rzHide!=null);
    for(let i=0;i<sh.length;i++){const s=sh[i],skip=s._editing9||s.hidden9;if(solo&&i<last){if(!skip)one(ag,s,acc);continue}if(solo&&i===last)c.drawImage(acc,0,0);if(skip)continue;if(!(ui&&S.rzHide!=null&&S.rzHide===s.id))one(c,s,acc||it.base);if(acc&&!solo&&i<last)one(ag,s,acc)}}
-  if(ui && S.drag && S.drag.preview) drawShape(c,S.drag.preview,it.base);
+  if(ui && S.drag && S.drag.preview){const pv=S.drag.preview;
+    // 9.8.1: Blur and Magnify preview what is really under them (pictures are layers now, so the base can be empty),
+    // and every area tool shows a dashed outline while dragging, so you can see exactly where it will apply.
+    if(pv.t==='blur'||pv.t==='magnify'){const pc=prevComp98||(prevComp98=document.createElement('canvas'));if(pc.width!==W||pc.height!==H){pc.width=W;pc.height=H}const pg=pc.getContext('2d');pg.clearRect(0,0,W,H);
+      if(f.bg){pg.fillStyle=f.bg;pg.fillRect(0,0,W,H)}if(flt!=='none')pg.filter=flt;pg.drawImage(it.base,0,0);pg.filter='none';for(const s of it.shapes){if(s.hidden9||s._editing9)continue;if(s.t==='img'&&flt!=='none'){pg.save();pg.filter=flt;drawShape(pg,s,pc);pg.restore()}else drawShape(pg,s,pc)}
+      c.save();drawShape(c,pv,pc);c.restore()}else drawShape(c,pv,it.base);
+    if(['blur','spotlight','magnify'].includes(pv.t)){const r=norm(pv);if(r.w>1||r.h>1){const lw=1.5/Math.max(.05,scale());c.save();c.lineWidth=lw;c.setLineDash([6*lw,4*lw]);c.strokeStyle='rgba(0,0,0,.75)';c.strokeRect(r.x,r.y,r.w,r.h);c.lineDashOffset=5*lw;c.strokeStyle='#ffffff';c.strokeRect(r.x,r.y,r.w,r.h);c.restore()}}}
   c.restore();
   if(b&&!E&&(inside||bs!=='solid'))strokeBorder(c,f,p,W,H,b,inside,bs);
   if(ui){c.save();c.translate(p,p);drawUI(c,it);c.restore();}
@@ -496,6 +507,7 @@ function setDash(c,s){if(s.dash==='dot')c.setLineDash([.01,s.w*2]);else if(s.das
 function underline(c,lines,x0,top,lh,fs,col){c.save();c.setLineDash([]);c.strokeStyle=col;c.lineWidth=Math.max(1,fs/14);c.lineCap='butt';lines.forEach((l,i)=>{if(!l)return;const x=x0(l),y=top+i*lh+fs*1.05;c.beginPath();c.moveTo(x,y);c.lineTo(x+c.measureText(l).width,y);c.stroke()});c.restore()}
 function shadowOn(c,s){if(s.sh){c.shadowColor='rgba(0,0,0,.35)';c.shadowBlur=Math.max(4,s.w*1.4);c.shadowOffsetX=2;c.shadowOffsetY=3;}}
 let blurTmp94=null;
+let prevComp98=null;
 function drawShape(c,s,base){
   c.save(); c.globalAlpha=s.op??1; c.lineCap='round'; c.lineJoin='round';
   const hasFill=s.fill&&s.fill!=='none';
@@ -1605,6 +1617,7 @@ document.addEventListener('keydown',e=>{
   if(mod&&e.shiftKey&&k==='c'){e.preventDefault();copy();return}
   if(mod&&k==='z'){e.preventDefault();e.shiftKey?redo():undo();return}
   if(mod&&k==='y'){e.preventDefault();redo();return}
+  if(mod&&!e.altKey&&(k==='='||k==='+'||k==='-'||k==='_'||k==='0')&&S.cur?.kind==='image'){e.preventDefault();if(k==='0'){const zs=$('#zoom');zs.value='fit';zs.dispatchEvent(new Event('change'))}else zoomAtCentre(scale()*(k==='-'||k==='_'?1/1.25:1.25));try{syncZoomBox()}catch(_){}return}
   if(mod&&k==='s'){e.preventDefault();save();return}
   if(mod&&k==='a'&&S.tool==='select'&&S.cur&&S.cur.kind==='image'){e.preventDefault();S.grp=S.cur.shapes.slice();S.sel=S.grp.length===1?S.grp[0]:null;if(S.grp.length<2)S.grp=[];render();renderProps();return}
   if(mod&&k==='d'){e.preventDefault();dupSel();return}
@@ -2153,7 +2166,7 @@ acts34.replaceChildren(history34,zoom34,clip34,save34,open34,saveAs34,new34);fmt
 // Retain hidden action targets for keyboard/context-menu compatibility.
 for(const id of ['newBtn','templates33']){const b=$('#'+id);b.hidden=true;acts34.append(b)}
 for(const id of ['cropQuick','workflowHelp','workflows33','editMenu33','pptx33'])$('#'+id)?.remove();
-$('#rail [data-t="crop"]')?.remove();
+// 9.8.1: Crop stays on the toolbar, where people look for it (as in Snagit).
 const image34=$('#imageActions');image34.className='tool';image34.dataset.t='image';image34.removeAttribute('aria-haspopup');image34.title='Image: rotate, flip, resize, border and corners (I)';image34.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 6-6 5 5 3-3 4 4"/></svg><span>Image</span>';image34.onclick=()=>{if(S.cur?.kind!=='image'){toast('Open an image first.');return}setTool('image')};
 const rail34=$('#rail');rail34.append($('#fxBtn'),image34);rail34.querySelectorAll(':scope>span').forEach(s=>s.remove());
 const groups34=document.createElement('div');groups34.className='group-tools34';groups34.setAttribute('role','group');groups34.setAttribute('aria-label','Group annotations');groups34.innerHTML='<button class="btn" id="group34" title="Group selected annotations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="20" height="20" rx="2" stroke-dasharray="3 2"/><rect x="6" y="6" width="7" height="7"/><rect x="11" y="11" width="7" height="7"/></svg>Group</button><button class="btn" id="ungroup34" title="Ungroup selected annotations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/><path d="m16 4 4 4m0-4-4 4M4 16l4 4m0-4-4 4"/></svg>Ungroup</button>';
@@ -2301,7 +2314,7 @@ function zoomAtCentre(z){const r=stage.getBoundingClientRect();setViewZoom(z,r.l
 function syncZoomBox(){const i=$('#zPct');if(!i||document.activeElement===i)return;const img=S.cur&&S.cur.kind==='image';i.value=img?Math.round(scale()*100)+'%':'';i.disabled=!img;['zIn','zOut','zMenu'].forEach(id=>$('#'+id).disabled=!img)}
 // Compact zoom control, the size of the old dropdown: type a percentage, nudge with the small arrows, or pick a preset.
 {const zb=document.createElement('label');zb.className='sel zoombox';
- zb.innerHTML='Zoom <span class="zc"><input id="zPct" aria-label="Zoom percentage" title="Type a zoom level (10–800%) and press Enter"><span class="zspin"><button type="button" id="zIn" title="Zoom in" aria-label="Zoom in">▲</button><button type="button" id="zOut" title="Zoom out" aria-label="Zoom out">▼</button></span><button type="button" id="zMenu" title="Zoom presets" aria-label="Zoom presets">▾</button></span>';
+ zb.innerHTML='Zoom <span class="zc"><input id="zPct" aria-label="Zoom percentage" title="Type a zoom level (10–800%) and press Enter"><span class="zspin"><button type="button" id="zIn" title="Zoom in (Ctrl +)" aria-label="Zoom in">▲</button><button type="button" id="zOut" title="Zoom out (Ctrl −)" aria-label="Zoom out">▼</button></span><button type="button" id="zMenu" title="Zoom presets" aria-label="Zoom presets">▾</button></span>';
  zoom34.replaceWith(zb);zoom34.hidden=true;acts34.append(zoom34);
  const st=document.createElement('style');st.textContent=`.zoombox{gap:6px}.zc{display:flex;align-items:stretch;height:32px;border:1px solid var(--line);border-radius:7px;background:var(--panel-2);overflow:hidden}
   .zc input{width:44px;border:0;background:transparent;color:var(--fg);font:inherit;font-family:var(--f-mono);font-size:12px;text-align:right;padding:0 4px;outline:none}.zc input:focus{background:var(--panel)}

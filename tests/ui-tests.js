@@ -62,6 +62,20 @@ async 'F1 accessibility names'(){const it=fresh('QA a11y');await sleep(200);
   document.querySelector('#fxBtn')?.click();await sleep(80);scan().forEach(x=>bad.add(x+' (Effects)'));document.querySelector('#fxDone')?.click();
   check('F1 every visible control has a name, in every tool panel ('+tools.length+' tools)',bad.size===0,[...bad].slice(0,8).join(' '));
   T().toast('hello');check('F1 messages are announced (role=status)',document.querySelector('.toast')?.getAttribute('role')==='status')},
+async 'Human: area tools show where they apply while dragging'(){const tool=n=>[...document.querySelectorAll('.tool')].find(b=>b.textContent.trim()===n);
+  for(const name of ['Blur','Spotlight','Magnify']){const it=T().addImage(QA.page(),'drag '+name);T().openItem(it);await sleep(200);tool(name).click();await sleep(60);
+    const [x0,y0]=QA.at(50,228),[x1,y1]=QA.at(380,275);const before=QA.px(50,250),row=[];for(let x=60;x<360;x+=4)row.push(QA.px(x,252));await QA.hold(x0,y0,x1,y1,8);await sleep(40);
+    const edge=QA.px(50,250),inside=name==='Blur'?(()=>{let d=0,i=0;for(let x=60;x<360;x+=4){const p=QA.px(x,252),q=row[i++];if(Math.abs(p[0]-q[0])+Math.abs(p[1]-q[1])+Math.abs(p[2]-q[2])>40)d++}return d})():0;
+    check(`${name}: dashed outline visible while dragging`,Math.abs(edge[0]-before[0])+Math.abs(edge[1]-before[1])>40||edge[0]>250,'edge '+edge.slice(0,3)+' before '+before.slice(0,3));
+    if(name==='Blur')check('Blur: pixelation previews while dragging',inside>5,'changed text samples '+inside);
+    await QA.release(x1,y1);await sleep(80);check(`${name}: applied after letting go`,it.shapes.some(s=>s.t===name.toLowerCase()))}},
+async 'Human: toolbar, zoom keys, captions, narrow window'(){const it=fresh('human toolbar');await sleep(200);const cb=[...document.querySelectorAll('.tool')].find(b=>b.textContent.trim()==='Crop');
+  check('Crop is on the toolbar',!!cb);cb&&cb.click();await sleep(50);check('Crop button picks the Crop tool',S().tool==='crop');QA.key('Escape');document.activeElement.blur();
+  const w=()=>document.querySelector('#cv').getBoundingClientRect().width,w0=w();QA.key('=',{ctrlKey:true});await sleep(120);const w1=w();QA.key('-',{ctrlKey:true});await sleep(120);const w2=w();QA.key('0',{ctrlKey:true});await sleep(120);
+  check('Ctrl + zooms in, Ctrl − zooms out, Ctrl 0 fits',w1>w0*1.1&&Math.abs(w2-w0)<3&&Math.abs(w()-w0)<3,[w0,w1,w2,w()].map(Math.round).join(' → '));
+  const ov=QA.overlaps();check('top bar: no controls on top of each other at this window width ('+ov.w+' px)',!ov.hits.length&&!ov.offscreen.length,ov.hits.join('; '));
+  await QA.openVideo(2);document.querySelector('[data-tab="caps"]').click();await sleep(80);document.querySelector('[data-a="addcap"]').click();await sleep(120);const ae=document.activeElement;
+  check('Add caption puts you straight into typing',ae.tagName==='INPUT'&&ae.type==='text'&&ae.selectionEnd-ae.selectionStart===ae.value.length,ae.tagName+' '+ae.type)},
 async 'Regression: image editing and export'(){const it=fresh('QA regress',640,360,'#2a7');await sleep(150);T().snap();const a=T().newShape('arrow',50,50);a.x2=300;a.y2=200;it.shapes.push(a);T().render();
   const n=it.shapes.length;T().undo();check('Undo removes the arrow',it.shapes.length===n-1);T().redo();check('Redo restores the arrow',it.shapes.length===n);
   __saved.length=0;await T().save('png');await until(()=>__saved.length,5000);const b=new Blob([__saved[0].data],{type:'image/png'}),im=await createImageBitmap(b);check('PNG export has the picture size',im.width===640&&im.height===360,im.width+'x'+im.height);

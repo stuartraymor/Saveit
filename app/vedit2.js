@@ -491,7 +491,7 @@ function mount(host,it,api){css();HK=api;
     ostart(){const o=selOv();if(o){snap();o.t0=Math.min(eng.t,o.t1-.1);ovui();changed()}},oend(){const o=selOv();if(o){snap();o.t1=Math.max(eng.t,o.t0+.1);ovui();changed()}},
     odup(){const o=selOv();if(!o)return;snap();const c=clone(o);c.id=(c.id||0)+1000+e.ovs.length;HK.moveShape(c,30,30);e.ovs.push(c);select('ov',c);changed()},
     odel(){const o=selOv();if(!o)return;snap();e.ovs=e.ovs.filter(z=>z!==o);select(null);changed()},
-    addcap(){snap();const t=eng.t,nc={t0:t,t1:t+3,text:'New caption',pos:'b',fs:6,c:'#ffffff',bg:true};e.caps.push(nc);select('cap',nc);caplist();changed()},
+    addcap(){snap();const t=eng.t,nc={t0:t,t1:t+3,text:'New caption',pos:'b',fs:6,c:'#ffffff',bg:true};e.caps.push(nc);select('cap',nc);caplist();changed();{const rows=qa('.vcaps .vrow'),inp=rows[e.caps.indexOf(nc)]&&rows[e.caps.indexOf(nc)].querySelector('input[type=text]');if(inp){inp.focus();inp.select();inp.scrollIntoView({block:'nearest'})}}},
     apply(){run('video')},gif(){run('gif')},stop(){if(exp)exp.cancel=true}};
   function restore(h){for(const k of Object.keys(e))delete e[k];Object.assign(e,JSON.parse(h));fillDefaults(e);sel=null;eng.sync();eng.refreshFx();sizePrev();inT=Math.min(inT,D());outT=D();refreshAll();changed()}
   function doDelete(keepGap){if(!sel){toast('Click something on the timeline first.');return}snap();const r=sel.ref,ty=sel.type;
@@ -615,7 +615,7 @@ function mount(host,it,api){css();HK=api;
     draw()}
   // ----- captions -----
   function caplist(){const box=R('caps');box.innerHTML='';e.caps.forEach((c,i)=>{const r=document.createElement('div');r.className='vrow';
-    r.innerHTML=`<input type="text" placeholder="Caption text"><label>from <input type="number" step="0.1" min="0"></label><label>to <input type="number" step="0.1" min="0"></label><select><option value="b">Bottom</option><option value="c">Middle</option><option value="t">Top</option></select><label>size <input type="number" min="2" max="20" step="0.5"></label><input type="color"><label><input type="checkbox"> box</label><button class="btn">✕</button>`;
+    r.innerHTML=`<input type="text" placeholder="Caption text"><label>from <input type="number" step="0.1" min="0"></label><label>to <input type="number" step="0.1" min="0"></label><select><option value="b">Bottom</option><option value="c">Middle</option><option value="t">Top</option></select><label>size <input type="number" min="2" max="20" step="0.5"></label><input type="color"><label><input type="checkbox"> box</label><button class="btn" title="Delete this caption" aria-label="Delete this caption">✕</button>`;
     const ins=r.querySelectorAll('input,select'),[iT,iF,iTo,sP,iS,iC,iB]=ins;iT.value=c.text;iF.value=c.t0.toFixed(1);iTo.value=c.t1.toFixed(1);sP.value=c.pos||'b';iS.value=c.fs||6;iC.value=c.c||'#ffffff';iB.checked=c.bg!==false;
     const chg=()=>{snap();c.text=iT.value;c.t0=Math.max(0,+iF.value||0);c.t1=Math.max(c.t0+.1,+iTo.value||0);c.pos=sP.value;c.fs=+iS.value||6;c.c=iC.value;c.bg=iB.checked;redraw();changed()};
     const chg0=chg;ins.forEach(x=>x.addEventListener('change',()=>{if(x===iT){c.text=iT.value;redraw();changed();return}chg0()}));iT.addEventListener('focus',snapOnce);iT.addEventListener('input',()=>{c.text=iT.value;redraw()});
