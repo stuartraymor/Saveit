@@ -26,4 +26,9 @@ const {_electron}=require('playwright'),path=require('path'),fs=require('fs'),as
    const sleep=ms=>new Promise(r=>setTimeout(r,ms)),px=async()=>{const s=await desktopCapturer.getSources({types:['screen'],thumbnailSize:{width:Math.round(b.width*sf),height:Math.round(b.height*sf)}});const t=(s.find(q=>String(q.display_id)===String(d.id))||s[0]).thumbnail,sz=t.getSize(),buf=t.toBitmap(),x=Math.round(120*sf),y=Math.round(120*sf),o=(y*sz.width+x)*4;return[buf[o+2],buf[o+1],buf[o]]};
    await sleep(500);const visible=await px();win.setOpacity(0);await sleep(60);const hidden=await px();win.setOpacity(1);await sleep(60);const back=await px();win.destroy();return{visible,hidden,back}});
   const isRed=p=>p[0]>200&&p[1]<80&&p[2]<80;console.log('   capture samples (r,g,b):',JSON.stringify(r));assert.ok(!isRed(r.hidden),'hidden window still captured');assert.ok(isRed(r.visible),'baseline: visible window is captured');assert.ok(isRed(r.back),'window is back after opacity 1')});
+ await test('Step Capture starts saveit-steps.exe (not PowerShell) and Stop ends it',async()=>{
+  const {execSync}=require('child_process'),running=n=>{try{return execSync('tasklist /FI "IMAGENAME eq '+n+'" /NH',{encoding:'utf8'}).toLowerCase().includes(n.toLowerCase())}catch(e){return false}};
+  assert.equal(running('saveit-steps.exe'),false,'no helper before');
+  await w.evaluate(()=>window.bench.startSteps(0));await new Promise(r=>setTimeout(r,2000));assert.equal(running('saveit-steps.exe'),true,'helper running during Step Capture');
+  await app.evaluate(({ipcMain})=>ipcMain.emit('steps-cmd',{},'stop'));await new Promise(r=>setTimeout(r,1500));assert.equal(running('saveit-steps.exe'),false,'helper ended after Stop')});
  console.log(JSON.stringify({passed:results.filter(Boolean).length,failed:results.filter(x=>!x).length,errs}));await app.close();process.exit(results.includes(0)||errs.length?1:0)})().catch(e=>{console.log('FAIL',e.message);process.exit(1)});

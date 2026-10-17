@@ -479,7 +479,11 @@ ipcMain.handle('steps-start', async (e, delay = 0) => {
   try { globalShortcut.register('F9', () => takeStep()); } catch (_) { }
   if (process.platform === 'win32') {
     try {
-      const h = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', CLICK_WATCHER], { windowsHide: true });
+      // 10.0.10: native hook + UI Automation helper (saveit-steps.exe in the app folder); the old PowerShell watcher if it is missing
+      const helperExe = path.join(__dirname, 'saveit-steps.exe');
+      const h = fs.existsSync(helperExe)
+        ? spawn(helperExe, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] })
+        : spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', CLICK_WATCHER], { windowsHide: true });
       steps.helper = h;
       let buf = '';
       h.stdout.on('data', ch => {
@@ -487,7 +491,9 @@ ipcMain.handle('steps-start', async (e, delay = 0) => {
         while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
           if (line === 'READY' && steps) { steps.auto = true; stepsBarState(); }
           if (line.startsWith('CLICK')) takeStep(+line.split(' ')[1] || null);
-          if (line.startsWith('INFO ')) { try { win.webContents.send('step-info', JSON.parse(line.slice(5))); } catch (_) { } } }
+          if (line.startsWith('INFO ')) { try { win.webContents.send('step-info', JSON.parse(line.slice(5))); } catch (_) { } }
+          // 10.0.10: typed text, one line per field (the helper never sends what is typed into password fields)
+          if (line.startsWith('TYPE ')) { try { const m = /^TYPE \d+ (.*)$/.exec(line); const t = m && JSON.parse(m[1]); if (t && !t.isPassword && typeof t.text === 'string' && t.text) win.webContents.send('step-type', { field: String(t.field || '').slice(0, 80), text: t.text.slice(0, 200) }); } catch (_) { } } }
       });
       h.on('exit', () => { if (steps && steps.helper === h) { steps.auto = false; steps.helper = null; stepsBarState(); } });
     } catch (_) { }

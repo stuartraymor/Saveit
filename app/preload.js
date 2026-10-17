@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('bench', {
   startSteps: delay => ipcRenderer.invoke('steps-start', delay),
   onStepShot: fn => ipcRenderer.on('step-shot', (e, d) => fn(d)),
   onStepInfo: fn => ipcRenderer.on('step-info', (e, d) => fn(d)),
+  onStepType: fn => ipcRenderer.on('step-type', (e, d) => fn(d)),
   onStepsDone: fn => ipcRenderer.on('steps-done', () => fn()),
   printPdf: (html, name, asBuffer) => ipcRenderer.invoke('print-pdf', html, name, asBuffer),
   saveMany: files => ipcRenderer.invoke('save-many', files),

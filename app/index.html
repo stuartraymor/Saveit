@@ -2085,7 +2085,13 @@ function onStepShot(d){stepQueue=stepQueue.then(async()=>{const g=stepGuide;if(!
   const st=makeStep(g,c,{x:d.click.x-x,y:d.click.y-y},k);st.seq=d.seq;const inf=d.seq&&pendingInfo[d.seq];if(inf){applyStepInfo(st,inf);delete pendingInfo[d.seq]}
   renderTray();if(S.cur===g)renderGuide();persist(g)})}
 const pendingInfo={};
-function stepTitleFrom(i){const clean=v=>String(v||'').replace(/\s+/g,' ').trim().slice(0,70);const n=clean(i.name),w=clean(i.window),t=String(i.type||'').replace('ControlType.','');
+const CT_NAMES34={50000:'Button',50002:'CheckBox',50003:'ComboBox',50004:'Edit',50005:'Hyperlink',50006:'Image',50007:'ListItem',50011:'MenuItem',50010:'MenuBar',50013:'RadioButton',50019:'TabItem',50020:'Text',50024:'TreeItem',50029:'DataItem',50030:'Document',50031:'SplitButton',50032:'Window',50033:'Pane',50037:'TitleBar'};
+// 10.0.10: the native helper sends numeric control types plus button, menu, window and app
+function stepTitleFrom(i){if(i&&i.ctype&&!/^ControlType\./.test(i.type||''))i={...i,type:'ControlType.'+(CT_NAMES34[i.ctype]||'Custom')};const r=stepTitleFrom0(i);if(!r.title)return r;
+  if(i.menu&&/MenuItem/.test(i.type)&&i.name&&i.menu!==i.name)r.title=`Select "${i.name}" from the "${i.menu}" menu`;
+  if(i.button==='right')r.title=r.title.replace(/^(Click in|Click|Select|Open|Check)\b/,'Right-click');
+  return r}
+function stepTitleFrom0(i){const clean=v=>String(v||'').replace(/\s+/g,' ').trim().slice(0,70);const n=clean(i.name),w=clean(i.window),t=String(i.type||'').replace('ControlType.','');
   const q=n?`"${n}"`:'';
   const map={Button:q?`Click ${q}`:'Click the button',SplitButton:q?`Click ${q}`:'Click the button',Hyperlink:q?`Click the ${q} link`:'Click the link',MenuItem:q?`Select ${q}`:'Select the menu item',MenuBar:q?`Click ${q}`:'Open the menu',
     TabItem:q?`Open the ${q} tab`:'Open the tab',Edit:q?`Click in the ${q} box`:'Click in the text box',Document:q?`Click in ${q}`:'Click in the document',CheckBox:q?`Check ${q}`:'Check the box',RadioButton:q?`Select ${q}`:'Select the option',
@@ -2093,6 +2099,9 @@ function stepTitleFrom(i){const clean=v=>String(v||'').replace(/\s+/g,' ').trim(
     Pane:q?`Click in ${q}`:(w?`Click in ${w}`:'Click here'),Window:w?`Click in ${w}`:'Click in the window',TitleBar:w?`Click the ${w} title bar`:'Click the title bar'};
   return{title:map[t]||(q?`Click ${q}`:(w?`Click in ${w}`:'')),text:w&&n!==w?`In the ${w} window.`:''}}
 function applyStepInfo(st,inf){const r=stepTitleFrom(inf);if(!st.title&&r.title)st.title=r.title;if(!st.text&&r.text)st.text=r.text;st.autoFilled=true}
+// 10.0.10: what was typed (one field at a time) becomes an instruction on the step that clicked the field
+function onStepType(d){stepQueue=stepQueue.then(()=>{const g=stepGuide;if(!g||!g.steps.length||!d||!d.text)return;const st=g.steps[g.steps.length-1],clean=v=>String(v||'').replace(/\s+/g,' ').trim(),txt=clean(d.text).slice(0,120),f=clean(d.field).slice(0,60);if(!txt)return;
+  const line=`Type "${txt}"${f?` in the "${f}" box`:''}.`;if((st.text||'').includes(line))return;st.text=st.text?st.text+'\n'+line:line;if(S.cur===g)renderGuide();persist(g)})}
 function onStepInfo(inf){stepQueue=stepQueue.then(()=>{const g=stepGuide||S.items.find(x=>x.kind==='guide'&&x.steps.some(st=>st.seq===inf.n));const st=g&&g.steps.find(x=>x.seq===inf.n);
   if(!st){pendingInfo[inf.n]=inf;return}applyStepInfo(st,inf);if(S.cur===g)renderGuide();persist(g)})}
 function onStepsDone(){stepQueue.then(()=>{const g=stepGuide;stepGuide=null;if(!g)return;if(!g.steps.length){removeItem(g);toast('No steps were captured.');return}openItem(g);toast(`Captured ${g.steps.length} step${g.steps.length===1?'':'s'}. Add titles and instructions, then export.`)})}
@@ -2358,7 +2367,7 @@ if(window.bench){$('#widgetBtn').hidden=false;$('#widgetBtn').onclick=()=>{const
   window.bench.onWidgetOpts(o=>applySettings(o));
   window.bench.onWidgetGo(o=>{applySettings(o);if(S.mode==='audio'&&rec)return;if(S.mode==='video'){if(rec)return;fromWidget=true}$('#capBtn').click()});
   window.bench.onHotkey(mode=>{if(mode.startsWith('preset:')){runWorkflow(mode.slice(7)).catch(actionError);return}if(mode==='video'){if(rec){rec.stop();return}$('#mVid').click();startRec();return}if(rec)return;$("#mImg").click();captureDesktop(mode,true)});
-  window.bench.onStepShot(onStepShot);if(window.bench.onStepInfo)window.bench.onStepInfo(onStepInfo);window.bench.onStepsDone(onStepsDone);
+  window.bench.onStepShot(onStepShot);if(window.bench.onStepInfo)window.bench.onStepInfo(onStepInfo);if(window.bench.onStepType)window.bench.onStepType(onStepType);window.bench.onStepsDone(onStepsDone);
   window.bench.onRecCmd(c=>{if(!rec)return;if(c==='stop')rec.stop();if(c==='pause')rec.togglePause()});
   window.bench.onShortcutFailed(keys=>{if(keys.includes('PrintScreen'))toast('Windows is using the Print Screen key for Snipping Tool. Use Ctrl+Shift+X, or turn off "Use the Print screen key to open screen capture" in Windows Settings > Accessibility > Keyboard, then restart Saveit.',9000)});
 }
