@@ -674,11 +674,11 @@ cv.addEventListener('pointerdown',e=>{
   if(t==='step'){snap();const s=newShape('step',x,y);it.shapes.push(s);S.stepNext++;S.sel=s;render();renderProps();changed();return}
   if(t==='select'){const hs=hit(x,y),G=grpList();
     if(e.shiftKey&&hs){const L=G.length>1?G.slice():(S.sel?[S.sel]:[]);const i=L.indexOf(hs);if(i>=0)L.splice(i,1);else L.push(hs);if(L.length>1){S.grp=L;S.sel=null}else{S.grp=[];S.sel=L[0]||null}renderProps();render();return}
-    if(G.length>1&&hs&&G.includes(hs)){snap();S.drag={mode:'move',s:hs,list:G,lx:x,ly:y,moved:false};render();return}
-    if(!hs){S.sel=null;S.grp=[];S.drag={mode:'marq'};S.marq={x1:x,y1:y,x2:x,y2:y};renderProps();render();return}
+    if(G.length>1&&hs&&G.includes(hs)){snap();S.drag={mode:'move',s:hs,list:G,lx:x,ly:y,moved:false,drill:!S._grpJust};S._grpJust=false;render();return}
+    if(!hs){const keep=e.shiftKey?selectedShapes().slice():[];S.sel=null;S.grp=[];S.drag={mode:'marq',keep};S.marq={x1:x,y1:y,x2:x,y2:y};renderProps();render();return}
     S.grp=[]}
   if(t==='select'||(S.sel&&hit(x,y)===S.sel)){
-    const s=hit(x,y),gm9=s&&s.groupId!=null?S.cur.shapes.filter(q=>q.groupId===s.groupId):null;if(gm9&&gm9.length>1){S.sel=null;S.grp=gm9;renderProps();snap();S.drag={mode:'move',s,list:gm9,lx:x,ly:y,moved:false};render();return}S.sel=s;renderProps();
+    const s=hit(x,y),gm9=s&&s.groupId!=null?S.cur.shapes.filter(q=>q.groupId===s.groupId):null;if(gm9&&gm9.length>1&&S.sel!==s){S.sel=null;S.grp=gm9;renderProps();snap();S.drag={mode:'move',s,list:gm9,lx:x,ly:y,moved:false};render();return}S.sel=s;renderProps();
     if(s){snap();S.drag={mode:'move',s,lx:x,ly:y,moved:false};}
     render();return}
   if(t==='text'){S.drag={mode:'text',x,y};return}
@@ -696,7 +696,7 @@ cv.addEventListener('pointermove',e=>{
   if(d.mode==='draw'){const s=d.preview;if(s.t==='pen')s.pts.push([x,y]);else{let X=x,Y=y;
       if(e.shiftKey){if(s.t==='arrow'||s.t==='line'){const a=Math.round(Math.atan2(y-s.y1,x-s.x1)/(Math.PI/4))*(Math.PI/4),l=Math.hypot(x-s.x1,y-s.y1);X=s.x1+Math.cos(a)*l;Y=s.y1+Math.sin(a)*l}else{const m=Math.max(Math.abs(x-s.x1),Math.abs(y-s.y1));X=s.x1+Math.sign(x-s.x1||1)*m;Y=s.y1+Math.sign(y-s.y1||1)*m}}
       s.x2=X;s.y2=Y;}render();return}
-  if(d.mode==='move'){const dx=x-d.lx,dy=y-d.ly;d.lx=x;d.ly=y;d.moved=true;(d.list||[d.s]).forEach(q=>moveShape(q,dx,dy));render();return}
+  if(d.mode==='move'){const dx=x-d.lx,dy=y-d.ly;if(!dx&&!dy)return;d.lx=x;d.ly=y;d.moved=true;(d.list||[d.s]).forEach(q=>moveShape(q,dx,dy));render();return}
   if(d.mode==='handle'){const s=d.s,k=d.k;
     if(k==='p1'){s.x1=x;s.y1=y}else if(k==='p2'){s.x2=x;s.y2=y}else if(k==='c'){s.cx=x;s.cy=y}else if(k==='tail'){s.tx=x;s.ty=y}
     else resizeByHandle(s,d,x,y,e.shiftKey);
@@ -708,7 +708,7 @@ cv.addEventListener('pointerup',e=>{
   if(d.mode==='cut'){const q=S.cutRect;S.cutRect=null;const dx=Math.abs(q.x2-q.x1),dy=Math.abs(q.y2-q.y1);if(dx<3&&dy<3){render();return}
     if(dx>=dy)applyCut('x',Math.min(q.x1,q.x2),Math.max(q.x1,q.x2));else applyCut('y',Math.min(q.y1,q.y2),Math.max(q.y1,q.y2));return}
   if(d.mode==='text'){const s=newShape('text',d.x,d.y);s.txt='';startText(s,true);return}
-  if(d.mode==='marq'){const r=norm(S.marq);S.marq=null;if(r.w>3||r.h>3){const pk=it.shapes.filter(q=>{const b=bbox(q);return b.x<r.x+r.w&&b.x+b.w>r.x&&b.y<r.y+r.h&&b.y+b.h>r.y});{const gids=new Set(pk.map(q=>q.groupId).filter(v=>v!=null));if(gids.size)it.shapes.forEach(q=>{if(gids.has(q.groupId)&&!pk.includes(q))pk.push(q)})}if(pk.length===1){S.sel=pk[0];S.grp=[]}else if(pk.length>1){S.sel=null;S.grp=pk}}renderProps();render();return}
+  if(d.mode==='marq'){const r=norm(S.marq);S.marq=null;if(d.keep&&d.keep.length&&!(r.w>3||r.h>3)){if(d.keep.length===1)S.sel=d.keep[0];else S.grp=d.keep;renderProps();render();return}if(r.w>3||r.h>3){const pk=it.shapes.filter(q=>(d.keep||[]).includes(q)||(!q.hidden9&&!q.locked9&&(()=>{const b=bbox(q);return b.x<r.x+r.w&&b.x+b.w>r.x&&b.y<r.y+r.h&&b.y+b.h>r.y})()));{const gids=new Set(pk.map(q=>q.groupId).filter(v=>v!=null));if(gids.size)it.shapes.forEach(q=>{if(gids.has(q.groupId)&&!pk.includes(q))pk.push(q)})}if(pk.length===1){S.sel=pk[0];S.grp=[]}else if(pk.length>1){S.sel=null;S.grp=pk}}renderProps();render();return}
   if(d.mode==='pix'){const pr=S.pixRect,r=norm(pr);S.pixRect=null;render();if(r.w>4&&r.h>4){if(d.ocr)grabTextFrom(r);else liftPixels(r)}
     else if(!d.ocr){const sm=ImgTools.smart(it.base,pr.x1,pr.y1);if(sm&&sm.w>3&&sm.h>3){const m=sm.kind==='content'?3:0,x0=Math.max(0,sm.x-m),y0=Math.max(0,sm.y-m);liftPixels({x:x0,y:y0,w:Math.min(it.base.width-x0,sm.w+m*2),h:Math.min(it.base.height-y0,sm.h+m*2)});toast(sm.kind==='shape'?'Picked up the whole box. Drag it to move it.':'Picked up that text or picture. Drag it to move it.')}else toast('Nothing to pick up there. Drag a box around the area instead.')}return}
   if(d.mode==='crop'){const r=norm(S.cropRect);if(r.w<4||r.h<4)S.cropRect=null;renderProps();render();return}
@@ -719,7 +719,7 @@ cv.addEventListener('pointerup',e=>{
       else{s.tx=r.x-Math.min(60,r.w*.3);s.ty=r.y+r.h+Math.min(60,r.h*.6);}
       s.txt='';snap();it.shapes.push(s);S.sel=s;render();startText(s,false);return}
     snap();it.shapes.push(s);S.sel=s;render();renderProps();changed();return}
-  if(d.mode==='move'&&!d.moved){it.undo.pop();}
+  if(d.mode==='move'&&!d.moved){it.undo.pop();if(d.drill&&d.list&&d.s){S.sel=d.s;S.grp=[]}}S._grpJust=false;
   changed();renderProps();
 });
 cv.addEventListener('dblclick',e=>{const {x,y}=pt(e);const s=S.cur&&hit(x,y);if(s&&(s.t==='text'||s.t==='callout')){S.sel=s;startText(s,false)}});
@@ -2000,7 +2000,7 @@ const lib33=renderLib;renderLib=function(){lib33();const m=$('#libModal');if(!m)
  for(const id of ['libGuide']){const b=$('#'+id);if(b&&!b._hydrate33){const fn=b.onclick;b.onclick=async()=>{try{await Promise.all(libChosen().map(hydrate));fn()}catch(e){actionError(e)}};b._hydrate33=true}}
 };
 // Persisted groups select and move as a unit; Shift continues to edit a temporary selection.
-cv.addEventListener('pointerdown',e=>{if(S.tool!=='select'||e.button!==0||e.shiftKey||S.cur?.kind!=='image')return;const p=pt(e),s=hit(p.x,p.y);if(s?.groupId){S.grp=S.cur.shapes.filter(q=>q.groupId===s.groupId);S.sel=null}},true);
+cv.addEventListener('pointerdown',e=>{if(S.tool!=='select'||e.button!==0||e.shiftKey||S.cur?.kind!=='image')return;const p=pt(e),s=hit(p.x,p.y);if(s?.groupId!=null&&S.sel!==s&&!grpList().includes(s)){S.grp=S.cur.shapes.filter(q=>q.groupId===s.groupId);S.sel=null;S._grpJust=true}},true);
 function group33(remove=false){const a=selectedShapes();if(!a.length)return;snap();const id='grp-'+Date.now()+'-'+uid++;for(const s of a){if(remove)delete s.groupId;else s.groupId=id}renderProps();render();changed()}
 function align33(mode){const a=selectedShapes();if(a.length<2)return;const boxes=a.map(bbox),left=Math.min(...boxes.map(b=>b.x)),right=Math.max(...boxes.map(b=>b.x+b.w)),top=Math.min(...boxes.map(b=>b.y)),bottom=Math.max(...boxes.map(b=>b.y+b.h));snap();if(mode==='distribute'){const rows=a.map((s,i)=>({s,b:boxes[i]})).sort((a,b)=>a.b.x-b.b.x),gap=(right-left-rows.reduce((n,r)=>n+r.b.w,0))/(rows.length-1);let x=left;rows.forEach(r=>{moveShape(r.s,x-r.b.x,0);x+=r.b.w+gap})}else a.forEach((s,i)=>{const b=boxes[i];moveShape(s,mode==='left'?left-b.x:mode==='center'?(left+right-b.w)/2-b.x:mode==='right'?right-b.w-b.x:0,mode==='top'?top-b.y:mode==='middle'?(top+bottom-b.h)/2-b.y:mode==='bottom'?bottom-b.h-b.y:0)});render();renderProps();changed()}
 const props33=renderProps;renderProps=function(){props33();if(S.cur?.kind!=='image'||S.fxOpen||selectedShapes().length<2)return;const box=document.createElement('div');box.className='grp';box.id='editing33';
@@ -2353,9 +2353,9 @@ window.imageTabDown9=function(e,x,y){const it=S.cur;
   if(e.shiftKey&&hs){const cur=grpList().length>1?grpList():S.sel?[S.sel]:[],g=groupOf9(hs),has=cur.includes(hs);const L=has?cur.filter(q=>!g.includes(q)):[...cur,...g.filter(q=>!cur.includes(q))];setSel9(L);render();renderProps();return}
   if(!hs){S.sel=null;S.grp=[];if(!it.base._blank&&x>=0&&y>=0&&x<=it.base.width&&y<=it.base.height)S.rzTarget=null;S.rz=null;render();renderProps();return}
   const G=grpList();let list;
-  if(G.length>1&&G.includes(hs))list=G;else{const g=groupOf9(hs);setSel9(g);list=g.length>1?g:null}
+  let drill=false;if(G.length>1&&G.includes(hs)){list=G;drill=true}else if(S.sel===hs){list=null}else{const g=groupOf9(hs);setSel9(g);list=g.length>1?g:null}
   if(hs.t==='img'&&!list){S.rzTarget=hs.id}S.rz=null;
-  snap();S.drag={mode:'move',s:hs,list,lx:x,ly:y,moved:false};render();renderProps()};
+  snap();S.drag={mode:'move',s:hs,list,lx:x,ly:y,moved:false,drill};render();renderProps()};
 
 // ---------- 9.03: rotate and flip what is selected ----------
 const isRot=k=>k==='left'||k==='right';
@@ -2392,8 +2392,8 @@ function bakePictures9(){const it=S.cur;if(it?.kind!=='image'||it.guide)return;c
 const setTool9=setTool;setTool=function(t){const a=S.sel,g=grpList().slice();if(t==='simplify'&&S.tool!=='simplify')bakePictures9();setTool9(t);if(t==='image'&&S.cur?.kind==='image'){if(a&&S.cur.shapes.includes(a))S.sel=a;else if(g.length>1)S.grp=g;render();renderProps()}};
 
 // ---------- groups ----------
-window.group9=function(){const it=S.cur;if(it?.kind!=='image')return;const a=expand9(selectedShapes());if(a.length<2){toast('Select two or more items to group. Shift-click them or drag a box around them.');return}
-  snap();const g=uid++;a.forEach(s=>s.groupId=g);setSel9(a);render();renderProps();changed();toast(`Grouped ${a.length} items. They now move, rotate and flip together.`)};
+window.group9=function(){const it=S.cur;if(it?.kind!=='image')return;const a=selectedShapes().slice();if(a.length<2){toast('Select two or more items to group. Shift-click them or drag a box around them.');return}
+  snap();const g=uid++;a.forEach(s=>{s.groupId=g;delete s.gname9});{const top=Math.max(...a.map(q=>it.shapes.indexOf(q))),mem=it.shapes.filter(q=>a.includes(q)),rest=it.shapes.filter(q=>!a.includes(q)),pos=rest.filter(q=>it.shapes.indexOf(q)<top).length;rest.splice(pos,0,...mem);it.shapes.splice(0,it.shapes.length,...rest)}setSel9(it.shapes.filter(q=>a.includes(q)));render();renderProps();changed();toast(`Grouped ${a.length} items. They now move, rotate and flip together.`)};
 window.ungroup9=function(){const it=S.cur;if(it?.kind!=='image')return;const a=expand9(selectedShapes()).filter(s=>s.groupId!=null);if(!a.length){toast('Select a group to ungroup.');return}
   snap();a.forEach(s=>delete s.groupId);setSel9(a);render();renderProps();changed();toast('Ungrouped.')};
 // copies of a group (Duplicate, Paste) form a new group instead of joining the old one
@@ -2518,6 +2518,8 @@ cv.addEventListener('pointerup',end91,true);cv.addEventListener('pointercancel',
 const TNAME92={img:'Picture',arrow:'Arrow',line:'Line',rect:'Shape',ellipse:'Ellipse',pen:'Pen',highlight:'Highlight',blur:'Blur',spotlight:'Spotlight',magnify:'Magnify',stamp:'Stamp',step:'Step',text:'Text',callout:'Callout'};
 const lname92=s=>s.name9||((s.t==='text'||s.t==='callout')&&(s.txt||'').trim()&&`${TNAME92[s.t]}: ${(s.txt||'').trim().split('\n')[0].slice(0,24)}`)||(s.t==='step'?`Step ${stepLabel(s.n,s.seq)}`:TNAME92[s.t]||s.t);
 const hitL92=hit;hit=function(x,y){const it=S.cur,a=it.shapes;if(!a.some(s=>s.hidden9||s.locked9))return hitL92(x,y);it.shapes=a.filter(s=>!s.hidden9&&!s.locked9);try{return hitL92(x,y)}finally{it.shapes=a}};
+const hitIn93=hit;hit=function(x,y){const s=hitIn93(x,y);if(s)return s;const a=S.cur?.shapes||[];for(let i=a.length-1;i>=0;i--){const q=a[i];if(q.hidden9||q.locked9||q._editing9||(q.t!=='rect'&&q.t!=='ellipse'))continue;const r=norm(q);if(x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h)return q}return null};
+group33=function(remove){return remove?ungroup9():group9()};
 const lyBtn92=document.createElement('button');lyBtn92.className='tool';lyBtn92.id='layersBtn92';lyBtn92.title='Layers: see, name, select and reorder every layer';lyBtn92.setAttribute('aria-pressed','false');
 lyBtn92.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 4.5 9-4.5" opacity=".55"/></svg><span>Layers</span>';
 vidBtn80.after(lyBtn92);
@@ -2533,12 +2535,19 @@ const ICO92={eye:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" st
   lock:LOCK_ON87.replace('width="14" height="14"','width="15" height="15"'),unlock:LOCK_OFF87.replace('width="14" height="14"','width="15" height="15"')};
 let last92=null;
 function layersPanel92(P,it){const a=it.shapes,n=a.length,sel=new Set(selectedShapes()),gids=[...new Set(a.map(s=>s.groupId).filter(v=>v!=null))];
-  const rows=a.map((s,i)=>({s,i})).reverse().map(({s,i})=>`<div class="ly92${sel.has(s)?' on':''}${s.hidden9?' hid':''}" data-i="${i}" title="Layer ${n-i} of ${n}">
-    <span class="ln92">${n-i}</span><span class="th92" data-th="${i}"></span><span class="nm92" data-nm="${i}">${escH(lname92(s))}${s.groupId!=null?`<em> · group ${gids.indexOf(s.groupId)+1}</em>`:''}</span>
-    <button class="btn ic92" data-eye="${i}" aria-label="${s.hidden9?'Show':'Hide'} layer" title="${s.hidden9?'Show':'Hide'}">${s.hidden9?ICO92.off:ICO92.eye}</button><button class="btn ic92" data-lk="${i}" aria-pressed="${!!s.locked9}" aria-label="${s.locked9?'Unlock':'Lock'} layer" title="${s.locked9?'Unlock':'Lock'} (a locked layer can't be clicked on the canvas)">${s.locked9?ICO92.lock:ICO92.unlock}</button></div>`).join('');
+  const row=(s,i,mem)=>`<div class="ly92${mem?' mem92':''}${sel.has(s)?' on':''}${s.hidden9?' hid':''}" data-i="${i}" title="Layer ${n-i} of ${n}">
+    <span class="ln92">${n-i}</span><span class="th92" data-th="${i}"></span><span class="nm92" data-nm="${i}">${escH(lname92(s))}</span>
+    <button class="btn ic92" data-eye="${i}" aria-label="${s.hidden9?'Show':'Hide'} layer" title="${s.hidden9?'Show':'Hide'}">${s.hidden9?ICO92.off:ICO92.eye}</button><button class="btn ic92" data-lk="${i}" aria-pressed="${!!s.locked9}" aria-label="${s.locked9?'Unlock':'Lock'} layer" title="${s.locked9?'Unlock':'Lock'} (a locked layer can't be clicked on the canvas)">${s.locked9?ICO92.lock:ICO92.unlock}</button></div>`;
+  const memOf=g=>a.filter(q=>q.groupId===g),done=new Set();let rows='';
+  for(let i=n-1;i>=0;i--){const s=a[i];if(done.has(s))continue;const m=s.groupId!=null?memOf(s.groupId):[];
+    if(m.length>1){const top=m.slice().reverse();top.forEach(q=>done.add(q));const all=top.every(q=>sel.has(q)),part=!all&&top.some(q=>sel.has(q)),hid=top.every(q=>q.hidden9),lk=top.every(q=>q.locked9),gn=top.find(q=>q.gname9)?.gname9||`Group ${gids.indexOf(s.groupId)+1}`;
+      rows+=`<div class="ly92 grp92${all?' on':''}${part?' part':''}${hid?' hid':''}" data-i="${i}" data-g="${escH(String(s.groupId))}" title="Group of ${top.length}. Click to select the whole group; drag to move it."><span class="ln92">▾</span><span class="nm92" data-gn="1">${escH(gn)}<em> · ${top.length} items</em></span>
+        <button class="btn ic92" data-geye="1" aria-label="${hid?'Show':'Hide'} group" title="${hid?'Show':'Hide'} group">${hid?ICO92.off:ICO92.eye}</button><button class="btn ic92" data-glk="1" aria-pressed="${lk}" aria-label="${lk?'Unlock':'Lock'} group" title="${lk?'Unlock':'Lock'} group">${lk?ICO92.lock:ICO92.unlock}</button></div>`;
+      top.forEach(q=>rows+=row(q,a.indexOf(q),true))}
+    else{done.add(s);rows+=row(s,i,false)}}
   const one=sel.size>0,dis=one?'':'disabled';
-  P.innerHTML=`<style>.lylist92{display:flex;flex-direction:column;gap:3px;max-height:46vh;overflow:auto;margin:6px 0}.ly92{display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;cursor:pointer;background:var(--panel-2)}.ly92.on{border-color:var(--accent,#2fb8a6);box-shadow:inset 0 0 0 1px var(--accent,#2fb8a6)}.ly92.hid{opacity:.5}.ly92{touch-action:none;user-select:none;position:relative}.ly92.drag{opacity:.4}.ly92.dropt::before,.ly92.dropb::after{content:'';position:absolute;left:-2px;right:-2px;height:3px;border-radius:2px;background:var(--accent,#2fb8a6)}.ly92.dropt::before{top:-4px}.ly92.dropb::after{bottom:-4px}.lyghost92{position:fixed;z-index:200;pointer-events:none;padding:4px 10px;border-radius:7px;background:var(--accent,#2fb8a6);color:#fff;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.4)}.lylist92.dragging,.lylist92.dragging *{cursor:grabbing!important}.ln92{width:18px;text-align:right;font:11px var(--f-mono);color:var(--muted)}.th92 canvas{display:block;border-radius:4px;background:repeating-conic-gradient(#ffffff22 0 25%,transparent 0 50%) 0/8px 8px}.nm92{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.nm92 em{color:var(--muted);font-style:normal}.nm92 input{width:100%;font:inherit}.ic92{padding:2px 4px!important;min-width:0!important;height:24px}.ly92 .ic92[aria-pressed=true]{color:var(--accent,#2fb8a6)}</style>
-  <div class="grp"><h3>Layers</h3><p class="hint" style="margin:0">${n} layer${n===1?'':'s'}, top first. Layer 1 is on top. Click a layer to select it · Shift or Ctrl+click for more · drag layers up or down to reorder · double-click a name to rename.</p>
+  P.innerHTML=`<style>.lylist92{display:flex;flex-direction:column;gap:3px;max-height:46vh;overflow:auto;margin:6px 0}.ly92{display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;cursor:pointer;background:var(--panel-2)}.ly92.on{border-color:var(--accent,#2fb8a6);box-shadow:inset 0 0 0 1px var(--accent,#2fb8a6)}.ly92.hid{opacity:.5}.ly92.mem92{margin-left:18px}.ly92.grp92{background:transparent}.ly92.grp92 .nm92{font-weight:600}.ly92.grp92.part{border-style:dashed;border-color:var(--accent,#2fb8a6)}.ly92{touch-action:none;user-select:none;position:relative}.ly92.drag{opacity:.4}.ly92.dropt::before,.ly92.dropb::after{content:'';position:absolute;left:-2px;right:-2px;height:3px;border-radius:2px;background:var(--accent,#2fb8a6)}.ly92.dropt::before{top:-4px}.ly92.dropb::after{bottom:-4px}.lyghost92{position:fixed;z-index:200;pointer-events:none;padding:4px 10px;border-radius:7px;background:var(--accent,#2fb8a6);color:#fff;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.4)}.lylist92.dragging,.lylist92.dragging *{cursor:grabbing!important}.ln92{width:18px;text-align:right;font:11px var(--f-mono);color:var(--muted)}.th92 canvas{display:block;border-radius:4px;background:repeating-conic-gradient(#ffffff22 0 25%,transparent 0 50%) 0/8px 8px}.nm92{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.nm92 em{color:var(--muted);font-style:normal}.nm92 input{width:100%;font:inherit}.ic92{padding:2px 4px!important;min-width:0!important;height:24px}.ly92 .ic92[aria-pressed=true]{color:var(--accent,#2fb8a6)}</style>
+  <div class="grp"><h3>Layers</h3><p class="hint" style="margin:0">${n} layer${n===1?'':'s'}, top first. Layer 1 is on top. Click a layer to select it · Shift or Ctrl+click for more · drag layers up or down to reorder · double-click a name to rename. A group's row selects the whole group; its items are listed under it.</p>
     <div class="lylist92" id="lyList92">${rows||'<p class="hint">No layers yet. Draw something or use Add picture.</p>'}</div>
     <div class="ly92" style="cursor:default;opacity:.8" title="The canvas itself"><span class="ln92"></span><span class="nm92">Background · ${it.base.width} × ${it.base.height}${it.fx.bg?' · '+escH(it.fx.bg):' · transparent'}</span></div></div>
   <div class="grp"><h3>Order</h3><div class="row"><button class="btn" id="l92fwd" ${dis} title="Ctrl+]">Bring forward</button><button class="btn" id="l92back" ${dis} title="Ctrl+[">Send backward</button></div>
@@ -2556,24 +2565,31 @@ function layersPanel92(P,it){const a=it.shapes,n=a.length,sel=new Set(selectedSh
     inp.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter')fin(true);if(e.key==='Escape')fin(false)};inp.onblur=()=>fin(true);inp.onclick=e=>e.stopPropagation()};
   if(L){
   const pick=(e,s)=>{if(e.shiftKey||e.ctrlKey||e.metaKey){const cur=selectedShapes();const L2=cur.includes(s)?cur.filter(q=>q!==s):[...cur,s];if(L2.length===1){S.sel=L2[0];S.grp=[]}else if(L2.length){S.sel=null;S.grp=a.filter(q=>L2.includes(q))}else{S.sel=null;S.grp=[]}}else{S.sel=s;S.grp=[]}};
-  L.onclick=e=>{const row=e.target.closest('[data-i]');if(!row||e.target.closest('input'))return;const i=idx(row),s=a[i];
+  const hdrOf=row=>row&&row.dataset.g!=null?a.filter(q=>String(q.groupId)===row.dataset.g):null;
+  const renameG=row=>{const m=hdrOf(row),el=row.querySelector('[data-gn]');if(!m||!el)return;const cur=m.find(q=>q.gname9)?.gname9||el.firstChild.textContent;el.innerHTML=`<input type="text" aria-label="Group name" value="${escH(cur)}">`;const inp=el.querySelector('input');inp.focus();inp.select();
+    let done=false;const fin=ok=>{if(done)return;done=true;const v=inp.value.trim();if(ok&&v&&v!==cur){snap();m.forEach(q=>q.gname9=v.slice(0,60));changed()}renderProps()};inp.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter')fin(true);if(e.key==='Escape')fin(false)};inp.onblur=()=>fin(true)};
+  L.onclick=e=>{const row=e.target.closest('[data-i]');if(!row||e.target.closest('input'))return;const i=idx(row),s=a[i],hm=hdrOf(row);
+    if(hm&&e.target.closest('[data-geye]')){snap();const h=!hm.every(q=>q.hidden9);hm.forEach(q=>{if(h)q.hidden9=true;else delete q.hidden9});if(h){S.sel=hm.includes(S.sel)?null:S.sel;S.grp=grpList().filter(q=>!hm.includes(q))}changed();refresh();return}
+    if(hm&&e.target.closest('[data-glk]')){snap();const l=!hm.every(q=>q.locked9);hm.forEach(q=>{if(l)q.locked9=true;else delete q.locked9});changed();refresh();return}
+    if(hm)return;
     if(e.target.closest('[data-eye]')){snap();if(s.hidden9)delete s.hidden9;else s.hidden9=true;if(s.hidden9){if(S.sel===s)S.sel=null;S.grp=grpList().filter(q=>q!==s)}changed();refresh();return}
     if(e.target.closest('[data-lk]')){snap();if(s.locked9)delete s.locked9;else s.locked9=true;changed();refresh();return}
   };
   L.ondblclick=e=>{const nm=e.target.closest('[data-nm]');if(nm)rename(+nm.dataset.nm)};
   // 9.2.1: press a layer and drag it up or down; every selected layer moves with it. A line shows where they will land.
-  L.onpointerdown=e=>{const row=e.target.closest('[data-i]');if(!row||e.button!==0||e.target.closest('button,input'))return;const s=a[idx(row)];
+  L.onpointerdown=e=>{const row=e.target.closest('[data-i]');if(!row||e.button!==0||e.target.closest('button,input'))return;const s=a[idx(row)],hm=hdrOf(row);
     const y0=e.clientY;let on=false,slot=-1,ghost=null,moving=[],rest=[],scrollT=null;
-    const rowsOf=()=>[...L.querySelectorAll('[data-i]')];
-    const begin=()=>{on=true;if(!selectedShapes().includes(s)){S.sel=s;S.grp=[]}const chosen=new Set(selectedShapes());
+    const rowsOf=()=>[...L.querySelectorAll('[data-i]:not([data-g])')];
+    const begin=()=>{on=true;if(hm){if(!hm.every(q=>selectedShapes().includes(q))){S.sel=null;S.grp=hm}}else if(!selectedShapes().includes(s)){S.sel=s;S.grp=[]}const chosen=new Set(selectedShapes());
       rowsOf().forEach(r=>{const q=a[idx(r)];if(chosen.has(q)){moving.push(r);r.classList.add('drag')}else rest.push(r)});
-      L.classList.add('dragging');ghost=document.createElement('div');ghost.className='lyghost92';ghost.textContent=moving.length>1?`${moving.length} layers`:lname92(s);document.body.append(ghost);render()};
+      L.classList.add('dragging');ghost=document.createElement('div');ghost.className='lyghost92';ghost.textContent=hm&&moving.length===hm.length?(row.querySelector('[data-gn]')?.firstChild?.textContent||'Group'):moving.length>1?`${moving.length} layers`:lname92(s);document.body.append(ghost);render()};
     const place=ev=>{ghost.style.left=(ev.clientX+14)+'px';ghost.style.top=(ev.clientY-10)+'px';rest.forEach(r=>r.classList.remove('dropt','dropb'));
       slot=rest.filter(r=>{const b=r.getBoundingClientRect();return b.top+b.height/2<ev.clientY}).length;
       if(rest.length){if(slot<rest.length)rest[slot].classList.add('dropt');else rest[rest.length-1].classList.add('dropb')}
       const lb=L.getBoundingClientRect();clearInterval(scrollT);const d=ev.clientY<lb.top+24?-8:ev.clientY>lb.bottom-24?8:0;if(d)scrollT=setInterval(()=>{L.scrollTop+=d},16)};
     const move=ev=>{if(!on){if(Math.abs(ev.clientY-y0)<5)return;begin()}ev.preventDefault();place(ev)};
-    const up=ev=>{removeEventListener('pointermove',move,true);removeEventListener('pointerup',up,true);removeEventListener('pointercancel',up,true);clearInterval(scrollT);if(!on){if(!(ev.shiftKey||ev.ctrlKey||ev.metaKey)&&last92&&last92.s===s&&Date.now()-last92.t<500){last92=null;rename(a.indexOf(s));return}last92={s,t:Date.now()};pick(ev,s);refresh();return}
+    const up=ev=>{removeEventListener('pointermove',move,true);removeEventListener('pointerup',up,true);removeEventListener('pointercancel',up,true);clearInterval(scrollT);if(!on){const mod=ev.shiftKey||ev.ctrlKey||ev.metaKey,key=hm?'g'+row.dataset.g:s;if(!mod&&last92&&last92.s===key&&Date.now()-last92.t<500){last92=null;if(hm)renameG(row);else rename(a.indexOf(s));return}last92={s:key,t:Date.now()};
+        if(hm){const cur=selectedShapes();if(mod){const has=hm.every(q=>cur.includes(q)),L2=has?cur.filter(q=>!hm.includes(q)):[...cur,...hm.filter(q=>!cur.includes(q))];S.sel=L2.length===1?L2[0]:null;S.grp=L2.length>1?a.filter(q=>L2.includes(q)):[]}else{S.sel=null;S.grp=hm}}else pick(ev,s);refresh();return}
       ghost.remove();L.classList.remove('dragging');
       const top=r=>a[idx(r)],ordered=[...rest.slice(0,slot).map(top),...moving.map(top),...rest.slice(slot).map(top)].reverse();
       if(ordered.some((q,i)=>q!==a[i])){snap();a.splice(0,a.length,...ordered);changed();refresh();layerToast9()}else refresh()};
