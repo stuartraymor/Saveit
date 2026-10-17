@@ -187,21 +187,32 @@ async function scrollCapture(d, r, horizontal=false) {
   try {
     const cx = d.bounds.x + r.x + r.w / 2, cy = d.bounds.y + r.y + r.h / 2;
     drv.move(cx, cy); await sleep(500);
-    let notches = 3, ppn = 0;
-    for (let i = 0; i < 80; i++) {
+    // 9.8: a frame that has not moved yet (smooth scrolling still running) or does not line up is re-checked
+    // before giving up, and a capture that stops early says so instead of quietly returning the first screen.
+    let notches = 3, ppn = 0, still = 0, lost = 0, frames = 0, why = '';
+    for (let i = 0; i < 120; i++) {
       const img = await grabDisplay(d), kk = img.getSize().width / d.bounds.width;
       const rect = { x: Math.round(r.x * kk), y: Math.round(r.y * kk), width: Math.max(1, Math.round(r.w * kk)), height: Math.max(1, Math.round(r.h * kk)) };
       const c = img.crop(rect), sz = c.getSize();
       const res = st.add({ ...(horizontal?transposeFrame({data:c.toBitmap(),w:sz.width,h:sz.height}):{data:c.toBitmap(),w:sz.width,h:sz.height}) });
-      if (res.done) break;
+      if (res.done && res.lost) { if (++lost <= 3) { await sleep(350); continue; } why = 'lost'; break; }
+      if (res.done) { if (++still <= 2) { if (still === 2) drv.wheel(notches); await sleep(still === 1 ? 500 : 650); continue; } break; }
+      still = 0; lost = 0; frames++;
       if (!res.first && res.added > 0) { ppn = res.added / notches; notches = Math.max(1, Math.min(30, Math.floor(sz.height * 0.6 / Math.max(1, ppn)))); }
-      if (st.total > 32000) break;
+      if (st.total > 32000) { why = 'long'; break; }
       drv.wheel(notches); await sleep(450);
     }
+    if (!why && frames <= 1) why = 'noscroll';
+    st.why = why;
   } finally { drv.close(); }
   const result = st.result(), o=horizontal?transposeFrame(result):result, { nativeImage } = require('electron');
-  return nativeImage.createFromBitmap(o.data, { width: o.w, height: o.h });
+  const img = nativeImage.createFromBitmap(o.data, { width: o.w, height: o.h });
+  lastScrollNote = st.why === 'lost' ? 'Scrolling capture stopped early: the page changed in a way that could not be lined up (moving content or a video). The part captured so far is shown. Try again, or turn on Manual scroll.'
+    : st.why === 'long' ? 'Scrolling capture stopped at the maximum length. The part captured so far is shown.'
+    : st.why === 'noscroll' ? 'The page did not scroll, so only the visible part was captured. Click inside the page first, or use Manual scroll.' : '';
+  return img;
 }
+let lastScrollNote = '';
 
 async function doCapture(mode, delay = 0, opts = {}, pre = null) {
   const wasVisible = win && win.isVisible() && !win.isMinimized();
@@ -250,7 +261,8 @@ async function doCapture(mode, delay = 0, opts = {}, pre = null) {
       break;
     }
     if(!opts.quiet)showWindow();
-    return { region:lastRegion, url: out.toDataURL(), cursor, settings, area: mode };
+    const note = mode === 'scroll' ? lastScrollNote : ''; lastScrollNote = '';
+    return { region:lastRegion, url: out.toDataURL(), cursor, settings, area: mode, note };
   } catch (err) {
     showWindow();
     throw err;
@@ -346,7 +358,7 @@ ipcMain.on('rec-ui', (e, on, info, extra) => {
     recWins.push(cw);
   }
   // Floating recording controls
-  const W = 400, H = 48;
+  const W = 460, H = 48;
   let x, y;
   if (region) { x = Math.round(region.x + region.w / 2 - W / 2); y = Math.round(region.y + region.h + 12); if (y + H > d.bounds.y + d.bounds.height) y = Math.max(d.bounds.y + 8, Math.round(region.y - H - 12)); if (y < d.bounds.y) y = d.bounds.y + 8; }
   else { const db = (info && info.display) || { x: d.bounds.x, y: d.bounds.y, w: d.bounds.width }; x = Math.round(db.x + db.w / 2 - W / 2); y = db.y + 12; }
@@ -355,7 +367,7 @@ ipcMain.on('rec-ui', (e, on, info, extra) => {
     webPreferences: { preload: asset('recbar-preload.js'), contextIsolation: true } });
   rb.setContentProtection(true);
   rb.setAlwaysOnTop(true, 'screen-saver');
-  rb.loadFile(asset('recbar.html'), { query: { size: region ? `${Math.round(region.w)} × ${Math.round(region.h)}` : 'Full screen', cursor: extra && extra.cursor ? '1' : '0', cam: cam ? '1' : '0', mic: extra && extra.mic ? '1' : '0', sys: extra && extra.sys ? '1' : '0' } });
+  rb.loadFile(asset('recbar.html'), { query: { size: (extra && typeof extra.size === 'string' && extra.size.slice(0, 60)) || (region ? `Region · ${Math.round(region.w * (d.scaleFactor || 1))} × ${Math.round(region.h * (d.scaleFactor || 1))} px` : 'Full screen'), cursor: extra && extra.cursor ? '1' : '0', cam: cam ? '1' : '0', mic: extra && extra.mic ? '1' : '0', sys: extra && extra.sys ? '1' : '0' } });
   rb.once('ready-to-show', () => rb.showInactive());
   recWins.push(rb);
 });
@@ -602,6 +614,8 @@ function buildTrayMenu() {
 app.on('second-instance', showWindow);
 
 app.whenReady().then(() => {
+  // 9.8: always build the accessibility tree, so Narrator, UI Automation and other assistive tools see named controls
+  try { app.setAccessibilitySupportEnabled(true); } catch (_) {}
   // Screen recording: hand the display under the cursor to getDisplayMedia (with system audio on Windows)
   session.defaultSession.setDisplayMediaRequestHandler(async (req, cb) => {
     try {
