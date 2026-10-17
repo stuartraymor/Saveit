@@ -9,7 +9,7 @@ if(!runtime)throw Error('SAVEIT_ELECTRON_PATH must name a separate review runtim
  try{
   const page=await app.firstWindow();await page.waitForFunction(()=>window.bench&&document.querySelector('[data-t="cutout"]'));await page.waitForTimeout(500);
   const identity=await app.evaluate(({app})=>({version:app.getVersion(),profile:app.getPath('userData'),app:app.getAppPath()}));
-  check('Native runtime uses version 9.9.2',identity.version==='9.9.2',identity);
+  check('Native runtime uses the current package version',identity.version===require('../app/package.json').version,identity);
   check('Native profile is disposable',path.resolve(identity.profile)===profile,identity.profile);
   check('Native application files match this checkout',fs.readFileSync(path.join(identity.app,'index.html'),'utf8')===fs.readFileSync(path.join(root,'app','index.html'),'utf8'),identity.app);
   check('Real preload bridge reports 9.9.2',await page.evaluate(()=>window.bench.appVersion())==='9.9.2');

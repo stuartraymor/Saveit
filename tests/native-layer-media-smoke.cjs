@@ -5,7 +5,7 @@ if(!runtime)throw Error('Set SAVEIT_ELECTRON_PATH to a separate review runtime.'
 (async()=>{const profile=path.join(out,'native-layer-profile-'+Date.now()),app=await _electron.launch({executablePath:runtime,env:{...process.env,SAVEIT_REVIEW_DATA:profile},timeout:30000}),results=[];
  const check=(name,ok)=>{results.push({name,pass:!!ok});assert.ok(ok,name)};
  try{const page=await app.firstWindow();page.setDefaultTimeout(15000);await page.waitForFunction(()=>document.body.dataset.catalogCount);
-  const identity=await app.evaluate(({app})=>({version:app.getVersion(),profile:app.getPath('userData'),app:app.getAppPath()}));check('Native version and disposable profile are correct',identity.version==='9.9.2'&&path.resolve(identity.profile)===profile);
+  const identity=await app.evaluate(({app})=>({version:app.getVersion(),profile:app.getPath('userData'),app:app.getAppPath()}));check('Native version and disposable profile are correct',identity.version===require('../app/package.json').version&&path.resolve(identity.profile)===profile);
   for(const f of ['index.html','aedit.js','audio-timeline.js','vedit2.js'])check('Packaged source matches '+f,fs.readFileSync(path.join(identity.app,f),'utf8')===fs.readFileSync(path.join(root,'app',f),'utf8'));
   await page.locator('#file').setInputFiles(path.join(out,'native-fixture.png'));await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('800 × 450'));
   for(const [type,x,y]of [['rect',.15,.2],['ellipse',.6,.55]]){await page.locator(`[data-t="${type}"]`).click();const b=await page.locator('#cv').boundingBox();await page.mouse.move(b.x+b.width*x,b.y+b.height*y);await page.mouse.down();await page.mouse.move(b.x+b.width*(x+.15),b.y+b.height*(y+.15),{steps:5});await page.mouse.up()}
