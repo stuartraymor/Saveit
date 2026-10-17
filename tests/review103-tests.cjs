@@ -35,4 +35,9 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
   r=await draw('arrow',[600,150],[850,300]);assert.equal(await hover(r[0],r[1]),'grab');assert.equal(await hover(r[2],r[3]),'grab');
   r=await draw('line',[600,400],[850,520]);assert.equal(await hover(r[0],r[1]),'grab');assert.equal(await hover(r[2],r[3]),'grab');
   const q=await at(r[2],r[3]);await page.mouse.move(q.x,q.y);await page.mouse.down();await page.mouse.move(q.x+10,q.y+10,{steps:3});assert.equal(await cur(),'grabbing');await page.mouse.up()});
+ await test('10.0.5: mic tracks are named Mic 1 / Mic 2 (not the long device name); pan shows as "Pan C" with a tooltip',async()=>{
+  const r=await ev(async()=>{const o={};for(const mics of [['pitchA'],['pitchA','pitchB']]){const ctl=await AEdit.record({mics,sys:false,onLevel(){},warn(){}});ctl.start();await QA.sleep(400);const tracks=await ctl.stop();o[mics.length]=tracks.map(t=>t.name)}return o});
+  assert.deepEqual(r[1],['Microphone']);assert.deepEqual(r[2],['Mic 1','Mic 2']);
+  const hint=await ev(async()=>{const it=__T.addAudio([{name:'Microphone',blob:await QA.toneWav([300],1),vol:1,mute:false,solo:false}],'pan');await QA.until(()=>__T.S.cur===it&&__T.audio?.getProject?.());await new Promise(r=>setTimeout(r,300));const e=document.querySelector('.alane .arow .hint');return[e.textContent,e.title,e.getAttribute('aria-label')]});
+  assert.deepEqual(hint,['Pan C','Pan: centre','Pan: centre'])});
  console.log(JSON.stringify({passed:results.filter(Boolean).length,failed:results.filter(x=>!x).length,errors}));await browser.close();process.exit(results.includes(0)||errors.length?1:0)})();
