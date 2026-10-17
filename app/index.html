@@ -821,7 +821,8 @@ let saveTarget9=null,saveOwner9=null;
 function saveExts9(it){const k=it.kind==='image'&&it.guide?'image':it.kind,l=(FORMATS[k]||FORMATS.image).map(x=>x[0]);if(it.kind==='video')return l.filter(x=>x==='mp4'?it.mp4:x==='webm'?it.webm:false);return['saveit',...l.filter(x=>x!=='saveit')]}
 async function save(fmtArg){const it=S.cur;if(!it)return;commitText();saveTarget9=null;saveOwner9=null;let fmt=typeof fmtArg==='string'?fmtArg:$('#fmt').value;
   if(typeof fmtArg!=='string'&&window.bench?.savePick){let p=it.savedPath;if(!p){p=await window.bench.savePick(baseName(it),saveExts9(it));if(!p)return}fmt=p.split('.').pop().toLowerCase();saveTarget9=p;saveOwner9=it}
-  if(it.kind==='video'){if(fmt==='gif'){saveTarget9=null;saveOwner9=null;if(vid&&vid._ctl)vid._ctl.saveGif();return}const b=fmt==='mp4'?it.mp4:it.webm;if(!b){toast(fmt==='mp4'?'This recording was made without MP4. Choose WebM, or record again in this version to get both.':'This recording only has MP4. Choose MP4.',6000);return}saveBlob(b,fileName(fmt));return}
+  if(it.kind==='video'){if(fmt==='gif'){saveTarget9=null;saveOwner9=null;if(vid&&vid._ctl)vid._ctl.saveGif();return}const ctl97=vid&&vid._ctl;if(ctl97&&ctl97.needsRender&&ctl97.needsRender()){toast('Saving with your webcam and layout… keep this window open and in front. It takes as long as the video.',9000);(async()=>{try{const o=await ctl97.renderBlob(),b2=fmt==='mp4'?o.mp4:(o.webm||o.mp4);if(!b2){toast('MP4 could not be made here. Choose WebM.',6000);return}saveBlob(b2,fileName(fmt))}catch(e){toast('Could not save: '+(e.message||e),6000)}})();return}
+  const b=fmt==='mp4'?it.mp4:it.webm;if(!b){toast(fmt==='mp4'?'This recording was made without MP4. Choose WebM, or record again in this version to get both.':'This recording only has MP4. Choose MP4.',6000);return}saveBlob(b,fileName(fmt));return}
   if(fmt==='saveit')return saveSaveit(it.guide&&false?it.guide:it);
   if(it.kind==='guide'){if(fmt==='docx')return exportDocx(it);if(fmt==='pdf')return exportPdf(it);if(fmt==='jpg')return exportGuideJpg(it);if(fmt==='png'){const pc=renderPageCanvas(it,2);pc.canvas.toBlob(b=>saveBlob(b,safeName(it.title)+'.png'),'image/png');return}return}
   const c=exportCanvas();
@@ -931,8 +932,11 @@ async function compose(stream,rect,displayW,cam,displayH){if(!rect&&!cam)return{
   const kx=v.videoWidth/(displayW||v.videoWidth),ky=displayH?v.videoHeight/displayH:kx,r=rect||{x:0,y:0,w:v.videoWidth/kx,h:v.videoHeight/ky};
   const sx=Math.min(Math.max(0,r.x*kx),v.videoWidth-2),sy=Math.min(Math.max(0,r.y*ky),v.videoHeight-2),sw=Math.min(r.w*kx,v.videoWidth-sx),sh=Math.min(r.h*ky,v.videoHeight-sy);
   const c=document.createElement('canvas');c.width=Math.max(2,Math.round(sw)&~1);c.height=Math.max(2,Math.round(sh)&~1);const g=c.getContext('2d');
-  const draw=()=>{g.drawImage(v,sx,sy,sw,sh,0,0,c.width,c.height);if(cam)drawCam(g,cam.video,c.width,c.height,cam.o)};draw();const iv=setInterval(draw,1000/30);
+  const draw=()=>{g.drawImage(v,sx,sy,sw,sh,0,0,c.width,c.height)};draw();const iv=setInterval(draw,1000/30);
   const out=c.captureStream(30);stream.getAudioTracks().forEach(t=>out.addTrack(t));
+  // 9.7: the webcam is recorded as its own track; the video editor places it (Layout tab)
+  if(cam){const tr=cam.stream.getVideoTracks();if(tr.length){const mt=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(m=>window.MediaRecorder&&MediaRecorder.isTypeSupported(m)),r=new MediaRecorder(new MediaStream(tr),mt?{mimeType:mt,videoBitsPerSecond:4e6}:undefined),ch=[];
+    r.ondataavailable=ev=>ev.data.size&&ch.push(ev.data);out._camRec={r,o:{...cam.o},done:new Promise(res=>r.onstop=()=>res(new Blob(ch,{type:'video/webm'})))}}}
   return{recStream:out,cleanup:()=>{clearInterval(iv);v.srcObject=null;if(cam){cam.stream.getTracks().forEach(t=>t.stop());cam.video.srcObject=null}}}}
 async function autoCam(){const o=camSettings();try{const {stream,fellBack}=await DEVICES.open('cam',devPick.cam,{width:{ideal:1280},height:{ideal:720}});if(fellBack)toast('The chosen webcam was not found, so the default webcam is used.',5000);const vEl=document.createElement('video');vEl.muted=true;vEl.playsInline=true;vEl.srcObject=stream;await vEl.play();return{stream,video:vEl,o}}catch(e){toast(e.message+' Recording without the webcam.',7000);return null}}
 async function startRec(pre){
@@ -969,25 +973,28 @@ async function beginRecording(stream,recStream,cleanup,uiInfo,uiExtra){
   const types=[pick(['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']),pick(['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1,opus','video/mp4;codecs=avc1','video/mp4'])].filter(Boolean);
   const recs=types.map(t=>{const r=new MediaRecorder(recStream,{mimeType:t}),ch=[];r.ondataavailable=e=>e.data.size&&ch.push(e.data);return{r,ch,type:t}});
   if(!recs.length){const r=new MediaRecorder(recStream),ch=[];r.ondataavailable=e=>e.data.size&&ch.push(e.data);recs.push({r,ch,type:r.mimeType||'video/webm'})}
-  const mr=recs[0].r;
+  const mr=recs[0].r,camRec=recStream._camRec||null;
   let bar=null,tm=null,secs=0,paused=false;
   if(!window.bench){bar=document.createElement('div');bar.className='recbar';bar.innerHTML='<span class="dot"></span><span class="t">00:00</span><button class="btn" data-a="pause">Pause</button><button class="btn pri" data-a="stop">Stop</button>';document.body.appendChild(bar);
     tm=setInterval(()=>{if(!paused){secs++;bar.querySelector('.t').textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0')}},1000);
     bar.addEventListener('click',e=>{const a=e.target.dataset.a;if(a==='stop')stop();if(a==='pause'){togglePause();e.target.textContent=paused?'Resume':'Pause'}});}
   let finished=false;
-  const finalize=async()=>{if(finished)return;finished=true;if(tm)clearInterval(tm);if(bar)bar.remove();try{if(cleanup)cleanup()}catch(e){}stream.getTracks().forEach(t=>t.stop());recStream.getTracks().forEach(t=>t.stop());
+  const finalize=async()=>{if(finished)return;finished=true;if(tm)clearInterval(tm);if(bar)bar.remove();const camBlob=camRec?await Promise.race([camRec.done,new Promise(r=>setTimeout(()=>r(null),4000))]):null;try{if(cleanup)cleanup()}catch(e){}stream.getTracks().forEach(t=>t.stop());recStream.getTracks().forEach(t=>t.stop());
     if(window.bench){window.bench.setRecording(false);window.bench.recUI(false)}rec=null;setCapLabel();
     const blobs={};for(const x of recs)if(x.ch.length)blobs[/mp4/.test(x.type)?'mp4':'webm']=new Blob(x.ch,{type:x.type.split(';')[0]});
     const main=blobs.webm||blobs.mp4;if(!main){toast('The recording was empty, so nothing was saved.');return}
-    const v=addVideo(main,null,await videoThumb(main));v.mp4=blobs.mp4||null;v.webm=blobs.webm||null;persist(v);renderProps();
+    const v=addVideo(main,null,await videoThumb(main));v.mp4=blobs.mp4||null;v.webm=blobs.webm||null;
+    if(camBlob&&camBlob.size>2000){const o=camRec.o||{};v.edit={cam:{src:'scam',off:0,o:{mirror:o.mirror!==false}},look:{layout:'pip',bg:'black',pos:o.pos||'br',shape:o.shape==='rect'?'wide':o.shape==='circle'?'circle':(o.corners==='rounded'?'rounded':'square'),camSize:+o.size||22,round:true,shadow:true,border:o.border!==false}};v._edBlobs={scam:camBlob};openItem(v)}
+    persist(v);renderProps();
+    if(camBlob&&$('#clipOn').checked&&window.bench){toast('Putting the webcam into the recording for the clipboard… this takes as long as the recording.',9000);try{let ctl=null;for(let i=0;i<40&&!(ctl=vid&&vid._ctl)?.needsRender?.();i++)await new Promise(r=>setTimeout(r,250));const o2=await ctl.renderBlob(),b=o2.mp4||o2.webm;const ok=await window.bench.copyFile(fileName(o2.mp4?'mp4':'webm'),await b.arrayBuffer());toast(ok?'Recording saved to Recent and copied to the clipboard.':'Recording saved to Recent. It could not be put on the clipboard.',6000)}catch(e){toast('Recording saved to Recent. It could not be put on the clipboard.',6000)}return}
     if($('#clipOn').checked&&window.bench){const b=v.mp4||v.webm;const ok=await window.bench.copyFile(fileName(v.mp4?'mp4':'webm'),await b.arrayBuffer());toast(ok?'Recording saved to Recent and copied to the clipboard. Paste it into an email, Teams or a folder.':'Recording saved to Recent. It could not be put on the clipboard.',6000)}
     else toast('Recording saved to Recent');};
   let stopped=0;
-  const stop=()=>{if(finished)return;for(const x of recs){try{if(x.r.state==='paused')x.r.resume();if(x.r.state!=='inactive'){x.r.requestData();x.r.stop()}}catch(e){}}setTimeout(finalize,2500)};
-  const togglePause=()=>{if(mr.state==='inactive')return;paused=!paused;for(const x of recs){try{paused?x.r.pause():x.r.resume()}catch(e){}}if(window.bench)window.bench.recState(paused?'paused':'recording')};
+  const stop=()=>{if(finished)return;try{if(camRec&&camRec.r.state!=='inactive'){if(camRec.r.state==='paused')camRec.r.resume();camRec.r.stop()}}catch(e){}for(const x of recs){try{if(x.r.state==='paused')x.r.resume();if(x.r.state!=='inactive'){x.r.requestData();x.r.stop()}}catch(e){}}setTimeout(finalize,2500)};
+  const togglePause=()=>{if(mr.state==='inactive')return;paused=!paused;for(const x of [...recs,...(camRec?[camRec]:[])]){try{paused?x.r.pause():x.r.resume()}catch(e){}}if(window.bench)window.bench.recState(paused?'paused':'recording')};
   stream.getVideoTracks()[0].addEventListener('ended',stop);
   for(const x of recs)x.r.onstop=()=>{if(++stopped>=recs.length)setTimeout(finalize,50)};
-  for(const x of recs)x.r.start(1000);rec={mr,stop,togglePause};setCapLabel();
+  for(const x of recs)x.r.start(1000);if(camRec)try{camRec.r.start(1000)}catch(e){}rec={mr,stop,togglePause};setCapLabel();
   if(window.bench){window.bench.setRecording(true);window.bench.recUI(true,uiInfo,uiExtra)}
 }
 function videoThumb(blob){return new Promise(res=>{const v=document.createElement('video');v.muted=true;v.src=URL.createObjectURL(blob);v.onloadeddata=()=>{v.currentTime=Math.min(.5,(v.duration||1)/2)};v.onseeked=()=>{try{const c=canvasFrom(v,192,Math.round(192*v.videoHeight/v.videoWidth)||108);res(c.toDataURL('image/jpeg',.7))}catch(e){res('')}URL.revokeObjectURL(v.src)};v.onerror=()=>res('');setTimeout(()=>res(''),4000)})}
