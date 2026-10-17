@@ -20,7 +20,7 @@ It installs for your user account only, with no admin rights. Setup downloads th
 
 See [SETUP.txt](SETUP.txt) for hotkeys and details.
 
-What's new: [9.5.0](CHANGES-9.5.0.md) · [9.4.0](CHANGES-9.4.0.md) · [9.3.0](CHANGES-9.3.0.md) · [9.2.0](CHANGES-9.2.0.md) · [9.1.0](CHANGES-9.1.0.md) · [9.0.0](CHANGES-9.0.0.md) · [8.0.0](CHANGES-8.0.0.md) · [3.7.0](CHANGES-3.7.0.md).
+What's new: [9.7.0](CHANGES-9.7.0.md) · [9.6.0](CHANGES-9.6.0.md) · [9.5.0](CHANGES-9.5.0.md) · [9.4.0](CHANGES-9.4.0.md) · [9.3.0](CHANGES-9.3.0.md) · [9.2.0](CHANGES-9.2.0.md) · [9.1.0](CHANGES-9.1.0.md) · [9.0.0](CHANGES-9.0.0.md) · [8.0.0](CHANGES-8.0.0.md) · [3.7.0](CHANGES-3.7.0.md).
 
 ## Run from source
 
