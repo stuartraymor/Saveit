@@ -656,7 +656,7 @@ function handles(s){
   if(!UNIFORM.includes(s.t))hs.push(['n',cx,y],['e',x+w,cy],['s',cx,y+h],['w',x,cy]);
   if(s.t==='callout')hs.push(['tail',s.tx,s.ty]);
   return hs}
-const HANDLE_CURSOR={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',p1:'crosshair',p2:'crosshair'};
+const HANDLE_CURSOR={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',p1:'grab',p2:'grab'};
 // Maps a shape from its starting box b onto box nb (used by handles and by the exact size fields).
 function applyBox(s,s0,b,nb){const sx=nb.w/(b.w||1),sy=nb.h/(b.h||1),X=v=>nb.x+(v-b.x)*sx,Y=v=>nb.y+(v-b.y)*sy;
   if(s.t==='text'){s.fs=Math.max(4,s0.fs*sy);if(s0.tw)s.tw=s0.tw*sy;s.x1=s.x2=nb.x;s.y1=s.y2=nb.y;s._w=null}
@@ -734,7 +734,7 @@ cv.addEventListener('pointerdown',e=>{
   const {x,y}=pt(e);cv.setPointerCapture(e.pointerId);
   const t=S.tool;
   const hk=hitHandle(x,y);
-  if(hk){snap();S.drag={mode:'handle',k:hk,s:S.sel,b0:selBox(S.sel),s0:clone(S.sel)};return}
+  if(hk){snap();S.drag={mode:'handle',k:hk,s:S.sel,b0:selBox(S.sel),s0:clone(S.sel)};if(hk==='p1'||hk==='p2')cv.style.cursor='grabbing';return}
   if(selectedBorder(x,y)||((t==='stamp'||t==='step')&&S.sel&&!S.sel.hidden9&&!S.sel.locked9&&hit(x,y)===S.sel)){
     snap();S.drag={mode:'move',s:S.sel,lx:x,ly:y,moved:false};cv.style.cursor='move';return}
   if(t==='ocr'){S.sel=null;S.drag={mode:'pix',ocr:true};S.pixRect={x1:x,y1:y,x2:x,y2:y};render();return}
@@ -2515,7 +2515,7 @@ const hit0=hit;hit=function(x,y){const s=hit0(x,y);if(s&&s._editing9){const keep
 
 // ---------- 9.02: select and move in the Image tab ----------
 window.imageTabDown9=function(e,x,y){const it=S.cur;
-  const hk=hitHandle(x,y);if(hk&&S.sel&&S.sel.t!=='img'){snap();S.drag={mode:'handle',k:hk,s:S.sel,b0:selBox(S.sel),s0:clone(S.sel)};return}
+  const hk=hitHandle(x,y);if(hk&&S.sel&&S.sel.t!=='img'){snap();S.drag={mode:'handle',k:hk,s:S.sel,b0:selBox(S.sel),s0:clone(S.sel)};if(hk==='p1'||hk==='p2')cv.style.cursor='grabbing';return}
   const target=rzTargetShape88(),rb=rzBox88();const hs=target&&!target.locked9&&!target.hidden9&&nearBorder(x,y,{x:rb.L,y:rb.T,w:rb.R-rb.L,h:rb.B-rb.T},6/scale())?target:hit(x,y);
   if(e.shiftKey&&hs){const cur=grpList().length>1?grpList():S.sel?[S.sel]:[],g=groupOf9(hs),has=cur.includes(hs);const L=has?cur.filter(q=>!g.includes(q)):[...cur,...g.filter(q=>!cur.includes(q))];setSel9(L);render();renderProps();return}
   if(!hs){S.sel=null;S.grp=[];if(!it.base._blank&&x>=0&&y>=0&&x<=it.base.width&&y<=it.base.height)S.rzTarget=null;S.rz=null;render();renderProps();return}

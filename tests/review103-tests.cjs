@@ -26,4 +26,13 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
    const n=()=>it.audioProject.clips.length,o={start:n()};__T.audio.seek(1.5);__T.audio.split();o.split=n();document.querySelector('#undoBtn').click();await new Promise(r=>setTimeout(r,150));o.afterTopUndo=n();
    __T.audio.redo?.();o.redo=n();__T.audio.undo();o.afterAudioUndo=n();return o});
   assert.equal(r.start,1);assert.equal(r.split,2);assert.equal(r.afterTopUndo,1,JSON.stringify(r));assert.equal(r.afterAudioUndo,1,JSON.stringify(r))});
+ await test('10.0.4 cursors: resize arrows on box handles, grab hand on arrow/line ends, move on the body',async()=>{
+  await ev(()=>{const it=__T.addImage(QA.canvas(1000,600,'#edf2f7'),'cursor test',{flat:true});__T.openItem(it);__T.S.zoom=.8});
+  const at=(x,y)=>ev(({x,y})=>{const cv=document.querySelector('#cv'),r=cv.getBoundingClientRect(),k=cv.width/r.width;return{x:r.left+x/k,y:r.top+y/k}},{x,y}),cur=()=>ev(()=>document.querySelector('#cv').style.cursor);
+  const draw=async(tool,a,z)=>{await ev(t=>__T.setTool(t),tool);const p=await at(...a),q=await at(...z);await page.mouse.move(p.x,p.y);await page.mouse.down();await page.mouse.move(q.x,q.y,{steps:6});await page.mouse.up();return ev(()=>{const s=__T.S.sel;return[s.x1,s.y1,s.x2,s.y2]})};
+  const hover=async(x,y)=>{const q=await at(x,y);await page.mouse.move(q.x+25,q.y+25);await page.mouse.move(q.x,q.y);return cur()};
+  let r=await draw('rect',[200,200],[500,400]);assert.equal(await hover(r[2],r[3]),'nwse-resize');assert.equal(await hover(r[2],r[1]),'nesw-resize');assert.equal(await hover(350,r[1]),'ns-resize');assert.equal(await hover((r[0]+r[2])/2,(r[1]+r[3])/2),'move');
+  r=await draw('arrow',[600,150],[850,300]);assert.equal(await hover(r[0],r[1]),'grab');assert.equal(await hover(r[2],r[3]),'grab');
+  r=await draw('line',[600,400],[850,520]);assert.equal(await hover(r[0],r[1]),'grab');assert.equal(await hover(r[2],r[3]),'grab');
+  const q=await at(r[2],r[3]);await page.mouse.move(q.x,q.y);await page.mouse.down();await page.mouse.move(q.x+10,q.y+10,{steps:3});assert.equal(await cur(),'grabbing');await page.mouse.up()});
  console.log(JSON.stringify({passed:results.filter(Boolean).length,failed:results.filter(x=>!x).length,errors}));await browser.close();process.exit(results.includes(0)||errors.length?1:0)})();
