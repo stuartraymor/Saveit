@@ -1,8 +1,8 @@
 // Voice effects, shared parameter definitions, processing and honest response diagrams.
 (function(root){
 const defs={
- highpass:{name:'Rumble filter',short:'Low cut',color:'#72cdb8',hint:'Reduce low rumble and microphone handling noise.',params:[['cutoffHz','Cut below',20,400,1,80,'Hz']]},
- eq:{name:'Voice EQ',short:'EQ',color:'#8db3ff',hint:'Shape warmth, clarity and brightness without changing timing.',params:[['lowDb','Warmth',-12,12,.5,0,'dB'],['midDb','Clarity',-12,12,.5,0,'dB'],['highDb','Brightness',-12,12,.5,0,'dB'],['midHz','Clarity frequency',200,8000,50,2500,'Hz']]},
+ highpass:{name:'Rumble filter',short:'Low cut',color:'#72cdb8',hint:'Non-resonant 24 dB/octave low cut. Reduce rumble without boosting low voice frequencies.',params:[['cutoffHz','Cut below',20,400,1,80,'Hz']]},
+ eq:{name:'Voice EQ',short:'EQ',color:'#8db3ff',hint:'Starts flat: adjust Warmth, Clarity and Brightness, or apply a voice preset.',params:[['lowDb','Warmth',-12,12,.5,0,'dB'],['midDb','Clarity',-12,12,.5,0,'dB'],['highDb','Brightness',-12,12,.5,0,'dB'],['midHz','Clarity frequency',200,8000,50,2500,'Hz']]},
  compressor:{name:'Compressor',short:'Dynamics',color:'#d5a4f4',hint:'Reduce loud passages for a more even voice. Output gain restores level.',params:[['thresholdDb','Threshold',-60,0,1,-18,'dB'],['ratio','Ratio',1,12,.1,3,':1'],['kneeDb','Soft knee',0,30,1,12,'dB'],['attackMs','Attack',1,100,1,10,'ms'],['releaseMs','Release',30,600,10,150,'ms'],['makeupDb','Output gain',0,18,.5,0,'dB']]},
  limiter:{name:'Peak limiter',short:'Peak control',color:'#f2bd78',hint:'Keep loud peaks below a chosen level while preserving stereo balance.',params:[['ceilingDb','Ceiling',-12,0,.5,-1,'dBFS'],['releaseMs','Release',20,500,10,100,'ms']]},
  gain:{name:'Gain (dB)',short:'Level',color:'#72cdb8',hint:'Raise or lower this target by an exact number of decibels.',params:[['gainDb','Gain',-60,36,.1,0,'dB']]}
@@ -18,12 +18,12 @@ function validate(f){const d=defs[f.type];if(!d)return;for(const [key,,min,max,,
 function needsWorklet(p){return[p,...p.tracks,...p.clips].some(o=>!o.effectsBypassed114&&o.effects.some(f=>!f.bypass&&['compressor','limiter'].includes(f.type)))}
 async function prepare(ctx,p){if(!needsWorklet(p))return;if(!ctx.audioWorklet)throw Error('Voice dynamics are unavailable in this runtime. Bypass Compressor and Peak limiter to continue.');if(!pending.has(ctx))pending.set(ctx,ctx.audioWorklet.addModule(new URL('audio-dynamics-worklet.js',document.baseURI).href).catch(e=>{pending.delete(ctx);throw e}));await pending.get(ctx)}
 function filters(ctx,f){const result=[],mk=(type,hz,gain=0,q=.707)=>{const n=ctx.createBiquadFilter();n.type=type;n.frequency.value=Math.min(ctx.sampleRate*.45,hz);n.gain.value=gain;n.Q.value=q;result.push(n)};
- if(f.type==='highpass')mk('highpass',f.cutoffHz??80);
+ if(f.type==='highpass'){for(const q of [.541196100146197,1.306562964876377])mk('highpass',f.cutoffHz??80,0,20*Math.log10(q))}
  else if(f.type==='eq'){mk('lowshelf',180,f.lowDb??0);mk('peaking',f.midHz??2500,f.midDb??0,.9);mk('highshelf',6500,f.highDb??0)}
  return result;
 }
 function build(ctx,f){validate(f);let nodes=filters(ctx,f),update;
- if(nodes.length){update=n=>{const values=n.type==='highpass'?[[n.cutoffHz??80,0]]:[[180,n.lowDb??0],[n.midHz??2500,n.midDb??0],[6500,n.highDb??0]];nodes.forEach((node,i)=>{node.frequency.setTargetAtTime(Math.min(ctx.sampleRate*.45,values[i][0]),ctx.currentTime,.015);node.gain.setTargetAtTime(values[i][1],ctx.currentTime,.015)})}}
+ if(nodes.length){update=n=>{const values=n.type==='highpass'?[[n.cutoffHz??80,0],[n.cutoffHz??80,0]]:[[180,n.lowDb??0],[n.midHz??2500,n.midDb??0],[6500,n.highDb??0]];nodes.forEach((node,i)=>{node.frequency.setTargetAtTime(Math.min(ctx.sampleRate*.45,values[i][0]),ctx.currentTime,.015);node.gain.setTargetAtTime(values[i][1],ctx.currentTime,.015)})}}
  else if(f.type==='gain'){const n=ctx.createGain();n.gain.value=10**((f.gainDb??0)/20);nodes=[n];update=s=>n.gain.setTargetAtTime(10**((s.gainDb??0)/20),ctx.currentTime,.015)}
  else{const n=new AudioWorkletNode(ctx,'saveit-dynamics',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2],processorOptions:f});nodes=[n];update=s=>n.port.postMessage(s)}
  nodes.forEach((n,i)=>{if(i)nodes[i-1].connect(n)});return{input:nodes[0],output:nodes.at(-1),nodes,update,dispose(){nodes.forEach(n=>{try{n.port?.postMessage({stop:true});n.port?.close();n.disconnect()}catch(_){}})}};
