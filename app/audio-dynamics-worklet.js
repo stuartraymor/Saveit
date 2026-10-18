@@ -1,6 +1,6 @@
 // Stereo-linked, zero-lookahead dynamics. Runs identically for playback and offline export.
 class SaveitDynamics extends AudioWorkletProcessor {
- constructor(options){super();this.settings=options.processorOptions||{};this.gain=1;this.port.onmessage=e=>{this.settings={...this.settings,...e.data}}}
+ constructor(options){super();this.settings=options.processorOptions||{};this.gain=1;this.frames=0;this.port.onmessage=e=>{this.settings={...this.settings,...e.data}}}
  process(inputs,outputs){
   const input=inputs[0],output=outputs[0],s=this.settings;if(s.stop)return false;
   if(!input?.length||!output?.length)return true;
@@ -17,7 +17,7 @@ class SaveitDynamics extends AudioWorkletProcessor {
    const coeff=desired<this.gain?(s.type==='limiter'?0:attack):release;this.gain=coeff*this.gain+(1-coeff)*desired;
    for(let ch=0;ch<output.length;ch++)output[ch][i]=(input[ch]||input[0])[i]*this.gain*(s.type==='limiter'?1:makeup);
   }
-  return true;
+  if(++this.frames%20===0)this.port.postMessage({reductionDb:-20*Math.log10(Math.max(1e-12,this.gain))});return true;
  }
 }
 registerProcessor('saveit-dynamics',SaveitDynamics);

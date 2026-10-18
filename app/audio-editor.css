@@ -75,3 +75,10 @@ body.audio-workspace94 #rail{display:none}body.audio-workspace94 .app{grid-templ
 
 /* Voice cleanup: detailed controls scroll; output remains accessible. */
 .a94 .cleanup115{border:1px solid #41565f;border-radius:9px;padding:10px;background:linear-gradient(140deg,#253b3d,#202a33);display:grid;gap:8px}.a94 .cleanup115 summary{cursor:pointer;font-weight:600;color:#a9e3d2}.a94 .cleanup115>label{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px}.a94 .cleanup115 .btn{font-size:10px}.a94 .cleanup115 p,.a94 .loudness115 p{margin:5px 0;line-height:1.45}.a94 .loudness115{border-top:1px solid #384953;padding-top:7px}.a94 .loudness115 select{min-width:80px;font-size:11px}.audio-job115 .box{width:min(420px,90vw)}.audio-job115 progress{width:100%;accent-color:#79cdb7}
+
+/* 10.1.6: de-essing and complete effect controls. */
+.a94 .deess-listen116{display:flex;align-items:center;gap:7px;font-size:11px;color:#f0bbce;margin:10px 0}.a94 .deess-meter116{display:flex;align-items:center;gap:8px;padding:8px;background:#151c22;border-radius:6px;font-size:10px}.a94 .deess-meter116 meter{flex:1;min-width:45px;accent-color:#eda9c1}.a94 .deess-meter116 output{font:11px Consolas,monospace;min-width:43px}.a94 [data-addfx114=limiter]{grid-column:1/-1}.a94 .fx-dialog114 .fields94 label{font-size:12px}.a94 .fx-dialog114 .fields94 input{min-height:36px}
+
+.a94 .atools .btn svg,.a94 .azoom .btn svg,.a94 .atrans .btn svg{width:15px;height:15px;flex:none}.a94 .afxtitle svg{width:13px;height:13px;vertical-align:middle}.a94 .fxentry94 [data-order] svg{width:12px;height:12px}.a94 .arec svg{fill:currentColor;stroke-width:1}.a94 .atools [data-a=undo],.a94 .atools [data-a=redo]{min-width:30px}
+
+.a94 .hint94.monitor116{color:#ffc1d0;background:#4c293b;border-top:1px solid #795062}

@@ -26,7 +26,9 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
   await ev(()=>__T.saveBlob(new Blob(['x']),'t.png'));await page.waitForTimeout(150);const t=await toastText();assert.match(t,/Saved to/);assert.doesNotMatch(t,/Preparing/);
   assert.equal(await page.locator('.toast button:has-text("Open folder")').count(),1);await page.locator('.toast button:has-text("Open folder")').click();assert.match(await ev(()=>window.__revealed),/t\.png$/)});
  await test('Fix 3: Word export shows Preparing the Word document at once and then Saved to',async()=>{
-  await guide();await page.locator('#gDocx').click();await page.waitForTimeout(100);assert.match(await toastText(),/Preparing the Word document/);
+  await guide();await ev(()=>{window.__wordSave=window.bench.save;window.__finishWordSave=null;window.bench.save=(...args)=>new Promise(resolve=>{window.__finishWordSave=()=>window.__wordSave(...args).then(resolve)})});
+  await page.locator('#gDocx').click();await page.waitForFunction(()=>typeof window.__finishWordSave==='function');assert.match(await toastText(),/Preparing the Word document/);
+  await ev(()=>{window.__finishWordSave();window.bench.save=window.__wordSave});
   await page.waitForFunction(()=>/Saved to/.test([...document.querySelectorAll('.toast')].map(t=>t.textContent).join('')));assert.ok((await ev(()=>__saved.at(-1).name)).endsWith('.docx'))});
  await test('Fix 3: cancelling the Save window clears the Preparing message',async()=>{
   await guide();await ev(()=>{window.bench.save=async()=>null;__T.toast('Preparing the test…',0)});await ev(()=>__T.saveBlob(new Blob(['x']),'t.png'));await page.waitForTimeout(150);assert.equal(await toastText(),'')});
