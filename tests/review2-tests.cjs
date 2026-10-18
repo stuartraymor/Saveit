@@ -62,4 +62,13 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
    for(let i=0;i<100&&T.S.items.length===before;i++)await new Promise(r=>setTimeout(r,100));clearInterval(iv);await new Promise(r=>setTimeout(r,500));
    const v=T.S.items.find(i=>i.kind==='video'&&i.webm&&/^Recording|^Video|^Screen/i.test(i.name||'')||i.kind==='video'&&i.webm);return{n:T.S.items.length-before,has:!!(v&&v.webm),ms:v&&v.webm?await WebmFix.duration(v.webm):-1}});
   assert.ok(r.has,'a recording with a WebM was stored');assert.ok(r.ms>1500&&r.ms<2600,'length '+r.ms+' ms (about 2.0 s of recording, 1.2 s of pause left out)')});
+ // ---- Grab Text (10.1.2)
+ await test('B11: text annotations are read from the shapes, not from the picture, and follow the text read from the picture',async()=>{
+  const r=await ev(async()=>{const T=__T,base=QA.canvas(600,300,'#ffffff'),g=base.getContext('2d');g.fillStyle='#000';g.font='20px sans-serif';g.fillText('Row text on the picture',20,40);
+   const it=T.addImage(base,'ocr notes',{flat:true});T.openItem(it);const c=T.newShape('callout',200,100);Object.assign(c,{x2:500,y2:200,tx:300,ty:260,txt:'Follow up with purchasing',fill:'#ffff99'});it.shapes.push(c);
+   let sent=null;window.bench.ocr=async url=>{sent=url;return 'Row text on the picture'};window.bench.ocrLayout=async()=>({lines:[]});
+   await T.grabTextFrom({x:0,y:0,w:600,h:300});await new Promise(r=>setTimeout(r,500));
+   const img=new Image();img.src=sent;await img.decode();const cv=document.createElement('canvas');cv.width=img.naturalWidth;cv.height=img.naturalHeight;const cx=cv.getContext('2d');cx.drawImage(img,0,0);const k=img.naturalWidth/600,p=cx.getImageData(Math.round(350*k),Math.round(150*k),1,1).data;
+   return{text:document.querySelector('#ocrText')?.value,calloutAreaWhite:p[0]>250&&p[1]>250&&p[2]>250,scaled:k}});
+  assert.equal(r.text,'Row text on the picture\n\nFollow up with purchasing');assert.equal(r.calloutAreaWhite,true,'the callout is not in the picture that is read')});
  console.log(JSON.stringify({passed:results.filter(Boolean).length,failed:results.filter(x=>!x).length,errors}));await browser.close();process.exit(results.includes(0)||errors.length?1:0)})();

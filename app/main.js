@@ -36,6 +36,8 @@ ipcMain.handle('workflow-config',e=>{mainSender33(e);return{presets:workflowConf
 ipcMain.handle('workflow-save',async(e,list)=>{mainSender33(e);if(!Array.isArray(list)||list.length>100||!list.every(p=>typeof p.id==='string'&&typeof p.name==='string'&&p.name.length<=150&&['region','window','screen'].includes(p.area)&&(!p.hotkey||typeof p.hotkey==='string'&&p.hotkey.length<=100)&&(!p.folder||workflowConfig.folders.includes(p.folder))))throw Error('Invalid preset settings');workflowConfig.presets=list;await saveWorkflowConfig();return restoreWorkflowKeys()});
 ipcMain.handle('workflow-folder',async e=>{mainSender33(e);const r=await dialog.showOpenDialog(win,{title:'Choose automatic capture save folder',properties:['openDirectory','createDirectory']});if(r.canceled||!r.filePaths[0])return null;const folder=path.resolve(r.filePaths[0]);if(!workflowConfig.folders.includes(folder))workflowConfig.folders.push(folder);await saveWorkflowConfig();return folder});
 ipcMain.handle('workflow-file',async(e,folder,name,data)=>{mainSender33(e);if(!workflowConfig.folders.includes(folder))throw Error('Choose this save folder in Workflows first.');const safe=path.basename(String(name)).replace(/[<>:"/\\|?*\x00-\x1f]/g,'-');if(!safe||!safe.endsWith('.png'))throw Error('Expected a PNG filename');const parsed=path.parse(safe);let out=path.join(folder,safe),i=2;while(fs.existsSync(out))out=path.join(folder,parsed.name+'-'+i+++parsed.ext);await fs.promises.writeFile(out,Buffer.from(data),{flag:'wx'});return out});
+// 10.1.2: Grab Text output. Words far apart in one row are separated by a tab (a table cell, a label next to its value).
+function ocrJoinRow35(w) { const hs = w.map(a => a.rect.h).sort((a, b) => a - b), limit = Math.max(14, 1.5 * hs[Math.floor(hs.length / 2)]); let t = ''; w.forEach((a, i) => { if (i) { const gap = a.rect.x - (w[i - 1].rect.x + w[i - 1].rect.w); t += gap > limit ? '\t' : ' '; } t += a.text; }); return t; }
 ipcMain.handle('ocr-layout',async(e,url)=>{mainSender33(e);return recognize35(url)});
 ipcMain.handle('print-image',async(e,url)=>{mainSender33(e);if(typeof url!=='string'||!url.startsWith('data:image/png;base64,'))throw Error('Expected a PNG image');const w=new BrowserWindow({show:false,webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true}});try{await w.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent('<html><head><style>@page{margin:12mm}body{margin:0}img{max-width:100%;height:auto}</style></head><body><img src="'+url+'"></body></html>'));await w.webContents.executeJavaScript('Promise.all([...document.images].map(i=>i.decode()))');return await new Promise(resolve=>w.webContents.print({silent:false,printBackground:true},(ok,reason)=>resolve({ok,reason})))}finally{w.destroy()}});
 function transposeFrame(f){const data=Buffer.alloc(f.w*f.h*4);for(let y=0;y<f.h;y++)for(let x=0;x<f.w;x++){const a=(y*f.w+x)*4,b=(x*f.h+y)*4;data[b]=f.data[a];data[b+1]=f.data[a+1];data[b+2]=f.data[a+2];data[b+3]=f.data[a+3]}return{data,w:f.h,h:f.w}}
@@ -589,7 +591,7 @@ if ($engine -eq $null) { [Console]::Error.WriteLine('NO_ENGINE'); exit 2 }
 $result = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
 foreach ($line in $result.Lines) { [Console]::Out.WriteLine($line.Text) }
 `;
-ipcMain.handle('ocr',async(e,url)=>{mainSender33(e);const result=await recognize35(url);return result.lines.map(l=>l.text).join('\n')});
+ipcMain.handle('ocr',async(e,url)=>{mainSender33(e);const result=await recognize35(url);return result.lines.map(l => l.text).join('\n')});
 
 // Put a saved recording on the clipboard as a file, ready to paste into email, Teams or a folder
 ipcMain.handle('copy-file', async (e, name, buf) => {
@@ -700,7 +702,8 @@ async function recognize35(url){
  for(const line of data.lines||[])for(const word of line.words||[]){const duplicate=words.find(w=>overlap(w.rect,word.rect)>.65);if(!duplicate)words.push(word);else if(word.text.length>duplicate.text.length)Object.assign(duplicate,word)}
  words.sort((a,b)=>a.rect.y-b.rect.y||a.rect.x-b.rect.x);const rows=[];
  for(const word of words){let row=rows.find(r=>Math.abs(r.y-(word.rect.y+word.rect.h/2))<Math.min(r.h,word.rect.h)*.45);if(!row){row={y:word.rect.y+word.rect.h/2,h:word.rect.h,words:[]};rows.push(row)}row.words.push(word)}
- const lines=rows.sort((a,b)=>a.y-b.y).map(row=>{const w=row.words.sort((a,b)=>a.rect.x-b.rect.x),x=Math.min(...w.map(a=>a.rect.x)),y=Math.min(...w.map(a=>a.rect.y)),right=Math.max(...w.map(a=>a.rect.x+a.rect.w)),bottom=Math.max(...w.map(a=>a.rect.y+a.rect.h));return{text:w.map(a=>a.text).join(' '),words:w,rect:{x,y,w:right-x,h:bottom-y}}});
+ // 10.1.2: a gap much wider than a space (more than about one and a half text heights) is a column break, so a table row or a sidebar label stays apart from its neighbours.
+ const lines=rows.sort((a,b)=>a.y-b.y).map(row=>{const w=row.words.sort((a,b)=>a.rect.x-b.rect.x),x=Math.min(...w.map(a=>a.rect.x)),y=Math.min(...w.map(a=>a.rect.y)),right=Math.max(...w.map(a=>a.rect.x+a.rect.w)),bottom=Math.max(...w.map(a=>a.rect.y+a.rect.h));return{text:ocrJoinRow35(w),words:w,rect:{x,y,w:right-x,h:bottom-y}}});
  return{lines,width:size.width,height:size.height};
  }finally{await fs.promises.rm(dir,{recursive:true,force:true}).catch(()=>{})}
 }

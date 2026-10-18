@@ -37,4 +37,11 @@ const {_electron}=require('playwright'),path=require('path'),fs=require('fs'),as
    try{wc.emit('context-menu',{},{isEditable:true,selectionText:'x',editFlags:{canCut:true,canCopy:true,canPaste:false}});
     wc.emit('context-menu',{},{isEditable:false,selectionText:'some words',editFlags:{}});wc.emit('context-menu',{},{isEditable:false,selectionText:'  ',editFlags:{}})}finally{Menu.buildFromTemplate=orig}return seen});
   assert.deepEqual(r[0],['cut','copy','paste','separator','selectAll']);assert.equal(r.length,2,'nothing for empty selection');assert.deepEqual(r[1],['copy'])});
+ await test('Grab Text (real Windows OCR): J-codes are read correctly, table cells are tab-separated, word positions stay in the original pixels',async()=>{
+  const png=path.join(__dirname,'fixtures','sample-capture.png');assert.ok(fs.existsSync(png),'fixture missing');const url='data:image/png;base64,'+fs.readFileSync(png).toString('base64');
+  const r=await w.evaluate(async url=>({text:await window.bench.ocr(url),layout:await window.bench.ocrLayout(url)}),url);
+  const codes=['J-2041','J-2042','J-2043','J-2044','J-2045','J-2046','J-2047','J-2048'],missing=codes.filter(c=>!r.text.includes(c));assert.deepEqual(missing,[],'J-codes not read: '+missing.join(','));assert.ok(!/(^|[^A-Za-z0-9])['1l|]-204\d/m.test(r.text),'a J was read as another character');
+  assert.ok(/J-2041\tGripper finger/.test(r.text),'row cells are separated by tabs: '+JSON.stringify(r.text.split('\n').find(l=>/J-2041/.test(l))));
+  const lineWithJ=r.text.split('\n').find(l=>/J-2042/.test(l));assert.ok(lineWithJ.includes('\t'),'a table row has tab-separated columns');
+  const w0=r.layout.lines.flatMap(l=>l.words).find(x=>x.text==='Gripper');assert.ok(w0,'word Gripper found');assert.ok(Math.abs(w0.rect.x-340)<6&&Math.abs(w0.rect.y-129.5)<6&&w0.rect.h>6&&w0.rect.h<30,'position in picture pixels '+JSON.stringify(w0.rect))});
  console.log(JSON.stringify({passed:results.filter(Boolean).length,failed:results.filter(x=>!x).length,errs}));await app.close();process.exit(results.includes(0)||errs.length?1:0)})().catch(e=>{console.log('FAIL',e.message);process.exit(1)});
