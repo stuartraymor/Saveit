@@ -1581,7 +1581,9 @@ function dupItem(it,folder){const now=Date.now(),id=p=>p+now+'-'+(uid++);let c;
   else{c={id:id('g'),kind:'guide',pageShapes:clone(it.pageShapes||[]),undo:[],redo:[],name:it.name,title:it.title,numColor:it.numColor,created:now,steps:[]};
     for(const st of it.steps){const n={id:id('s'),kind:'image',name:'Step',title:st.title,text:st.text,base:canvasFrom(st.base),shapes:clone(st.shapes),fx:clone(st.fx),undo:[],redo:[],guide:c};c.steps.push(n);for(const ps of c.pageShapes)if(ps.anchor===st.id)ps.anchor=n.id}}
   c.folder=folder||'';S.items.unshift(c);persist(c);return c}
-function libCopy(){const l=libChosen();if(!l.length)return;libClip=l.map(i=>i.id);renderLib();toast(`Copied ${l.length} item${l.length>1?'s':''}. Open a folder and press Paste.`)}
+// 10.1.10: one chosen image also goes on the system clipboard as a picture, so it pastes into email; libClip still moves items between folders
+async function libCopy(){const l=libChosen();if(!l.length)return;libClip=l.map(i=>i.id);renderLib();const img=l.find(i=>i.kind==='image');
+  if(l.length===1&&img){await copyWhole(img);return}toast(`Copied ${l.length} item${l.length>1?'s':''}. Paste in a Saveit folder, or select one image to paste elsewhere.`)}
 function libPaste(){const src=libClip.map(id=>S.items.find(i=>i.id===id)).filter(Boolean);if(!src.length){toast('Nothing copied yet. Select items and press Copy.');return}
   const dest=libFolder==='all'?'':libFolder;libSel.clear();
   for(const it of src){const c=dupItem(it,dest);if((it.folder||'')===dest){if(c.kind==='guide')c.title=c.title+' (copy)';else c.name=c.name+' (copy)';persist(c)}libSel.add(c.id)}
@@ -1815,12 +1817,17 @@ async function duplicateCapture(it=S.cur){if(!it)return;await hydrate(it);$('#li
 async function renameCapture(it=S.cur){if(!it)return;const v=await askText('Rename capture',itemName(it),'Rename');if(v)renameItem(it,v)}
 function orderSelection(front){const it=S.cur,a=selectedShapes();if(it?.kind!=='image'||!a.length)return;snap();const selected=it.shapes.filter(s=>a.includes(s)),rest=it.shapes.filter(s=>!a.includes(s));it.shapes=front?[...rest,...selected]:[...selected,...rest];render();changed()}
 const CLIP_MAGIC='Saveit editable annotations v1';
+// 10.1.10: annotations copied with Ctrl+C stay editable through annoClip (in memory) instead of JSON text on the clipboard, which email apps pasted.
+// The fingerprint is taken from the picture as read back from the clipboard, because Windows can change a transparent PNG on the way in.
+let annoClip=null;
+const imgSig=async url=>{const c=await dataUrlCanvas(url),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let h=0;for(let i=0;i<d.length;i+=97)h=(h*31+d[i])|0;return c.width+'x'+c.height+':'+h};
+async function clipAnnotations(d){if(annoClip&&d?.image&&annoClip.sig){try{if(await imgSig(d.image)===annoClip.sig)return clone(annoClip.shapes)}catch(_){}}return parseAnnotations(d?.text||'')}
 function parseAnnotations(text){try{const d=JSON.parse(text);if(d.magic!==CLIP_MAGIC||!Array.isArray(d.shapes)||!d.shapes.length||d.shapes.length>500)return null;
   const types=new Set(['arrow','line','rect','ellipse','text','callout','step','stamp','highlight','pen','blur','spotlight','magnify','img']);
   if(!d.shapes.every(s=>s&&types.has(s.t)&&Number.isFinite(s.x1)&&Number.isFinite(s.y1)&&['x1','y1','x2','y2','tx','ty','cx','cy','fs','w','op','sz','bp'].every(k=>s[k]==null||Number.isFinite(s[k]))&&(!s.pts||(Array.isArray(s.pts)&&s.pts.length<100000&&s.pts.every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite))))&&(s.t!=='pen'||s.pts?.length)&&(s.t!=='img'||/^data:image\/(png|jpeg|webp);base64,/.test(s.src))))return null;return d.shapes}catch(_){return null}}
 async function copySelection(cut=false){const it=S.cur;if(it?.kind==='audio'&&aud?.ctl?.copySelected){await aud.ctl.copySelected(cut);return}const a=selectedShapes();if(it?.kind!=='image'||!a.length){if(!cut)await copyWhole();return}commitText();await readyShapes(a);const boxes=a.map(bbox),margin=20,x=Math.floor(Math.min(...boxes.map(b=>b.x))-margin),y=Math.floor(Math.min(...boxes.map(b=>b.y))-margin),w=Math.ceil(Math.max(...boxes.map(b=>b.x+b.w))-x+margin),h=Math.ceil(Math.max(...boxes.map(b=>b.y+b.h))-y+margin);if(w*h>64000000)throw Error('Selection too large');
   const c=document.createElement('canvas');c.width=Math.max(1,w);c.height=Math.max(1,h);const g=c.getContext('2d');g.translate(-x,-y);a.forEach(s=>drawShape(g,s,it.base));const text=JSON.stringify({magic:CLIP_MAGIC,shapes:clone(a)});
-  if(window.bench?.copyEditable)await window.bench.copyEditable(c.toDataURL(),text);else{await navigator.clipboard.writeText(text)}
+  if(window.bench?.copyImage){annoClip=null;await window.bench.copyImage(c.toDataURL());const back=await window.bench.readClipboard?.();annoClip={shapes:clone(a),sig:back?.image?await imgSig(back.image):null}}else{await navigator.clipboard.writeText(text)}
   if(cut)delSel();toast(cut?'Annotations cut. Ctrl+V to paste.':'Annotations copied as editable objects and an image.')
 }
 async function copyWhole(it=S.cur){if(it?.kind!=='image')return;await hydrate(it);commitText();await readyShapes(it.shapes);const c=exportFor(it);if(window.bench)await window.bench.copyImage(c.toDataURL());else await navigator.clipboard.write([new ClipboardItem({'image/png':await new Promise(r=>c.toBlob(r))})]);toast('Image copied. Ready to paste into another app.')}
@@ -1839,13 +1846,16 @@ function addPictures88(){const it=S.cur;if(it?.kind!=='image'){toast('Open an im
   inp.click()}
 async function pasteImageLayer(url,n=0,quiet=false){const it=S.cur;if(it?.kind!=='image'){toast('Open an image first.');return}const c=await dataUrlCanvas(url),k=Math.min(1,it.base.width/c.width,it.base.height/c.height),w=Math.round(c.width*k),h=Math.round(c.height*k),s={id:uid++,t:'img',x1:Math.round((it.base.width-w)/2)+n*24,y1:Math.round((it.base.height-h)/2)+n*24,x2:Math.round((it.base.width-w)/2)+w+n*24,y2:Math.round((it.base.height-h)/2)+h+n*24,src:url,op:1,sh:false,c:'#000',w:1,fs:20};await readyShapes([s]);snap();it.shapes.push(s);setTool('select');S.sel=s;render();renderProps();changed();if(!quiet)toast('Pasted image layer. Drag to move; use corner handles to resize.')}
 async function pasteClipboard(mode='auto'){
-  if(!window.bench?.readClipboard){toast('Use Ctrl+V to paste an image from your clipboard.');return}const d=await window.bench.readClipboard(),a=parseAnnotations(d.text);
+  if(!window.bench?.readClipboard){toast('Use Ctrl+V to paste an image from your clipboard.');return}const d=await window.bench.readClipboard()||{},a=await clipAnnotations(d);
   if(mode==='auto'&&a&&S.cur?.kind==='image'){await pasteAnnotations(a);return}
   if(!d.image){toast('No image on the clipboard. Copy an image first.');return}
   if(mode==='layer'||(mode==='auto'&&S.cur?.kind==='image'&&!S.cur.guide))await pasteImageLayer(d.image);else addImage(await dataUrlCanvas(d.image),'Pasted capture '+stamp())
 }
 function textTarget(t){return t?.isContentEditable||/INPUT|TEXTAREA|SELECT/.test(t?.tagName||'')}
-document.addEventListener('paste',e=>{if(editing||textTarget(e.target))return;const a=parseAnnotations(e.clipboardData?.getData('text/plain')||'');if(a&&S.cur?.kind==='image'){e.preventDefault();e.stopImmediatePropagation();pasteAnnotations(a).catch(err=>{console.error(err);toast('Could not paste annotations.')})}},true);
+document.addEventListener('paste',e=>{if(editing||textTarget(e.target))return;const a=parseAnnotations(e.clipboardData?.getData('text/plain')||'');if(a&&S.cur?.kind==='image'){e.preventDefault();e.stopImmediatePropagation();pasteAnnotations(a).catch(err=>{console.error(err);toast('Could not paste annotations.')})}
+  // 10.1.10: annotations copied in this session: decide after reading the clipboard; if it holds something else, import it as before
+  else if(annoClip&&S.cur?.kind==='image'&&window.bench?.readClipboard){e.preventDefault();e.stopImmediatePropagation();const fs=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean);
+    (async()=>{const d=await window.bench.readClipboard()||{},m=await clipAnnotations(d);if(m){await pasteAnnotations(m);return}if(fs.length){fs.forEach(importFile);toast('Pasted into library')}})().catch(err=>{console.error(err);toast('Could not paste.')})}},true);
 
 let cropRatio=0,cropDrag=null;
 function cropBounds(r){const it=S.cur;if(it?.kind!=='image'||!r)return null;const x=Math.max(0,Math.min(it.base.width-1,Math.round(r.x))),y=Math.max(0,Math.min(it.base.height-1,Math.round(r.y))),w=Math.max(1,Math.min(it.base.width-x,Math.round(r.w))),h=Math.max(1,Math.min(it.base.height-y,Math.round(r.h)));return{x,y,w,h}}
@@ -1895,7 +1905,7 @@ function showImageMenu(e,it=S.cur,fromTray=false,keyboard=false){if(!it)return;c
   menuAt(e.clientX,e.clientY,itemName(it),rows,keyboard)
 }
 function editorMenu(e,keyboard=false){const it=S.cur;if(it?.kind!=='image'){if(it)showImageMenu(e,it,false,keyboard);return}commitText();const a=selectedShapes();if(a.length){menuAt(e.clientX,e.clientY,`${a.length} annotation${a.length===1?'':'s'} selected`,[
-  ['Cut',()=>copySelection(true),'Ctrl+X'],['Copy',()=>copySelection(),'Ctrl+C'],['Paste',()=>pasteClipboard(),'Ctrl+V'],['Add picture…',addPictures88],null,['Duplicate',dupSel,'Ctrl+D'],['Top layer',()=>orderSelection(true)],['Bottom layer',()=>orderSelection(false)],['Layer up',()=>orderStep9(1),'Ctrl+]'],['Layer down',()=>orderStep9(-1),'Ctrl+['],['Group',group9,'Ctrl+G'],['Ungroup',ungroup9,'Ctrl+Shift+G'],['Flatten selected',()=>flattenSel9().catch(actionError)],['Delete',delSel,'Delete']],keyboard)}else if(S.cropRect){menuAt(e.clientX,e.clientY,'Crop region',[
+  ['Copy image',()=>copyWhole(),'Ctrl+Shift+C'],['Cut',()=>copySelection(true),'Ctrl+X'],['Copy selected',()=>copySelection(),'Ctrl+C'],['Paste',()=>pasteClipboard(),'Ctrl+V'],['Add picture…',addPictures88],null,['Duplicate',dupSel,'Ctrl+D'],['Top layer',()=>orderSelection(true)],['Bottom layer',()=>orderSelection(false)],['Layer up',()=>orderStep9(1),'Ctrl+]'],['Layer down',()=>orderStep9(-1),'Ctrl+['],['Group',group9,'Ctrl+G'],['Ungroup',ungroup9,'Ctrl+Shift+G'],['Flatten selected',()=>flattenSel9().catch(actionError)],['Delete',delSel,'Delete']],keyboard)}else if(S.cropRect){menuAt(e.clientX,e.clientY,'Crop region',[
   ['Apply crop',applyCrop,'Enter'],['Copy region',copyCropRegion],['New capture from region',()=>copyCropRegion(true)],['Cancel crop',()=>{S.cropRect=null;setTool('select')},'Esc']
 ],keyboard)}else showImageMenu(e,it,false,keyboard)}
 async function copyCropRegion(asNew=false){if(!S.cropRect||S.cur?.kind!=='image')return;const it=S.cur,r=cropBounds(norm(S.cropRect));await readyShapes(it.shapes);const src=flatCanvas(it),c=document.createElement('canvas');c.width=r.w;c.height=r.h;c.getContext('2d').drawImage(src,r.x,r.y,r.w,r.h,0,0,r.w,r.h);if(asNew)addImage(c,itemName(it)+' (region)');else{await window.bench.copyImage(c.toDataURL());toast('Region copied')}}
