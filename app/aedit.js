@@ -11,9 +11,9 @@ const MIC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-wid
 async function decode(blob){const b=await blob.arrayBuffer();return await ac().decodeAudioData(b)}
 async function buffers(it){if(it._bufs&&it._bufs.length===it.tracks.length)return it._bufs;it._bufs=await Promise.all(it.tracks.map(t=>decode(t.blob)));return it._bufs}
 const durOf=(bufs,tracks)=>AudioTimeline.duration(bufs,tracks);
-// min/max per bucket of the channels mixed together
-function peaks(buf,n){const ch=[];for(let c=0;c<buf.numberOfChannels;c++)ch.push(buf.getChannelData(c));const len=buf.length,out=new Float32Array(n*2),step=len/n;
-  for(let i=0;i<n;i++){let lo=1,hi=-1;const a=Math.floor(i*step),b=Math.min(len,Math.floor((i+1)*step)),inc=Math.max(1,Math.floor((b-a)/400));for(let j=a;j<b;j+=inc){let v=0;for(const d of ch)v+=d[j];v/=ch.length;if(v<lo)lo=v;if(v>hi)hi=v}if(hi<lo){lo=0;hi=0}out[i*2]=lo;out[i*2+1]=hi}return out}
+// Min/max across channels: opposite-polarity stereo must not disappear.
+function peaks(buf,n,channel=null){const ch=[];for(let c=0;c<buf.numberOfChannels;c++)if(channel===null||channel===c)ch.push(buf.getChannelData(c));const len=buf.length,out=new Float32Array(n*2),step=len/n;
+  for(let i=0;i<n;i++){let lo=1,hi=-1;const a=Math.floor(i*step),b=Math.min(len,Math.floor((i+1)*step)),inc=Math.max(1,Math.floor((b-a)/400));for(let j=a;j<b;j+=inc){for(const d of ch){const v=d[j];if(v<lo)lo=v;if(v>hi)hi=v}}if(hi<lo){lo=0;hi=0}out[i*2]=lo;out[i*2+1]=hi}return out}
 function audible(tracks){const solo=tracks.some(t=>t.solo&&!t.mute);return tracks.map(t=>!t.mute&&(!solo||t.solo))}
 const vol=t=>t.vol==null?1:t.vol;
 // waveform drawing: every pixel shows the loudest and quietest point of the part of the recording it covers
@@ -41,9 +41,10 @@ function fades(param,ed,T,from,when){const fi=Math.min(+ed.fi||0,T/2),fo=Math.mi
 async function mix(it){const bufs=await buffers(it),ed=editOf(it,durOf(bufs,it.tracks)),T=Math.max(0.01,lenOf(ed)),sr=Math.max(...bufs.map(b=>b.sampleRate),44100),on=audible(it.tracks);
   const off=new OfflineAudioContext(2,Math.max(1,Math.ceil(T*sr)),sr),m=off.createGain();const graph=AudioTimeline.graph(off,off.destination,ed.effects,0,0,T);m.connect(graph.input);fades(m.gain,ed,T,0,0);
   const gains=bufs.map((b,i)=>{const g=off.createGain();g.gain.value=on[i]?vol(it.tracks[i]):0;g.connect(m);return g});schedule(off,bufs,ed,0,0,gains,it.tracks);const rendered=await off.startRendering();graph.dispose();return rendered}
-function wav(buf){const ch=buf.numberOfChannels,n=buf.length,sr=buf.sampleRate,data=new DataView(new ArrayBuffer(44+n*ch*2)),w=(o,s)=>{for(let i=0;i<s.length;i++)data.setUint8(o+i,s.charCodeAt(i))};
-  w(0,'RIFF');data.setUint32(4,36+n*ch*2,true);w(8,'WAVE');w(12,'fmt ');data.setUint32(16,16,true);data.setUint16(20,1,true);data.setUint16(22,ch,true);data.setUint32(24,sr,true);data.setUint32(28,sr*ch*2,true);data.setUint16(32,ch*2,true);data.setUint16(34,16,true);w(36,'data');data.setUint32(40,n*ch*2,true);
-  const cd=[];for(let c=0;c<ch;c++)cd.push(buf.getChannelData(c));let o=44;for(let i=0;i<n;i++)for(let c=0;c<ch;c++){const v=clamp(cd[c][i],-1,1);data.setInt16(o,v<0?v*0x8000:v*0x7fff,true);o+=2}return new Blob([data],{type:'audio/wav'})}
+function wav(buf,float=false){const ch=buf.numberOfChannels,n=buf.length,sr=buf.sampleRate,bytes=float?4:2,data=new DataView(new ArrayBuffer(44+n*ch*bytes)),w=(o,s)=>{for(let i=0;i<s.length;i++)data.setUint8(o+i,s.charCodeAt(i))};
+  w(0,'RIFF');data.setUint32(4,36+n*ch*bytes,true);w(8,'WAVE');w(12,'fmt ');data.setUint32(16,16,true);data.setUint16(20,float?3:1,true);data.setUint16(22,ch,true);data.setUint32(24,sr,true);data.setUint32(28,sr*ch*bytes,true);data.setUint16(32,ch*bytes,true);data.setUint16(34,bytes*8,true);w(36,'data');data.setUint32(40,n*ch*bytes,true);
+  const cd=[];for(let c=0;c<ch;c++)cd.push(buf.getChannelData(c));let o=44;for(let i=0;i<n;i++)for(let c=0;c<ch;c++){if(float)data.setFloat32(o,cd[c][i],true);else{const v=clamp(cd[c][i],-1,1);data.setInt16(o,v<0?v*0x8000:v*0x7fff,true)}o+=bytes}return new Blob([data],{type:'audio/wav'})}
+
 async function renderWav(it){return wav(await mix(it))}
 const COLS=['#2db3a0','#7aa7ff','#f5c400'];
 async function thumbFor(it){const bufs=await buffers(it),ed=editOf(it,durOf(bufs,it.tracks)),T=lenOf(ed)||1,c=document.createElement('canvas');c.width=192;c.height=108;const g=c.getContext('2d');g.fillStyle='#1d2a2e';g.fillRect(0,0,192,108);
