@@ -275,6 +275,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size
 <script src="fxdefs.js"></script>
 <script src="imgtools.js"></script>
 <script src="gif.js"></script>
+<script src="webm.js"></script>
 <script src="vedit2.js"></script>
 <script src="audiobar.js"></script>
 <script src="audio-timeline.js"></script>
@@ -929,7 +930,7 @@ async function save(fmtArg){const it=S.cur;if(!it)return;commitText();saveTarget
   if(it.kind==='video'){if(fmt==='gif'){saveTarget9=null;saveOwner9=null;if(vid&&vid._ctl)vid._ctl.saveGif();return}const ctl97=vid&&vid._ctl;if(ctl97&&ctl97.needsRender&&ctl97.needsRender()){const tgt=saveTarget9,own=saveOwner9,len=ctl97.duration?ctl97.duration():0,lenT=len?' ('+Math.floor(len/60)+':'+String((len%60).toFixed(1)).padStart(4,'0')+')':'';saveTarget9=null;saveOwner9=null;
     toast('Saving your edited video'+lenT+'… keep this window open and in front. It takes as long as the video. Cancel is in Export.',9000);
     (async()=>{try{const o=await ctl97.renderBlob();if(!o){toast('Save cancelled. Nothing was written.',5000);return}const b2=fmt==='mp4'?o.mp4:(o.webm||o.mp4);if(!b2){toast('MP4 could not be made here. Choose WebM.',6000);return}saveTarget9=tgt;saveOwner9=own;saveBlob(b2,fileName(fmt),'Saved the edited video'+lenT+' to')}catch(e){toast('Could not save: '+(e.message||e),6000)}})();return}
-  const b=fmt==='mp4'?it.mp4:it.webm;if(!b){toast(fmt==='mp4'?'This recording was made without MP4. Choose WebM, or record again in this version to get both.':'This recording only has MP4. Choose MP4.',6000);return}saveBlob(b,fileName(fmt));return}
+  let b=fmt==='mp4'?it.mp4:it.webm;if(b&&fmt!=='mp4'&&window.WebmFix)b=await WebmFix.ensure(b);if(!b){toast(fmt==='mp4'?'This recording was made without MP4. Choose WebM, or record again in this version to get both.':'This recording only has MP4. Choose MP4.',6000);return}saveBlob(b,fileName(fmt));return}
   if(it.kind==='audio'){const tgt=saveTarget9,own=saveOwner9;saveTarget9=null;saveOwner9=null;const af=fmt==='mp3'||fmt==='m4a'?fmt:'wav';toast(af==='m4a'?'Making the M4A… it takes as long as the audio, so keep this window open.':af==='mp3'?'Making the MP3…':'Mixing the audio…',af==='m4a'?9000:3000);try{const b=await AEdit.renderAs(it,af);saveTarget9=tgt;saveOwner9=own;await saveBlob(b,fileName(af),'Saved the audio ('+AEdit.fmt(it.dur||0)+') to')}catch(e){toast('Could not save the audio: '+(e.message||e),6000)}return}
   if(fmt==='saveit')return saveSaveit(it.guide&&false?it.guide:it);
   if(it.kind==='guide'){if(fmt==='docx')return exportDocx(it);if(fmt==='pdf')return exportPdf(it);if(fmt==='jpg')return exportGuideJpg(it);if(fmt==='png'){const pc=renderPageCanvas(it,2);pc.canvas.toBlob(b=>saveBlob(b,safeName(it.title)+'.png'),'image/png');return}return}
@@ -1091,10 +1092,12 @@ async function beginRecording(stream,recStream,cleanup,uiInfo,uiExtra){
   if(!window.bench){bar=document.createElement('div');bar.className='recbar';bar.innerHTML='<span class="dot"></span><span class="t">00:00</span><button class="btn" data-a="pause">Pause</button><button class="btn pri" data-a="stop">Stop</button>';document.body.appendChild(bar);
     tm=setInterval(()=>{if(!paused){secs++;bar.querySelector('.t').textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0')}},1000);
     bar.addEventListener('click',e=>{const a=e.target.dataset.a;if(a==='stop')stop();if(a==='pause'){togglePause();e.target.textContent=paused?'Resume':'Pause'}});}
-  let finished=false;
+  let finished=false,recT0=0,recEnd=0,recPaused=0,recPauseAt=0;
   const finalize=async()=>{if(finished)return;finished=true;if(tm)clearInterval(tm);if(bar)bar.remove();const camBlob=camRec?await Promise.race([camRec.done,new Promise(r=>setTimeout(()=>r(null),4000))]):null;try{if(cleanup)cleanup()}catch(e){}stream.getTracks().forEach(t=>t.stop());recStream.getTracks().forEach(t=>t.stop());
     if(window.bench){window.bench.setRecording(false);window.bench.recUI(false)}rec=null;setCapLabel();
     const blobs={};for(const x of recs)if(x.ch.length)blobs[/mp4/.test(x.type)?'mp4':'webm']=new Blob(x.ch,{type:x.type.split(';')[0]});
+    // 10.1.1: write the length into the WebM so players can show it and seek
+    if(blobs.webm&&window.WebmFix&&recT0){const end=recEnd||performance.now(),ms=end-recT0-recPaused-(recPauseAt?end-recPauseAt:0);if(ms>0)blobs.webm=await WebmFix.fix(blobs.webm,ms)}
     const main=blobs.webm||blobs.mp4;if(!main){toast('The recording was empty, so nothing was saved.');return}
     const v=addVideo(main,null,await videoThumb(main));v.mp4=blobs.mp4||null;v.webm=blobs.webm||null;
     if(camBlob&&camBlob.size>2000){const o=camRec.o||{};v.edit={cam:{src:'scam',off:0,o:{mirror:o.mirror!==false}},look:{layout:'pip',bg:'black',pos:o.pos||'br',shape:o.shape==='rect'?'wide':o.shape==='circle'?'circle':(o.corners==='rounded'?'rounded':'square'),camSize:+o.size||22,round:true,shadow:true,border:o.border!==false}};v._edBlobs={scam:camBlob};openItem(v)}
@@ -1103,11 +1106,11 @@ async function beginRecording(stream,recStream,cleanup,uiInfo,uiExtra){
     if($('#clipOn').checked&&window.bench){const b=v.mp4||v.webm;const ok=await window.bench.copyFile(fileName(v.mp4?'mp4':'webm'),await b.arrayBuffer());toast(ok?'Recording saved to Recent and copied to the clipboard. Paste it into an email, Teams or a folder.':'Recording saved to Recent. It could not be put on the clipboard.',6000)}
     else toast('Recording saved to Recent');};
   let stopped=0;
-  const stop=()=>{if(finished)return;try{if(camRec&&camRec.r.state!=='inactive'){if(camRec.r.state==='paused')camRec.r.resume();camRec.r.stop()}}catch(e){}for(const x of recs){try{if(x.r.state==='paused')x.r.resume();if(x.r.state!=='inactive'){x.r.requestData();x.r.stop()}}catch(e){}}setTimeout(finalize,2500)};
-  const togglePause=()=>{if(mr.state==='inactive')return;paused=!paused;for(const x of [...recs,...(camRec?[camRec]:[])]){try{paused?x.r.pause():x.r.resume()}catch(e){}}if(window.bench)window.bench.recState(paused?'paused':'recording')};
+  const stop=()=>{if(finished)return;if(!recEnd)recEnd=performance.now();try{if(camRec&&camRec.r.state!=='inactive'){if(camRec.r.state==='paused')camRec.r.resume();camRec.r.stop()}}catch(e){}for(const x of recs){try{if(x.r.state==='paused')x.r.resume();if(x.r.state!=='inactive'){x.r.requestData();x.r.stop()}}catch(e){}}setTimeout(finalize,2500)};
+  const togglePause=()=>{if(mr.state==='inactive')return;paused=!paused;{const now=performance.now();if(paused)recPauseAt=now;else if(recPauseAt){recPaused+=now-recPauseAt;recPauseAt=0}}for(const x of [...recs,...(camRec?[camRec]:[])]){try{paused?x.r.pause():x.r.resume()}catch(e){}}if(window.bench)window.bench.recState(paused?'paused':'recording')};
   stream.getVideoTracks()[0].addEventListener('ended',stop);
   for(const x of recs)x.r.onstop=()=>{if(++stopped>=recs.length)setTimeout(finalize,50)};
-  for(const x of recs)x.r.start(1000);if(camRec)try{camRec.r.start(1000)}catch(e){}rec={mr,stop,togglePause};setCapLabel();
+  recT0=performance.now();for(const x of recs)x.r.start(1000);if(camRec)try{camRec.r.start(1000)}catch(e){}rec={mr,stop,togglePause};setCapLabel();
   if(window.bench){window.bench.setRecording(true);window.bench.recUI(true,uiInfo,uiExtra)}
 }
 function videoThumb(blob){return new Promise(res=>{const v=document.createElement('video');v.muted=true;v.src=URL.createObjectURL(blob);v.onloadeddata=()=>{v.currentTime=Math.min(.5,(v.duration||1)/2)};v.onseeked=()=>{try{const c=canvasFrom(v,192,Math.round(192*v.videoHeight/v.videoWidth)||108);res(c.toDataURL('image/jpeg',.7))}catch(e){res('')}URL.revokeObjectURL(v.src)};v.onerror=()=>res('');setTimeout(()=>res(''),4000)})}
@@ -1711,7 +1714,7 @@ function libBatch(move){const l=libChosen();if(!l.length)return;if($('#libBatch'
     else toast(`Saved ${files.length} file${files.length>1?'s':''} to ${where}`+(skipped.length?`. Skipped ${skipped.length}.`:''),6000);
     renderLib()}}
 async function blobFor(it,fmt){await hydrate(it);
-  if(it.kind==='video')return fmt==='mp4'?it.mp4:it.webm;
+  if(it.kind==='video')return fmt==='mp4'?it.mp4:(window.WebmFix&&it.webm?await WebmFix.ensure(it.webm):it.webm);
   if(it.kind==='audio')return AEdit.renderAs(it,fmt);
   if(fmt==='saveit')return saveitBlob(it);
   if(it.kind==='guide'){if(fmt==='docx')return await exportDocx(it,true);if(fmt==='pdf')return await exportPdf(it,true);if(fmt==='pptx')return await pptx33(it,true);

@@ -36,4 +36,30 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
   await ev(()=>{document.querySelectorAll('.toast').forEach(t=>t.remove());const T=__T,it=T.addImage(QA.canvas(400,300,'#ffffff'),'big fill',{flat:true});T.openItem(it);T.S.zoom=1;T.setTool('fill')});
   const q=await ev(()=>{const cv=document.querySelector('#cv'),r=cv.getBoundingClientRect(),k=cv.width/r.width;return{x:r.left+(100+__T.padX())/k,y:r.top+(100+__T.padY())/k}});await page.mouse.click(q.x,q.y);await page.waitForTimeout(300);
   const t=await ev(()=>[...document.querySelectorAll('.toast')].map(x=>x.textContent).join('|'));assert.match(t,/That filled 100% of the picture/);assert.match(t,/Ctrl\+Z/);assert.match(t,/lower Similar colours/)});
+ // ---- WebM length (10.1.1)
+ const recordWebm=()=>ev(async()=>{const c=document.createElement('canvas');c.width=160;c.height=120;const g=c.getContext('2d'),stream=c.captureStream(15),mr=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp8'}),chunks=[];mr.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+   const done=new Promise(r=>mr.onstop=r);mr.start(250);const t0=performance.now();let n=0;const iv=setInterval(()=>{g.fillStyle='hsl('+(n++*20%360)+',70%,50%)';g.fillRect(0,0,160,120)},60);await new Promise(r=>setTimeout(r,1500));clearInterval(iv);mr.stop();await done;
+   window.__webm=new Blob(chunks,{type:'video/webm'});window.__webmMs=performance.now()-t0;return{size:window.__webm.size,ms:window.__webmMs}});
+ await test('B10: MediaRecorder WebM has no length; WebmFix.fix writes it (11 bytes added) and the file still plays and seeks',async()=>{
+  const rec=await recordWebm();
+  const r=await ev(async()=>{const W=window.WebmFix,b=window.__webm,before=await W.duration(b),fixed=await W.fix(b,1500),after=await W.duration(fixed);
+   const probe=blob=>new Promise(res=>{const v=document.createElement('video');v.muted=true;v.preload='metadata';v.src=URL.createObjectURL(blob);v.onloadedmetadata=()=>{const d=v.duration;v.currentTime=0.5;v.onseeked=()=>res({d,seeked:true});setTimeout(()=>res({d,seeked:false}),4000)};v.onerror=()=>res({d:-1,seeked:false})});
+   return{before,after,grew:fixed.size-b.size,again:(await W.fix(fixed,900))===fixed,bad:(await W.fix(new Blob([new Uint8Array([1,2,3,4,5,6,7,8])]),1000)).size,playing:await probe(fixed),rawDur:(await probe(b)).d}});
+  assert.equal(r.before,0);assert.ok(Math.abs(r.after-1500)<1,'stored '+r.after);assert.equal(r.grew,11);assert.equal(r.again,true,'a file that already has a length is left alone');assert.equal(r.bad,8,'garbage is returned unchanged');
+  assert.ok(Number.isFinite(r.playing.d)&&Math.abs(r.playing.d-1.5)<.05,'player duration '+r.playing.d);assert.equal(r.playing.seeked,true)});
+ await test('B10: ensure() measures a WebM without a length, patches it once, and a saved older recording gets its length',async()=>{
+  await recordWebm();
+  const r=await ev(async()=>{const W=window.WebmFix,b=window.__webm,fixed=await W.ensure(b),again=await W.ensure(b),ms=await W.duration(fixed);
+   const T=__T,v=T.addVideo(b,'older webm');v.webm=b;v.mp4=null;window.bench.savePick=(name,exts)=>Promise.resolve('C:\\test\\'+name+'.webm');__saved.length=0;T.openItem(v);await T.save('webm');await new Promise(r=>setTimeout(r,800));
+   const saved=__saved.at(-1);return{ms,same:fixed===again,grew:fixed.size-b.size,savedMs:saved?await W.duration(new Blob([saved.data])):-1,savedName:saved&&saved.name}});
+  assert.ok(Math.abs(r.ms-1500)<300,'measured '+r.ms);assert.equal(r.same,true,'cached');assert.equal(r.grew,11);assert.ok(r.savedMs>1000&&r.savedMs<2200,'saved file length '+r.savedMs+' ('+r.savedName+')')});
+ await test('B10: a video exported from the editor has its WebM length written',async()=>{
+  const r=await ev(async()=>{await QA.openVideo(1);let ctl=null;for(let i=0;i<40&&!(ctl=__T.vid&&__T.vid._ctl);i++)await new Promise(r=>setTimeout(r,100));const o=await ctl.renderBlob();return{keys:Object.keys(o||{}),ms:o&&o.webm?await WebmFix.duration(o.webm):-1}});
+  assert.ok(r.keys.includes('webm'),'no webm: '+r.keys);assert.ok(r.ms>500&&r.ms<2500,'exported WebM length '+r.ms)});
+ await test('B10: a screen recording (with a pause) is stored with its WebM length, excluding the paused time',async()=>{
+  const r=await ev(async()=>{const T=__T,c=document.createElement('canvas');c.width=160;c.height=120;const g=c.getContext('2d'),stream=c.captureStream(15);let n=0;const iv=setInterval(()=>{g.fillStyle='hsl('+(n++*20%360)+',70%,50%)';g.fillRect(0,0,160,120)},60);
+   const before=T.S.items.length;await T.beginRecording(stream,stream,null,null,{});await new Promise(r=>setTimeout(r,1200));T.rec.togglePause();await new Promise(r=>setTimeout(r,1200));T.rec.togglePause();await new Promise(r=>setTimeout(r,800));T.rec.stop();
+   for(let i=0;i<100&&T.S.items.length===before;i++)await new Promise(r=>setTimeout(r,100));clearInterval(iv);await new Promise(r=>setTimeout(r,500));
+   const v=T.S.items.find(i=>i.kind==='video'&&i.webm&&/^Recording|^Video|^Screen/i.test(i.name||'')||i.kind==='video'&&i.webm);return{n:T.S.items.length-before,has:!!(v&&v.webm),ms:v&&v.webm?await WebmFix.duration(v.webm):-1}});
+  assert.ok(r.has,'a recording with a WebM was stored');assert.ok(r.ms>1500&&r.ms<2600,'length '+r.ms+' ms (about 2.0 s of recording, 1.2 s of pause left out)')});
  console.log(JSON.stringify({passed:results.filter(Boolean).length,failed:results.filter(x=>!x).length,errors}));await browser.close();process.exit(results.includes(0)||errors.length?1:0)})();
