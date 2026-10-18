@@ -777,7 +777,7 @@ cv.addEventListener('pointerdown',e=>{
   if(t==='image'){imageTabDown9(e,x,y);return}
   if(t==='selection'&&!(S.sel&&S.sel.t==='img'&&(hitHandle(x,y)||hit(x,y)===S.sel))){S.sel=null;S.drag={mode:'pix'};S.pixRect={x1:x,y1:y,x2:x,y2:y};render();return}
   if(t==='crop'){S.drag={mode:'crop',x0:x,y0:y};S.cropRect={x1:x,y1:y,x2:x,y2:y};render();return}
-  if(t==='fill'){const col=S.p.fillTransparent?'none':S.p.stroke,r=ImgTools.fill(it.base,x,y,col,+(S.p.tol??5),S.p.contig!==false,+(S.p.grow??1));if(r){snap();it.base=r.canvas;render();changed();toast(`Filled ${r.count.toLocaleString()} pixels. Ctrl+Z to undo.`)}return}
+  if(t==='fill'){const col=S.p.fillTransparent?'none':S.p.stroke,r=ImgTools.fill(it.base,x,y,col,+(S.p.tol??3),S.p.contig!==false,+(S.p.grow??1));if(r){snap();it.base=r.canvas;render();changed();{const tot=it.base.width*it.base.height,big=r.count>tot*.25;toast(big?`That filled ${Math.round(r.count/tot*100)}% of the picture (${r.count.toLocaleString()} pixels). Ctrl+Z to undo, or lower Similar colours and try again.`:`Filled ${r.count.toLocaleString()} pixels. Ctrl+Z to undo.`,big?7000:undefined)}}return}
   if(t==='erase'){snap();const src=it.base;if((S.p.eraseWhat||'pixels')!=='objects'){const nb=document.createElement('canvas');nb.width=src.width;nb.height=src.height;nb.getContext('2d').drawImage(src,0,0);it.base=nb}S.drag={mode:'erase',lx:x,ly:y,src};eraseSeg(x,y,x,y);render();return}
   if(t==='cutout'){const k=cutHit(x,y),q=cutRegion();
     if(k){S.drag={mode:'cutAdjust',k,q,p:q.axis==='x'?x:y};cv.style.cursor=k==='move'?'move':q.axis==='x'?'ew-resize':'ns-resize';return}
@@ -1473,7 +1473,7 @@ function toolPanel(P,it){const t=S.tool;if(!['fill','erase','cutout','simplify']
   const sw=()=>{P.querySelectorAll('.sw button').forEach(b=>b.onclick=()=>setProp(b.dataset.k,b.dataset.v));P.querySelectorAll('input[type=color][data-k]').forEach(i=>i.oninput=()=>setProp(i.dataset.k,i.value,true))};
   const rg=(attr,k,lbl,min,max,v)=>`<div class="row"><span>${lbl}</span><input type="range" ${attr}="${k}" min="${min}" max="${max}" value="${v}" aria-label="${lbl}"><span class="val">${v}</span></div>`;
   if(t==='fill'){const p=S.p;h=`<div class="grp"><h3>Fill</h3><p class="hint">Click an area to pour colour into it. Raise <b>Similar colours</b> to catch gradients and soft edges.</p><h3>Colour</h3>${swatches('stroke',false)}
-    <label class="chk"><input type="checkbox" id="fTr" ${p.fillTransparent?'checked':''}> Make transparent instead</label>${rg('data-fp','tol','Similar colours',0,100,p.tol??5)}${rg('data-fp','grow','Grow edge (px)',0,6,p.grow??1)}
+    <label class="chk"><input type="checkbox" id="fTr" ${p.fillTransparent?'checked':''}> Make transparent instead</label>${rg('data-fp','tol','Similar colours',0,100,p.tol??3)}${rg('data-fp','grow','Grow edge (px)',0,6,p.grow??1)}
     <label class="chk"><input type="checkbox" id="fCt" ${p.contig!==false?'checked':''}> Only touching pixels</label></div>`}
   else if(t==='erase'){const p=S.p,what=p.eraseWhat||'pixels';h=`<div class="grp"><h3>Erase</h3><p class="hint">Drag over what you want gone. <span class="kbd">Ctrl</span>+<span class="kbd">Z</span> undoes the whole stroke.</p>
     <div class="row"><span>Erase</span><select id="eWhat" aria-label="What to erase"><option value="pixels">Picture pixels</option><option value="objects">Annotations it touches</option><option value="both">Pixels and annotations</option></select></div>

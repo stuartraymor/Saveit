@@ -20,7 +20,7 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
  await test('Bug 2: Fill defaults to a tight tolerance and fills one cell, not the whole page',async()=>{
   const r=await ev(()=>{const it=__T.S.items.find(i=>i.name==='Sample capture');__T.openItem(it);__T.setTool('fill');return{slider:document.querySelector('[data-fp="tol"]').value,
    count:(()=>{const c=it.base,W=c.width,H=c.height,img=c.getContext('2d',{willReadFrequently:true}).getImageData(0,0,W,H);return ImgTools.region(img,300,300,+document.querySelector('[data-fp="tol"]').value,true).count/(W*H)})()}});
-  assert.equal(r.slider,'5');assert.ok(r.count<.15,'fill covered '+Math.round(r.count*100)+'%')});
+  assert.equal(r.slider,'3');assert.ok(r.count<.15,'fill covered '+Math.round(r.count*100)+'%')});
  await test('Bug 4: Undo after splitting an audio clip joins it again (top bar and audio bar)',async()=>{
   const r=await ev(async()=>{document.querySelectorAll('.modal').forEach(m=>m.remove());const it=__T.addAudio([{name:'Voice',blob:await QA.toneWav([300,500,700],1),vol:1,mute:false,solo:false}],'Split undo');await QA.until(()=>__T.S.cur===it&&__T.audio?.getProject?.());await __T.audio.ready;
    const n=()=>it.audioProject.clips.length,o={start:n()};__T.audio.seek(1.5);__T.audio.split();o.split=n();document.querySelector('#undoBtn').click();await new Promise(r=>setTimeout(r,150));o.afterTopUndo=n();
