@@ -38,6 +38,18 @@ ipcMain.handle('workflow-folder',async e=>{mainSender33(e);const r=await dialog.
 ipcMain.handle('workflow-file',async(e,folder,name,data)=>{mainSender33(e);if(!workflowConfig.folders.includes(folder))throw Error('Choose this save folder in Workflows first.');const safe=path.basename(String(name)).replace(/[<>:"/\\|?*\x00-\x1f]/g,'-');if(!safe||!safe.endsWith('.png'))throw Error('Expected a PNG filename');const parsed=path.parse(safe);let out=path.join(folder,safe),i=2;while(fs.existsSync(out))out=path.join(folder,parsed.name+'-'+i+++parsed.ext);await fs.promises.writeFile(out,Buffer.from(data),{flag:'wx'});return out});
 // 10.1.2: Grab Text output. Words far apart in one row are separated by a tab (a table cell, a label next to its value).
 function ocrJoinRow35(w) { const hs = w.map(a => a.rect.h).sort((a, b) => a - b), limit = Math.max(14, 1.5 * hs[Math.floor(hs.length / 2)]); let t = ''; w.forEach((a, i) => { if (i) { const gap = a.rect.x - (w[i - 1].rect.x + w[i - 1].rect.w); t += gap > limit ? '\t' : ' '; } t += a.text; }); return t; }
+// 10.1.12: Grab Text fixes look-alike characters only where the meaning is clear: money after a misread $ sign, and tokens that are plainly numbers.
+function ocrFixLine(line){
+  // hex codes: "Ox80070005" -> "0x80070005"; a money decimal point read as a dash: "$1,234-56" -> "$1,234.56"
+  line=line.replace(/\bOx(?=[0-9A-Fa-f]{2,}\b)/g,'0x').replace(/\$(\d{1,3}(?:,\d{3})+)-(\d{2})\b/g,'$$$1.$2');
+  // a space wrongly read inside a thousands group: "1 ,234.56" -> "1,234.56"
+  line=line.replace(/(\d|[lI|]) ,(?=\d{3}\b)/g,'$1,');
+  // money: "S1,234.56", "Sl,234.56", "S 1,234.56", "S1,234.S6" -> "$1,234.56"
+  line=line.replace(/(^|[\s(:])S\s?([lI|1]?[\dOo,]*[.,][\dOoSlI]{2})(?=$|[\s).,;:])/g,(m,pre,num)=>pre+'$'+num.replace(/[lI|]/g,'1').replace(/[Oo]/g,'0').replace(/S/g,'5'));
+  // number tokens: letters that look like digits become digits ("2O24" -> "2024", "1O,OO8" -> "10,008")
+  // only when the token has a real digit and becomes a plain number once O/o -> 0 and I/l/| -> 1 (so "Q0O8", "8B0O-1Il7", "IO" or "MP3" are left alone)
+  return line.replace(/[^\s]+/g,tok=>{const core=tok.replace(/^[(\[{"'#$+]+|[)\]}"',.;:!?]+$/g,'');if(core.length<2||!/\d/.test(core)||!/[OoIl|]/.test(core))return tok;
+    const fixed=core.replace(/[Oo]/g,'0').replace(/[Il|]/g,'1');return /^[\d.,:\-\/()+%]+$/.test(fixed)?tok.replace(core,fixed):tok})}
 ipcMain.handle('ocr-layout',async(e,url)=>{mainSender33(e);return recognize35(url)});
 ipcMain.handle('print-image',async(e,url)=>{mainSender33(e);if(typeof url!=='string'||!url.startsWith('data:image/png;base64,'))throw Error('Expected a PNG image');const w=new BrowserWindow({show:false,webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true}});try{await w.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent('<html><head><style>@page{margin:12mm}body{margin:0}img{max-width:100%;height:auto}</style></head><body><img src="'+url+'"></body></html>'));await w.webContents.executeJavaScript('Promise.all([...document.images].map(i=>i.decode()))');return await new Promise(resolve=>w.webContents.print({silent:false,printBackground:true},(ok,reason)=>resolve({ok,reason})))}finally{w.destroy()}});
 function transposeFrame(f){const data=Buffer.alloc(f.w*f.h*4);for(let y=0;y<f.h;y++)for(let x=0;x<f.w;x++){const a=(y*f.w+x)*4,b=(x*f.h+y)*4;data[b]=f.data[a];data[b+1]=f.data[a+1];data[b+2]=f.data[a+2];data[b+3]=f.data[a+3]}return{data,w:f.h,h:f.w}}
@@ -703,7 +715,7 @@ async function recognize35(url){
  words.sort((a,b)=>a.rect.y-b.rect.y||a.rect.x-b.rect.x);const rows=[];
  for(const word of words){let row=rows.find(r=>Math.abs(r.y-(word.rect.y+word.rect.h/2))<Math.min(r.h,word.rect.h)*.45);if(!row){row={y:word.rect.y+word.rect.h/2,h:word.rect.h,words:[]};rows.push(row)}row.words.push(word)}
  // 10.1.2: a gap much wider than a space (more than about one and a half text heights) is a column break, so a table row or a sidebar label stays apart from its neighbours.
- const lines=rows.sort((a,b)=>a.y-b.y).map(row=>{const w=row.words.sort((a,b)=>a.rect.x-b.rect.x),x=Math.min(...w.map(a=>a.rect.x)),y=Math.min(...w.map(a=>a.rect.y)),right=Math.max(...w.map(a=>a.rect.x+a.rect.w)),bottom=Math.max(...w.map(a=>a.rect.y+a.rect.h));return{text:ocrJoinRow35(w),words:w,rect:{x,y,w:right-x,h:bottom-y}}});
+ const lines=rows.sort((a,b)=>a.y-b.y).map(row=>{const w=row.words.sort((a,b)=>a.rect.x-b.rect.x),x=Math.min(...w.map(a=>a.rect.x)),y=Math.min(...w.map(a=>a.rect.y)),right=Math.max(...w.map(a=>a.rect.x+a.rect.w)),bottom=Math.max(...w.map(a=>a.rect.y+a.rect.h));w.forEach(a=>{a.text=ocrFixLine(a.text)});return{text:ocrFixLine(ocrJoinRow35(w)),words:w,rect:{x,y,w:right-x,h:bottom-y}}});
  return{lines,width:size.width,height:size.height};
  }finally{await fs.promises.rm(dir,{recursive:true,force:true}).catch(()=>{})}
 }
