@@ -12,7 +12,7 @@ async function decode(blob){const b=await blob.arrayBuffer();return await ac().d
 async function buffers(it){if(it._bufs&&it._bufs.length===it.tracks.length)return it._bufs;it._bufs=await Promise.all(it.tracks.map(t=>decode(t.blob)));return it._bufs}
 const durOf=(bufs,tracks)=>AudioTimeline.duration(bufs,tracks);
 // Min/max across channels: opposite-polarity stereo must not disappear.
-function peaks(buf,n){const ch=[];for(let c=0;c<buf.numberOfChannels;c++)ch.push(buf.getChannelData(c));const len=buf.length,out=new Float32Array(n*2),step=len/n;
+function peaks(buf,n,channel=null){const ch=[];for(let c=0;c<buf.numberOfChannels;c++)if(channel===null||channel===c)ch.push(buf.getChannelData(c));const len=buf.length,out=new Float32Array(n*2),step=len/n;
   for(let i=0;i<n;i++){let lo=1,hi=-1;const a=Math.floor(i*step),b=Math.min(len,Math.floor((i+1)*step)),inc=Math.max(1,Math.floor((b-a)/400));for(let j=a;j<b;j+=inc){for(const d of ch){const v=d[j];if(v<lo)lo=v;if(v>hi)hi=v}}if(hi<lo){lo=0;hi=0}out[i*2]=lo;out[i*2+1]=hi}return out}
 function audible(tracks){const solo=tracks.some(t=>t.solo&&!t.mute);return tracks.map(t=>!t.mute&&(!solo||t.solo))}
 const vol=t=>t.vol==null?1:t.vol;

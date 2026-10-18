@@ -1,6 +1,8 @@
 # Saveit — developer handoff
 
-Development version: **10.1.3** (audio bug-fix update for owner testing; latest published release is **10.1.2**). Development branch: `v10-dev`. Repository: https://github.com/stuartraymor/Saveit
+Development version: **10.1.4** (Audio studio update for owner testing; latest published release is **10.1.2**). Development branch: `v10-dev`. Repository: https://github.com/stuartraymor/Saveit
+
+Audio studio: read `AUDIO-STUDIO-10.1.4.md`, `CHANGES-10.1.4.md`, and `VALIDATION-10.1.4.md`. `audio-effects.js` defines voice EQ/high-pass/dynamics/gain, presets, and response diagrams. `audio-dynamics-worklet.js` is loaded per context for stereo-linked compression and sample-peak limiting; `AudioFX.prepare(ctx,p)` must finish before scheduling active dynamics. `audio-engine.js` shares those graphs between playback/export and exposes separate channel meters. `effectsBypassed114` on a clip/track/project bypasses that rack; `voicePreset114` on an effect identifies replaceable preset effects. Peak normalization adds a normal editable gain effect, not a LUFS adjustment. New recording still creates a separate item. The owner requested voiceover/tutorial priorities. Do not publish 10.1.4 until they have tried and approved it.
 
 Audio handoff: read `CHANGES-10.1.3.md` and `VALIDATION-10.1.3.md` for the latest bug fixes and checks. Repeat now uses an app dialog, Ctrl+V pastes onto the selected track, bounce renders before master processing using internal float WAV, waveform peaks retain both stereo channels, simple mono WAV output stays mono, and trims preserve partial fade curves (`fadeFrom`/`fadeTo`). One-track/All tracks trims move to zero; trimming one track in a multitrack project preserves sync. New recording still creates a separate item; the professional audio features remain deferred. Do not publish 10.1.3 until the owner has tried and approved it.
 

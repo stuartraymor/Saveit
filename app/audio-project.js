@@ -8,7 +8,8 @@ function validate(p,bufs,sources){
  const tracks=new Set(),ids=new Set();for(const t of p.tracks){if(!t.id||tracks.has(t.id)||!Number.isInteger(t.control)||t.control<0||t.control>=sources.length||!Array.isArray(t.effects))throw Error('Invalid audio track.');tracks.add(t.id)}
  for(const c of p.clips){if(!c.id||ids.has(c.id)||!tracks.has(c.track)||!Number.isInteger(c.src)||!bufs[c.src]||![c.a,c.b,c.start,c.gain,c.fi,c.fo].every(Number.isFinite)||c.a<0||c.b<=c.a||c.b>bufs[c.src].duration+.001||c.start<0||c.gain<0||c.gain>4||c.fi<0||c.fo<0||!Array.isArray(c.effects))throw Error('Invalid audio clip. Original media has not been changed.');ids.add(c.id)}
  const effects=[p.effects,...p.tracks.map(t=>t.effects),...p.clips.map(c=>c.effects)].flat();
- for(const f of effects)if(!f.id||!['volume','fadein','fadeout','mute','echo','reverb'].includes(f.type)||![f.start,f.end,f.amount].every(Number.isFinite)||f.start<0||f.end<=f.start||f.amount<0||f.amount>200||[f.fadeFrom,f.fadeTo].some(v=>v!==undefined&&(!Number.isFinite(v)||v<0||v>1)))throw Error('Invalid audio effect.');
+ for(const f of effects)if(!f.id||!['volume','fadein','fadeout','mute','echo','reverb',...Object.keys(root.AudioFX.defs)].includes(f.type)||![f.start,f.end,f.amount].every(Number.isFinite)||f.start<0||f.end<=f.start||f.amount<0||f.amount>200||[f.fadeFrom,f.fadeTo].some(v=>v!==undefined&&(!Number.isFinite(v)||v<0||v>1)))throw Error('Invalid audio effect.');
+ for(const f of effects)root.AudioFX.validate(f);
  return p;
 }
 function ensure(it,bufs){if(it.audioProject)return validate(it.audioProject,bufs,it.tracks);
@@ -47,6 +48,6 @@ function remove(p,ids,range,ripple=false,all=false){
 function insertGap(p,at,amount,tracks,all=false){split(p,new Set(p.clips.filter(c=>tracks.has(c.track)).map(c=>c.id)),at);for(const c of p.clips)if(tracks.has(c.track)&&c.start>=at-.000001)c.start+=amount;for(const t of p.tracks)if(tracks.has(t.id))t.effects=root.AudioTimeline.insertEffects(t.effects,at,amount);if(all){p.effects=root.AudioTimeline.insertEffects(p.effects,at,amount);p.length+=amount}}
 function duplicate(p,ids){const selected=p.clips.filter(c=>ids.has(c.id));if(!selected.length)return[];const a=Math.min(...selected.map(c=>c.start)),b=Math.max(...selected.map(end));return selected.map(c=>{const n={...copy(c),id:id('clip'),start:c.start+b-a};n.effects=n.effects.map(f=>({...f,id:id('fx')}));p.clips.push(n);return n.id})}
 function owner(p,type,target){return type==='master'?p:type==='track'?p.tracks.find(t=>t.id===target):p.clips.find(c=>c.id===target)}
-function effect(type,start,stop){return{id:id('fx'),type,start,end:stop,amount:type==='volume'?100:type==='echo'?35:type==='reverb'?30:100,delayMs:180,feedback:35,decay:.45,bypass:false}}
+function effect(type,start,stop){return{...root.AudioFX.defaults(type),id:id('fx'),type,start,end:stop,amount:type==='volume'?100:type==='echo'?35:type==='reverb'?30:100,delayMs:180,feedback:35,decay:.45,bypass:false}}
 root.AudioProject={id,copy,clamp,end,length,ensure,validate,trim,split,remove,insertGap,duplicate,owner,effect,clampEffects};
 })(window);
