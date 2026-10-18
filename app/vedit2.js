@@ -236,7 +236,8 @@ function makeEngine(P){
       await new Promise(res=>{S.onEnd=res;S.onTick=t=>{onProg&&onProg(Math.min(1,t/T));if(ctl&&ctl.cancel){stopPlay();res()}};S.playing=true;S.tok++;S.last=performance.now();step()});
       await new Promise(r=>setTimeout(r,40));
     }finally{recs.forEach(x=>x.r.state!=='inactive'&&x.r.stop());await Promise.all(recs.map(x=>x.done));stopPlay();S.out.disconnect();S.out.connect(ac.destination);S.targets=saved;S.mode='preview';S.onTick=savedTick;S.onEnd=savedEnd;S.t=0;sync()}
-    if(ctl&&ctl.cancel)return null;const o={};recs.forEach(x=>{o[x.k]=new Blob(x.chunks,{type:x.m.split(';')[0]})});return o}
+    if(ctl&&ctl.cancel)return null;const o={};for(const x of recs){let b=new Blob(x.chunks,{type:x.m.split(';')[0]});if(x.k==='webm'&&window.WebmFix)b=await WebmFix.fix(b,T*1000); // 10.1.1: write the length into the WebM
+      o[x.k]=b}return o}
   async function renderTimes(times,cw,ch,cb,ctl){stopPlay();const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;const g=cv.getContext('2d',{willReadFrequently:true});
     for(let i=0;i<times.length;i++){if(ctl&&ctl.cancel)return false;S.t=times[i];await prepare(times[i]);drawFrame(g,times[i],cw,ch);await cb(g,i);if(i%3===2)await new Promise(r=>setTimeout(r,0))}return true}
   function snapshot(cw,ch){const c=document.createElement('canvas');c.width=cw||e.W;c.height=ch||e.H;drawFrame(c.getContext('2d'),S.t,c.width,c.height);return c}

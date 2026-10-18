@@ -275,6 +275,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size
 <script src="fxdefs.js"></script>
 <script src="imgtools.js"></script>
 <script src="gif.js"></script>
+<script src="webm.js"></script>
 <script src="vedit2.js"></script>
 <script src="audiobar.js"></script>
 <script src="audio-timeline.js"></script>
@@ -777,7 +778,7 @@ cv.addEventListener('pointerdown',e=>{
   if(t==='image'){imageTabDown9(e,x,y);return}
   if(t==='selection'&&!(S.sel&&S.sel.t==='img'&&(hitHandle(x,y)||hit(x,y)===S.sel))){S.sel=null;S.drag={mode:'pix'};S.pixRect={x1:x,y1:y,x2:x,y2:y};render();return}
   if(t==='crop'){S.drag={mode:'crop',x0:x,y0:y};S.cropRect={x1:x,y1:y,x2:x,y2:y};render();return}
-  if(t==='fill'){const col=S.p.fillTransparent?'none':S.p.stroke,r=ImgTools.fill(it.base,x,y,col,+(S.p.tol??5),S.p.contig!==false,+(S.p.grow??1));if(r){snap();it.base=r.canvas;render();changed();toast(`Filled ${r.count.toLocaleString()} pixels. Ctrl+Z to undo.`)}return}
+  if(t==='fill'){const col=S.p.fillTransparent?'none':S.p.stroke,r=ImgTools.fill(it.base,x,y,col,+(S.p.tol??3),S.p.contig!==false,+(S.p.grow??1));if(r){snap();it.base=r.canvas;render();changed();{const tot=it.base.width*it.base.height,big=r.count>tot*.25;toast(big?`That filled ${Math.round(r.count/tot*100)}% of the picture (${r.count.toLocaleString()} pixels). Ctrl+Z to undo, or lower Similar colours and try again.`:`Filled ${r.count.toLocaleString()} pixels. Ctrl+Z to undo.`,big?7000:undefined)}}return}
   if(t==='erase'){snap();const src=it.base;if((S.p.eraseWhat||'pixels')!=='objects'){const nb=document.createElement('canvas');nb.width=src.width;nb.height=src.height;nb.getContext('2d').drawImage(src,0,0);it.base=nb}S.drag={mode:'erase',lx:x,ly:y,src};eraseSeg(x,y,x,y);render();return}
   if(t==='cutout'){const k=cutHit(x,y),q=cutRegion();
     if(k){S.drag={mode:'cutAdjust',k,q,p:q.axis==='x'?x:y};cv.style.cursor=k==='move'?'move':q.axis==='x'?'ew-resize':'ns-resize';return}
@@ -871,9 +872,11 @@ function commitText(){if(!editing)return;const {s,isNew}=editing;editing=null;co
 
 // ---------- Grab Text ----------
 let ocrBusy35=false;
-async function grabTextFrom(r){const it=S.cur;if(it?.kind!=='image'){toast('Open an image first.');return}commitText();await readyShapes(it.shapes);const x=Math.max(0,Math.min(it.base.width,Math.round(r.x))),y=Math.max(0,Math.min(it.base.height,Math.round(r.y))),w=Math.min(it.base.width,Math.round(r.x+r.w))-x,h=Math.min(it.base.height,Math.round(r.y+r.h))-y;if(w<5||h<5){toast('Drag a larger box around the text.');return}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(flatCanvas(it),-x,-y);return runOcr(c)}
-async function runOcr(c){if(ocrBusy35){toast('Text recognition is already running.');return}if(!window.bench?.ocr){toast('Grab Text uses Windows text recognition in the desktop app.');return}ocrBusy35=true;document.body.dataset.ocrBusy='true';
- try{const k=c.width<1000&&c.height<500?Math.min(2,2000/Math.max(c.width,c.height)):1,b=document.createElement('canvas');b.width=Math.max(1,Math.round(c.width*k));b.height=Math.max(1,Math.round(c.height*k));const g=b.getContext('2d');g.fillStyle='white';g.fillRect(0,0,b.width,b.height);g.imageSmoothingQuality='high';g.drawImage(c,0,0,b.width,b.height);toast('Reading text…',90000);const text=await window.bench.ocr(b.toDataURL());document.querySelectorAll('.toast').forEach(e=>e.remove());if(!text.trim()){showText('',true);return}let copyFailed=false;if($('#clipOn').checked){try{await navigator.clipboard.writeText(text)}catch(e){copyFailed=true}}showText(text);if(copyFailed)toast('Text is ready. Automatic copy was blocked; use Copy text or Ctrl+C.',6000)
+async function grabTextFrom(r){const it=S.cur;if(it?.kind!=='image'){toast('Open an image first.');return}commitText();await readyShapes(it.shapes);const x=Math.max(0,Math.min(it.base.width,Math.round(r.x))),y=Math.max(0,Math.min(it.base.height,Math.round(r.y))),w=Math.min(it.base.width,Math.round(r.x+r.w))-x,h=Math.min(it.base.height,Math.round(r.y+r.h))-y;if(w<5||h<5){toast('Drag a larger box around the text.');return}const c=document.createElement('canvas');c.width=w;c.height=h;{const isText=s=>(s.t==='text'||s.t==='callout')&&String(s.txt||'').trim()&&!s.hidden9,notes=it.shapes.filter(isText).filter(s=>{const b=bbox(s);return b.x<x+w&&b.x+b.w>x&&b.y<y+h&&b.y+b.h>y}).sort((a,b)=>bbox(a).y-bbox(b).y||bbox(a).x-bbox(b).x).map(s=>String(s.txt).trim());
+  c.getContext('2d').drawImage(flatCanvas(notes.length?{...it,shapes:it.shapes.filter(s=>!isText(s))}:it),-x,-y);return runOcr(c,notes.join('\n'))}}
+async function runOcr(c,notes=''){if(ocrBusy35){toast('Text recognition is already running.');return}if(!window.bench?.ocr){toast('Grab Text uses Windows text recognition in the desktop app.');return}ocrBusy35=true;document.body.dataset.ocrBusy='true';
+ try{const k=c.width<1000&&c.height<500?Math.min(2,2000/Math.max(c.width,c.height)):1,b=document.createElement('canvas');b.width=Math.max(1,Math.round(c.width*k));b.height=Math.max(1,Math.round(c.height*k));const g=b.getContext('2d');g.fillStyle='white';g.fillRect(0,0,b.width,b.height);g.imageSmoothingQuality='high';g.drawImage(c,0,0,b.width,b.height);toast('Reading text…',90000);let text=await window.bench.ocr(b.toDataURL());document.querySelectorAll('.toast').forEach(e=>e.remove());if(notes)text=[text.trim(),notes].filter(Boolean).join('\n\n'); // 10.1.2: the words of text annotations follow the text read from the picture
+  if(!text.trim()){showText('',true);return}let copyFailed=false;if($('#clipOn').checked){try{await navigator.clipboard.writeText(text)}catch(e){copyFailed=true}}showText(text);if(copyFailed)toast('Text is ready. Automatic copy was blocked; use Copy text or Ctrl+C.',6000)
  }catch(e){toast((e.message||String(e)).replace(/^Error invoking remote method 'ocr': (Error: )?/,''),9000)}finally{ocrBusy35=false;delete document.body.dataset.ocrBusy}
 }
 function showText(text,empty=false){$('#grabbedText35')?.remove();const m=document.createElement('div');m.className='modal';m.id='grabbedText35';m.style.zIndex=160;
@@ -923,13 +926,13 @@ async function icoBlob(c){const k=Math.min(1,256/Math.max(c.width,c.height)),w=M
 let saveTarget9=null,saveOwner9=null;
 // 10.0.9: Save asks once per session per item before it starts writing over the same file
 const sessionSaved34=new Set();
-function saveExts9(it){const k=it.kind==='image'&&it.guide?'image':it.kind,l=(FORMATS[k]||FORMATS.image).map(x=>x[0]);if(it.kind==='video')return l.filter(x=>x==='mp4'?it.mp4:x==='webm'?it.webm:false);if(it.kind==='audio')return l;return['saveit',...l.filter(x=>x!=='saveit')]}
+function saveExts9(it){const k=it.kind==='image'&&it.guide?'image':it.kind,l=(FORMATS[k]||FORMATS.image).map(x=>x[0]);if(it.kind==='video')return l.filter(x=>x==='mp4'?it.mp4:x==='webm'?it.webm:x==='gif');if(it.kind==='audio')return l;return['saveit',...l.filter(x=>x!=='saveit')]}
 async function save(fmtArg){const it=S.cur;if(!it)return;commitText();saveTarget9=null;saveOwner9=null;let fmt=typeof fmtArg==='string'?fmtArg:$('#fmt').value;
   if(typeof fmtArg!=='string'&&window.bench?.savePick){let p=it.savedPath;if(!p||!sessionSaved34.has(it.id)){const ex=saveExts9(it),pe=p?p.split('.').pop().toLowerCase():'';if(pe&&ex.includes(pe)){ex.splice(ex.indexOf(pe),1);ex.unshift(pe)}p=await window.bench.savePick(p?p.replace(/\.[^.\\]+$/,''):baseName(it),ex);if(!p)return;sessionSaved34.add(it.id)}fmt=p.split('.').pop().toLowerCase();saveTarget9=p;saveOwner9=it}
   if(it.kind==='video'){if(fmt==='gif'){saveTarget9=null;saveOwner9=null;if(vid&&vid._ctl)vid._ctl.saveGif();return}const ctl97=vid&&vid._ctl;if(ctl97&&ctl97.needsRender&&ctl97.needsRender()){const tgt=saveTarget9,own=saveOwner9,len=ctl97.duration?ctl97.duration():0,lenT=len?' ('+Math.floor(len/60)+':'+String((len%60).toFixed(1)).padStart(4,'0')+')':'';saveTarget9=null;saveOwner9=null;
     toast('Saving your edited video'+lenT+'… keep this window open and in front. It takes as long as the video. Cancel is in Export.',9000);
     (async()=>{try{const o=await ctl97.renderBlob();if(!o){toast('Save cancelled. Nothing was written.',5000);return}const b2=fmt==='mp4'?o.mp4:(o.webm||o.mp4);if(!b2){toast('MP4 could not be made here. Choose WebM.',6000);return}saveTarget9=tgt;saveOwner9=own;saveBlob(b2,fileName(fmt),'Saved the edited video'+lenT+' to')}catch(e){toast('Could not save: '+(e.message||e),6000)}})();return}
-  const b=fmt==='mp4'?it.mp4:it.webm;if(!b){toast(fmt==='mp4'?'This recording was made without MP4. Choose WebM, or record again in this version to get both.':'This recording only has MP4. Choose MP4.',6000);return}saveBlob(b,fileName(fmt));return}
+  let b=fmt==='mp4'?it.mp4:it.webm;if(b&&fmt!=='mp4'&&window.WebmFix)b=await WebmFix.ensure(b);if(!b){toast(fmt==='mp4'?'This recording was made without MP4. Choose WebM, or record again in this version to get both.':'This recording only has MP4. Choose MP4.',6000);return}saveBlob(b,fileName(fmt));return}
   if(it.kind==='audio'){const tgt=saveTarget9,own=saveOwner9;saveTarget9=null;saveOwner9=null;const af=fmt==='mp3'||fmt==='m4a'?fmt:'wav';toast(af==='m4a'?'Making the M4A… it takes as long as the audio, so keep this window open.':af==='mp3'?'Making the MP3…':'Mixing the audio…',af==='m4a'?9000:3000);try{const b=await AEdit.renderAs(it,af);saveTarget9=tgt;saveOwner9=own;await saveBlob(b,fileName(af),'Saved the audio ('+AEdit.fmt(it.dur||0)+') to')}catch(e){toast('Could not save the audio: '+(e.message||e),6000)}return}
   if(fmt==='saveit')return saveSaveit(it.guide&&false?it.guide:it);
   if(it.kind==='guide'){if(fmt==='docx')return exportDocx(it);if(fmt==='pdf')return exportPdf(it);if(fmt==='jpg')return exportGuideJpg(it);if(fmt==='png'){const pc=renderPageCanvas(it,2);pc.canvas.toBlob(b=>saveBlob(b,safeName(it.title)+'.png'),'image/png');return}return}
@@ -1091,10 +1094,12 @@ async function beginRecording(stream,recStream,cleanup,uiInfo,uiExtra){
   if(!window.bench){bar=document.createElement('div');bar.className='recbar';bar.innerHTML='<span class="dot"></span><span class="t">00:00</span><button class="btn" data-a="pause">Pause</button><button class="btn pri" data-a="stop">Stop</button>';document.body.appendChild(bar);
     tm=setInterval(()=>{if(!paused){secs++;bar.querySelector('.t').textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0')}},1000);
     bar.addEventListener('click',e=>{const a=e.target.dataset.a;if(a==='stop')stop();if(a==='pause'){togglePause();e.target.textContent=paused?'Resume':'Pause'}});}
-  let finished=false;
+  let finished=false,recT0=0,recEnd=0,recPaused=0,recPauseAt=0;
   const finalize=async()=>{if(finished)return;finished=true;if(tm)clearInterval(tm);if(bar)bar.remove();const camBlob=camRec?await Promise.race([camRec.done,new Promise(r=>setTimeout(()=>r(null),4000))]):null;try{if(cleanup)cleanup()}catch(e){}stream.getTracks().forEach(t=>t.stop());recStream.getTracks().forEach(t=>t.stop());
     if(window.bench){window.bench.setRecording(false);window.bench.recUI(false)}rec=null;setCapLabel();
     const blobs={};for(const x of recs)if(x.ch.length)blobs[/mp4/.test(x.type)?'mp4':'webm']=new Blob(x.ch,{type:x.type.split(';')[0]});
+    // 10.1.1: write the length into the WebM so players can show it and seek
+    if(blobs.webm&&window.WebmFix&&recT0){const end=recEnd||performance.now(),ms=end-recT0-recPaused-(recPauseAt?end-recPauseAt:0);if(ms>0)blobs.webm=await WebmFix.fix(blobs.webm,ms)}
     const main=blobs.webm||blobs.mp4;if(!main){toast('The recording was empty, so nothing was saved.');return}
     const v=addVideo(main,null,await videoThumb(main));v.mp4=blobs.mp4||null;v.webm=blobs.webm||null;
     if(camBlob&&camBlob.size>2000){const o=camRec.o||{};v.edit={cam:{src:'scam',off:0,o:{mirror:o.mirror!==false}},look:{layout:'pip',bg:'black',pos:o.pos||'br',shape:o.shape==='rect'?'wide':o.shape==='circle'?'circle':(o.corners==='rounded'?'rounded':'square'),camSize:+o.size||22,round:true,shadow:true,border:o.border!==false}};v._edBlobs={scam:camBlob};openItem(v)}
@@ -1103,11 +1108,11 @@ async function beginRecording(stream,recStream,cleanup,uiInfo,uiExtra){
     if($('#clipOn').checked&&window.bench){const b=v.mp4||v.webm;const ok=await window.bench.copyFile(fileName(v.mp4?'mp4':'webm'),await b.arrayBuffer());toast(ok?'Recording saved to Recent and copied to the clipboard. Paste it into an email, Teams or a folder.':'Recording saved to Recent. It could not be put on the clipboard.',6000)}
     else toast('Recording saved to Recent');};
   let stopped=0;
-  const stop=()=>{if(finished)return;try{if(camRec&&camRec.r.state!=='inactive'){if(camRec.r.state==='paused')camRec.r.resume();camRec.r.stop()}}catch(e){}for(const x of recs){try{if(x.r.state==='paused')x.r.resume();if(x.r.state!=='inactive'){x.r.requestData();x.r.stop()}}catch(e){}}setTimeout(finalize,2500)};
-  const togglePause=()=>{if(mr.state==='inactive')return;paused=!paused;for(const x of [...recs,...(camRec?[camRec]:[])]){try{paused?x.r.pause():x.r.resume()}catch(e){}}if(window.bench)window.bench.recState(paused?'paused':'recording')};
+  const stop=()=>{if(finished)return;if(!recEnd)recEnd=performance.now();try{if(camRec&&camRec.r.state!=='inactive'){if(camRec.r.state==='paused')camRec.r.resume();camRec.r.stop()}}catch(e){}for(const x of recs){try{if(x.r.state==='paused')x.r.resume();if(x.r.state!=='inactive'){x.r.requestData();x.r.stop()}}catch(e){}}setTimeout(finalize,2500)};
+  const togglePause=()=>{if(mr.state==='inactive')return;paused=!paused;{const now=performance.now();if(paused)recPauseAt=now;else if(recPauseAt){recPaused+=now-recPauseAt;recPauseAt=0}}for(const x of [...recs,...(camRec?[camRec]:[])]){try{paused?x.r.pause():x.r.resume()}catch(e){}}if(window.bench)window.bench.recState(paused?'paused':'recording')};
   stream.getVideoTracks()[0].addEventListener('ended',stop);
   for(const x of recs)x.r.onstop=()=>{if(++stopped>=recs.length)setTimeout(finalize,50)};
-  for(const x of recs)x.r.start(1000);if(camRec)try{camRec.r.start(1000)}catch(e){}rec={mr,stop,togglePause};setCapLabel();
+  recT0=performance.now();for(const x of recs)x.r.start(1000);if(camRec)try{camRec.r.start(1000)}catch(e){}rec={mr,stop,togglePause};setCapLabel();
   if(window.bench){window.bench.setRecording(true);window.bench.recUI(true,uiInfo,uiExtra)}
 }
 function videoThumb(blob){return new Promise(res=>{const v=document.createElement('video');v.muted=true;v.src=URL.createObjectURL(blob);v.onloadeddata=()=>{v.currentTime=Math.min(.5,(v.duration||1)/2)};v.onseeked=()=>{try{const c=canvasFrom(v,192,Math.round(192*v.videoHeight/v.videoWidth)||108);res(c.toDataURL('image/jpeg',.7))}catch(e){res('')}URL.revokeObjectURL(v.src)};v.onerror=()=>res('');setTimeout(()=>res(''),4000)})}
@@ -1473,7 +1478,7 @@ function toolPanel(P,it){const t=S.tool;if(!['fill','erase','cutout','simplify']
   const sw=()=>{P.querySelectorAll('.sw button').forEach(b=>b.onclick=()=>setProp(b.dataset.k,b.dataset.v));P.querySelectorAll('input[type=color][data-k]').forEach(i=>i.oninput=()=>setProp(i.dataset.k,i.value,true))};
   const rg=(attr,k,lbl,min,max,v)=>`<div class="row"><span>${lbl}</span><input type="range" ${attr}="${k}" min="${min}" max="${max}" value="${v}" aria-label="${lbl}"><span class="val">${v}</span></div>`;
   if(t==='fill'){const p=S.p;h=`<div class="grp"><h3>Fill</h3><p class="hint">Click an area to pour colour into it. Raise <b>Similar colours</b> to catch gradients and soft edges.</p><h3>Colour</h3>${swatches('stroke',false)}
-    <label class="chk"><input type="checkbox" id="fTr" ${p.fillTransparent?'checked':''}> Make transparent instead</label>${rg('data-fp','tol','Similar colours',0,100,p.tol??5)}${rg('data-fp','grow','Grow edge (px)',0,6,p.grow??1)}
+    <label class="chk"><input type="checkbox" id="fTr" ${p.fillTransparent?'checked':''}> Make transparent instead</label>${rg('data-fp','tol','Similar colours',0,100,p.tol??3)}${rg('data-fp','grow','Grow edge (px)',0,6,p.grow??1)}
     <label class="chk"><input type="checkbox" id="fCt" ${p.contig!==false?'checked':''}> Only touching pixels</label></div>`}
   else if(t==='erase'){const p=S.p,what=p.eraseWhat||'pixels';h=`<div class="grp"><h3>Erase</h3><p class="hint">Drag over what you want gone. <span class="kbd">Ctrl</span>+<span class="kbd">Z</span> undoes the whole stroke.</p>
     <div class="row"><span>Erase</span><select id="eWhat" aria-label="What to erase"><option value="pixels">Picture pixels</option><option value="objects">Annotations it touches</option><option value="both">Pixels and annotations</option></select></div>
@@ -1598,7 +1603,8 @@ function openLibrary(){if($('#libModal'))return;const m=document.createElement('
     else if(e.key==='Delete'&&libSel.size){e.preventDefault();e.stopPropagation();libDelete()}};
   document.addEventListener('keydown',key,true);
   m.onclick=e=>{if(e.target===m||e.target.closest('[data-x]'))close()};
-  m.querySelector('#libQ').value=libQuery;m.querySelector('#libQ').oninput=e=>{libQuery=e.target.value;libraryPage=0;libPrune();renderLib()};
+  libQuery='';m.querySelector('#libQ').value=libQuery; // 10.0.12: a new Library starts with no search, so nothing is hidden for no visible reason
+  m.querySelector('#libQ').oninput=e=>{libQuery=e.target.value;libraryPage=0;libPrune();renderLib()};
   m.querySelector('#libAll').onchange=e=>{const v=libVisible();if(e.target.checked)v.forEach(i=>libSel.add(i.id));else v.forEach(i=>libSel.delete(i.id));renderLib()};
   m.querySelector('#libOpen').onclick=()=>{const l=libChosen();if(!l.length)return;close();openItem(l[0])};
   m.querySelector('#libRen').onclick=()=>{const l=libChosen();if(l.length===1){libRename=l[0].id;renderLib()}};
@@ -1710,7 +1716,7 @@ function libBatch(move){const l=libChosen();if(!l.length)return;if($('#libBatch'
     else toast(`Saved ${files.length} file${files.length>1?'s':''} to ${where}`+(skipped.length?`. Skipped ${skipped.length}.`:''),6000);
     renderLib()}}
 async function blobFor(it,fmt){await hydrate(it);
-  if(it.kind==='video')return fmt==='mp4'?it.mp4:it.webm;
+  if(it.kind==='video')return fmt==='mp4'?it.mp4:(window.WebmFix&&it.webm?await WebmFix.ensure(it.webm):it.webm);
   if(it.kind==='audio')return AEdit.renderAs(it,fmt);
   if(fmt==='saveit')return saveitBlob(it);
   if(it.kind==='guide'){if(fmt==='docx')return await exportDocx(it,true);if(fmt==='pdf')return await exportPdf(it,true);if(fmt==='pptx')return await pptx33(it,true);
@@ -2091,7 +2097,7 @@ function stepTitleFrom(i){if(i&&i.ctype&&!/^ControlType\./.test(i.type||''))i={.
   if(i.menu&&/MenuItem/.test(i.type)&&i.name&&i.menu!==i.name)r.title=`Select "${i.name}" from the "${i.menu}" menu`;
   if(i.button==='right')r.title=r.title.replace(/^(Click in|Click|Select|Open|Check)\b/,'Right-click');
   return r}
-function stepTitleFrom0(i){const clean=v=>String(v||'').replace(/\s+/g,' ').trim().slice(0,70);const n=clean(i.name),w=clean(i.window),t=String(i.type||'').replace('ControlType.','');
+function stepTitleFrom0(i){const clean=v=>String(v||'').replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g,'').replace(/\s+/g,' ').trim().slice(0,70);const n=clean(i.name),w=clean(i.window),t=String(i.type||'').replace('ControlType.','');
   const q=n?`"${n}"`:'';
   const map={Button:q?`Click ${q}`:'Click the button',SplitButton:q?`Click ${q}`:'Click the button',Hyperlink:q?`Click the ${q} link`:'Click the link',MenuItem:q?`Select ${q}`:'Select the menu item',MenuBar:q?`Click ${q}`:'Open the menu',
     TabItem:q?`Open the ${q} tab`:'Open the tab',Edit:q?`Click in the ${q} box`:'Click in the text box',Document:q?`Click in ${q}`:'Click in the document',CheckBox:q?`Check ${q}`:'Check the box',RadioButton:q?`Select ${q}`:'Select the option',

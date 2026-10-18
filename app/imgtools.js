@@ -15,9 +15,18 @@ function region(img,sx,sy,tol,contiguous){const {data:d,width:W,height:H}=img;sx
       if(y<H-1){const m=!mask[(y+1)*W+xx]&&close(d,((y+1)*W+xx)*4,r,g,b,tol);if(m&&!dn){st.push(xx,y+1);dn=true}else if(!m)dn=false}}}
   return{mask,count:n,x0,y0,x1,y1}}
 function hex(c){const m=/^#?([0-9a-f]{6})$/i.exec(c||'');const n=m?parseInt(m[1],16):0;return[n>>16&255,n>>8&255,n&255]}
+// Small separate objects inside or beside a filled area (the letters of a label, a dot) must not be eaten by "grow edge".
+// Returns a mask of every non-filled pixel that belongs to an object smaller than the limit.
+function smallObjects(mask,W,H,limit){const prot=new Uint8Array(W*H),seen=new Uint8Array(W*H),stack=new Int32Array(W*H),list=new Int32Array(W*H);
+  for(let s=0;s<W*H;s++){if(mask[s]||seen[s])continue;let sp=0,n=0;stack[sp++]=s;seen[s]=1;
+    while(sp){const i=stack[--sp];list[n++]=i;const x=i%W,y=(i-x)/W;
+      if(x>0&&!mask[i-1]&&!seen[i-1]){seen[i-1]=1;stack[sp++]=i-1}if(x<W-1&&!mask[i+1]&&!seen[i+1]){seen[i+1]=1;stack[sp++]=i+1}
+      if(y>0&&!mask[i-W]&&!seen[i-W]){seen[i-W]=1;stack[sp++]=i-W}if(y<H-1&&!mask[i+W]&&!seen[i+W]){seen[i+W]=1;stack[sp++]=i+W}}
+    if(n<limit)for(let k=0;k<n;k++)prot[list[k]]=1}
+  return prot}
 function fill(base,x,y,color,tol,contiguous,grow){const W=base.width,H=base.height,img=gd(base).getImageData(0,0,W,H),R=region(img,x,y,tol,contiguous);if(!R)return null;
   const out=mk(W,H),g=out.getContext('2d');g.drawImage(base,0,0);const none=!color||color==='none',[r,gg,b]=hex(color);let mask=R.mask;
-  if(grow>0){const m2=new Uint8Array(mask);for(let k=0;k<grow;k++){const src=k?m2.slice():mask;for(let yy=1;yy<H-1;yy++)for(let xx=1;xx<W-1;xx++){const i=yy*W+xx;if(!src[i]&&(src[i-1]||src[i+1]||src[i-W]||src[i+W]))m2[i]=1}}mask=m2}
+  if(grow>0){const prot=smallObjects(mask,W,H,Math.max(600,Math.round(W*H*.0025))),m2=new Uint8Array(mask);for(let k=0;k<grow;k++){const src=k?m2.slice():mask;for(let yy=1;yy<H-1;yy++)for(let xx=1;xx<W-1;xx++){const i=yy*W+xx;if(!src[i]&&!prot[i]&&(src[i-1]||src[i+1]||src[i-W]||src[i+W]))m2[i]=1}}mask=m2}
   const d=img.data;for(let i=0;i<W*H;i++)if(mask[i]){const o=i*4;if(none){d[o+3]=0}else{d[o]=r;d[o+1]=gg;d[o+2]=b;d[o+3]=255}}
   g.putImageData(img,0,0);return{canvas:out,count:R.count}}
 function dominant(base){const W=base.width,H=base.height,d=gd(base).getImageData(0,0,W,H).data,h=new Map(),st=Math.max(1,Math.floor(Math.sqrt(W*H/60000)));
