@@ -1,0 +1,21 @@
+// 10.1.12: Erase, Fill and Magic Cut panels have a Flatten button (like Effects) so the tool works through annotations and pictures.
+// node tests/flatten-tools-tests.cjs http://127.0.0.1:8944 <evidence-folder>
+const {chromium}=require('playwright'),assert=require('assert/strict'),fs=require('fs'),path=require('path');
+(async()=>{const out=path.resolve(process.argv[3]||'../flatten-evidence');fs.mkdirSync(out,{recursive:true});
+const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});const page=await browser.newPage({viewport:{width:1440,height:900}}),results=[],errors=[];page.on('pageerror',e=>errors.push(e.stack));page.setDefaultTimeout(15000);
+const ev=(fn,arg)=>page.evaluate(fn,arg),test=async(name,fn)=>{try{const d=await fn();results.push({name,pass:true,detail:d});console.log('PASS',name,d?JSON.stringify(d):'')}catch(e){results.push({name,pass:false,error:e.stack});console.log('FAIL',name,e.message);await page.screenshot({path:path.join(out,'failure-'+results.length+'.png')})}};
+try{await page.goto(process.argv[2]||'http://127.0.0.1:8944');await page.waitForFunction(()=>window.__T?.addImage&&window.QA);
+const fresh=()=>ev(async()=>{document.querySelectorAll('.modal').forEach(m=>m.remove());__T.addImage(QA.canvas(400,240,'#8ac'),'Flatten test');await QA.sleep(150);const it=__T.S.cur,a=__T.newShape('rect',40,40);Object.assign(a,{x2:200,y2:150,c:'#e5372a',fill:'#e5372a',w:6});it.shapes.push(a);__T.render();return it.shapes.length});
+for(const [tool,title] of [['erase','Erase'],['fill','Fill'],['selection','Magic Cut']])
+  await test(title+' panel has Flatten, which merges annotations into the picture and Undo brings them back',async()=>{await fresh();await ev(t=>{__T.setTool(t);__T.S.sel=null;__T.renderProps()},tool);
+    const btn=page.locator('[data-flattool]:visible');assert.equal(await btn.count(),1,'no Flatten button');assert.equal(await btn.isEnabled(),true);
+    const head=await btn.evaluate(b=>b.closest('.row').querySelector('h3').textContent);assert.equal(head,title);
+    await btn.click();await page.waitForFunction(()=>__T.S.cur.shapes.length===0);const r=await ev(()=>({shapes:__T.S.cur.shapes.length,tool:__T.S.tool,red:[...__T.S.cur.base.getContext('2d').getImageData(120,95,1,1).data].slice(0,3),disabled:document.querySelector('[data-flattool]')?.disabled}));
+    assert.equal(r.tool,tool,'tool changed');assert.ok(r.red[0]>200&&r.red[1]<90,'annotation not in the picture '+r.red);assert.equal(r.disabled,true,'Flatten still enabled with nothing to flatten');
+    /* a new capture is itself a picture layer, so it has 2 layers here */await ev(()=>__T.undo());const back=await ev(()=>__T.S.cur.shapes.map(s=>s.t).join(','));assert.equal(back,'img,rect','Undo did not restore');return{...r,afterUndo:back}});
+await test('Flatten is greyed out when there is nothing to flatten',async()=>{await ev(async()=>{__T.addImage(QA.canvas(300,200,'#8ac'),'Plain',{flat:true});await QA.sleep(100);__T.setTool('erase');__T.renderProps()});assert.equal(await page.locator('[data-flattool]:visible').isDisabled(),true)});
+await test('After Flatten, Erase rubs out the annotation too',async()=>{await fresh();await ev(()=>{__T.setTool('erase');__T.renderProps()});await page.locator('[data-flattool]:visible').click();await page.waitForFunction(()=>__T.S.cur.shapes.length===0);
+  await ev(()=>{__T.S.p.eraseTo='white';__T.S.p.eraseSize=60});const [x,y]=await ev(()=>{const cv=document.querySelector('#cv'),r=cv.getBoundingClientRect(),p=__T.padX(),k=r.width/cv.width;return[r.left+(120+p)*k,r.top+(95+__T.padY())*k]});
+  await page.mouse.move(x-10,y);await page.mouse.down();await page.mouse.move(x+10,y,{steps:4});await page.mouse.up();const px=await ev(()=>[...__T.S.cur.base.getContext('2d').getImageData(120,95,1,1).data].slice(0,3));assert.ok(px[0]>200&&px[1]>200&&px[2]>200,'not erased '+px);return px});
+results.push({name:'No renderer errors',pass:errors.length===0,errors});
+}finally{fs.writeFileSync(path.join(out,'flatten-results.json'),JSON.stringify({passed:results.filter(r=>r.pass).length,failed:results.filter(r=>!r.pass).length,results},null,2));await browser.close()}process.exitCode=results.some(r=>!r.pass)?1:0})().catch(e=>{console.error(e);process.exitCode=1});
