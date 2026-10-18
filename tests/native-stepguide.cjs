@@ -44,4 +44,4 @@ const {_electron}=require('playwright'),path=require('path'),fs=require('fs'),as
   assert.ok(/J-2041\tGripper finger/.test(r.text),'row cells are separated by tabs: '+JSON.stringify(r.text.split('\n').find(l=>/J-2041/.test(l))));
   const lineWithJ=r.text.split('\n').find(l=>/J-2042/.test(l));assert.ok(lineWithJ.includes('\t'),'a table row has tab-separated columns');
   const w0=r.layout.lines.flatMap(l=>l.words).find(x=>x.text==='Gripper');assert.ok(w0,'word Gripper found');assert.ok(Math.abs(w0.rect.x-340)<6&&Math.abs(w0.rect.y-129.5)<6&&w0.rect.h>6&&w0.rect.h<30,'position in picture pixels '+JSON.stringify(w0.rect))});
- console.log(JSON.stringify({passed:results.filter(Boolean).length,failed:results.filter(x=>!x).length,errs}));await app.close();process.exit(results.includes(0)||errs.length?1:0)})().catch(e=>{console.log('FAIL',e.message);process.exit(1)});
+ console.log(JSON.stringify({passed:results.filter(Boolean).length,failed:results.filter(x=>!x).length,errs}));await app.evaluate(({app})=>{app.isQuitting=true});await app.close();process.exit(results.includes(0)||errs.length?1:0)})().catch(e=>{console.log('FAIL',e.message);process.exit(1)});

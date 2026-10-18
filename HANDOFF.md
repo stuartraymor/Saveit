@@ -1,6 +1,8 @@
 # Saveit — developer handoff
 
-Version at handoff: **10.1.2** (released on GitHub). Development branch: `v10-dev`. Repository: https://github.com/stuartraymor/Saveit
+Development version: **10.1.3** (audio bug-fix update for owner testing; latest published release is **10.1.2**). Development branch: `v10-dev`. Repository: https://github.com/stuartraymor/Saveit
+
+Audio handoff: read `CHANGES-10.1.3.md` and `VALIDATION-10.1.3.md` for the latest bug fixes and checks. Repeat now uses an app dialog, Ctrl+V pastes onto the selected track, bounce renders before master processing using internal float WAV, waveform peaks retain both stereo channels, simple mono WAV output stays mono, and trims preserve partial fade curves (`fadeFrom`/`fadeTo`). One-track/All tracks trims move to zero; trimming one track in a multitrack project preserves sync. New recording still creates a separate item; the professional audio features remain deferred. Do not publish 10.1.3 until the owner has tried and approved it.
 
 This document is for a developer who has **never seen Saveit, never used Snagit, and has no history with this project**. Read sections 1–3 first (15 minutes), then 4 and 5 before you touch code. Everything else is reference.
 

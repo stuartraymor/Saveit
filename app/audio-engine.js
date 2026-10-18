@@ -9,9 +9,9 @@ function graph(ctx,dest,effects,from,when,T){let output=ctx.createGain();const i
   if(f.legacy){const next=gain(),legacy=root.AudioTimeline.graph(ctx,next,[f],from,when,T);output.connect(legacy.input);clean.push(legacy.dispose);output=next;continue}
   const a=f.start,b=f.end,amount=clamp((f.amount??100)/100,0,2),next=gain();
   if(['volume','mute','fadein','fadeout'].includes(f.type)){
-   const value=t=>t<a||t>=b?1:f.type==='mute'?0:f.type==='volume'?amount:f.type==='fadein'?(t-a)/(b-a):1-(t-a)/(b-a),par=next.gain;
+   const value=t=>t<a||t>=b?1:f.type==='mute'?0:f.type==='volume'?amount:(f.fadeFrom??(f.type==='fadein'?0:1))+((f.fadeTo??(f.type==='fadein'?1:0))-(f.fadeFrom??(f.type==='fadein'?0:1)))*(t-a)/(b-a),par=next.gain;
    par.setValueAtTime(value(from),when);if(a>from)par.setValueAtTime(value(a),time(a));
-   if(b>from){if(f.type==='fadein'||f.type==='fadeout'){par.linearRampToValueAtTime(f.type==='fadein'?1:0,time(b));par.setValueAtTime(1,time(b)+.0001)}else par.setValueAtTime(1,time(b))}output.connect(next);
+   if(b>from){if(f.type==='fadein'||f.type==='fadeout'){par.linearRampToValueAtTime(f.fadeTo??(f.type==='fadein'?1:0),time(b));par.setValueAtTime(1,time(b)+.0001)}else par.setValueAtTime(1,time(b))}output.connect(next);
   }else{
    const send=gain(),wet=gain();output.connect(next);output.connect(send);send.gain.setValueAtTime(from>=a&&from<b?1:0,when);if(a>from)send.gain.setValueAtTime(1,time(a));if(b>from)send.gain.setValueAtTime(0,time(b));wet.gain.value=amount;wet.connect(next);
    if(f.type==='echo'){const d=ctx.createDelay(1),fb=gain();nodes.push(d);d.delayTime.value=clamp((f.delayMs??180)/1000,.02,1);fb.gain.value=clamp((f.feedback??35)/100,0,.85);send.connect(d);d.connect(fb);fb.connect(d);d.connect(wet)}

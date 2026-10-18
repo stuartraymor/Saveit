@@ -25,7 +25,7 @@ const handleNames=['undo','redo','snap','renderLib','renderProps','render','open
 handleNames.push('selectedShapes','orderStep9','flattenImage','copyMediaClip','pasteMediaClip','mediaTimelineMenu','recordItem','dbRead','persistNow');
 const handle=`\n// test handle (harness only)\nwindow.__T={get S(){return S},get audio(){return typeof aud!=='undefined'?aud?.ctl:null},get libSel(){return typeof libSel!=='undefined'?libSel:null},get libQuery(){return libQuery},set libQuery(v){libQuery=v},get vid(){return typeof vid!=='undefined'?vid:null},get rec(){return rec},get stepGuide(){return stepGuide},set stepGuide(v){stepGuide=v}};\n`+
   handleNames.map(n=>`try{window.__T.${n}=${n}}catch(_){}`).join('\n')+'\n';
-let html=fs.readFileSync(path.join(OUT,'index.html'),'utf8');
+let html=fs.readFileSync(path.join(OUT,'index.html'),'utf8').replace(/\r\n/g,'\n');
 html=html.replace('<head>','<head>'+stub);
 const end='})();\n})();\n</script>';const i=html.lastIndexOf(end);if(i<0)throw new Error('IIFE end not found');
 html=html.slice(0,i)+handle+html.slice(i);
