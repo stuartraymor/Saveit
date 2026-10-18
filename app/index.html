@@ -640,7 +640,9 @@ function getFont(){return getComputedStyle(document.body).getPropertyValue('--f-
 function textLines(c,s){return s.tw?wrap(c,s.txt||'',s.tw):(s.txt||'').split('\n')}
 function fitTextWidth(s){const it=S.cur;if(!s||s.t!=='text'||s.tw||!it?.base)return;ctx.save();ctx.font=fontSpec(s);const w=Math.max(0,...(s.txt||'').split('\n').map(l=>ctx.measureText(l).width));ctx.restore();const room=it.base.width-s.x1-8;if(w>room&&room>s.fs*3)s.tw=Math.floor(room)}
 function wrap(c,txt,maxW){const out=[];for(const para of txt.split('\n')){let line='';for(const w of para.split(' ')){const t=line?line+' '+w:w;if(c.measureText(t).width>maxW&&line){out.push(line);line=w}else line=t}out.push(line)}return out}
-function contrast(hex){if(!hex||hex[0]!=='#')return'#111';const n=parseInt(hex.slice(1,7),16),r=n>>16,g=n>>8&255,b=n&255;return (r*299+g*587+b*114)/1000>150?'#111111':'#ffffff'}
+function contrast(col){let r,g,b;const c=String(col||'').trim(),m=c.match(/^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i);
+  if(m){r=+m[1];g=+m[2];b=+m[3]}else if(/^#[0-9a-f]{3,4}$/i.test(c)){r=parseInt(c[1]+c[1],16);g=parseInt(c[2]+c[2],16);b=parseInt(c[3]+c[3],16)}else if(/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(c)){const n=parseInt(c.slice(1,7),16);r=n>>16;g=n>>8&255;b=n&255}else return'#111111';
+  return (r*299+g*587+b*114)/1000>150?'#111111':'#ffffff'}
 
 // ---------- selection UI ----------
 function bbox(s){
@@ -856,16 +858,18 @@ let editing=null;
 function startText(s,isNew){editing={s,isNew};te.hidden=false;te.value=s.txt||'';if(!isNew&&s.t==='text'){s._hide=true}
   positionTe();te.focus();te.select();render();}
 function positionTe(){if(!editing)return;const s=editing.s,z=scale(),px=padX(),py=padY();
-  te.style.font=fontSpec(s,z);te.style.color=s.t==='callout'?contrast(s.fill&&s.fill!=='none'?s.fill:'#fff'):s.c;
+  te.style.font=fontSpec(s,z);te.style.color=s.t==='callout'?contrast(s.fill&&s.fill!=='none'?s.fill:'#ffffff'):s.c;
   te.style.textAlign=s.t==='callout'?'center':(s.align||'left');te.style.textDecoration=s.underline?'underline':'none';te.style.whiteSpace=s.t==='callout'?'pre-wrap':'pre';
   const off=28; // stage inner padding
-  if(s.t==='callout'){const r=norm(s);te.style.left=(off+(r.x+px)*z+8)+'px';te.style.top=(off+(r.y+py)*z+8)+'px';te.style.width=(r.w*z-16)+'px';te.style.height=(r.h*z-16)+'px';te.style.background=s.fill&&s.fill!=='none'?s.fill:'#fff'}
+  if(s.t==='callout'){const r=norm(s);te.style.left=(off+(r.x+px)*z+8)+'px';te.style.top=(off+(r.y+py)*z+8)+'px';te.style.width=(r.w*z-16)+'px';te.style.height=(r.h*z-16)+'px';editing.baseH=r.h*z-16;te.style.background=s.fill&&s.fill!=='none'?s.fill:TYPE_TINT;sizeTe()}
   else{te.style.left=(off+(s.x1+px)*z)+'px';te.style.top=(off+(s.y1+py)*z)+'px';te.style.background='transparent';sizeTe()}
 }
 // text is edited upright; the angle comes back when editing ends
 const startText103=startText;startText=function(s,isNew){if(rotated103(s)){s._rot103=s.rot;s.rot=0}return startText103(s,isNew)};
 const commitText103=commitText;commitText=function(){const e=editing,s=e&&e.s,r=commitText103.apply(this,arguments);if(s&&s._rot103!=null){s.rot=s._rot103;delete s._rot103;s._w=null;render()}return r};
-function sizeTe(){if(!editing||editing.s.t!=='text')return;if(editing.s.tw){te.style.whiteSpace='pre-wrap';te.style.width=(editing.s.tw*scale()+8)+'px';te.style.height='10px';te.style.height=(te.scrollHeight+4)+'px';return}te.style.width='10px';te.style.height='10px';te.style.width=(te.scrollWidth+24)+'px';te.style.height=(te.scrollHeight+4)+'px'}
+// 10.1.11: a callout's typing box grows downward with its text, so new words never go out of view (the callout itself grows when you finish)
+const TYPE_TINT='#e8f1ff';
+function sizeTe(){if(editing&&editing.s.t==='callout'){te.style.height=(editing.baseH||10)+'px';if(te.scrollHeight>te.clientHeight+1)te.style.height=(te.scrollHeight+4)+'px';return}if(!editing||editing.s.t!=='text')return;if(editing.s.tw){te.style.whiteSpace='pre-wrap';te.style.width=(editing.s.tw*scale()+8)+'px';te.style.height='10px';te.style.height=(te.scrollHeight+4)+'px';return}te.style.width='10px';te.style.height='10px';te.style.width=(te.scrollWidth+24)+'px';te.style.height=(te.scrollHeight+4)+'px'}
 te.addEventListener('input',sizeTe);
 te.addEventListener('keydown',e=>{if(e.key==='Escape'||(e.key==='Enter'&&(e.ctrlKey||e.metaKey))){e.preventDefault();commitText()}e.stopPropagation()});
 te.addEventListener('blur',()=>commitText());
@@ -2064,10 +2068,10 @@ function pageUp(e){const d=S.pdrag;S.pdrag=null;if(!d)return;const g=S.cur;
 function pageDbl(e){const {x,y}=pagePt(e),s=pageHit(x,y);if(s&&(s.t==='text'||s.t==='callout')){e.preventDefault();S.sel=s;startPageText(s,false)}}
 let pEditing=null;
 function startPageText(s,isNew){const pg=$('#gpage');let ta=$('#pte');if(!ta){ta=document.createElement('textarea');ta.id='pte';ta.spellcheck=false;pg.appendChild(ta)}
-  pEditing={s,isNew};const top=anchorTops()[s.anchor||'']??0;ta.value=s.txt||'';ta.style.font=fontSpec(s);ta.style.color=s.t==='callout'?contrast(s.fill&&s.fill!=='none'?s.fill:'#fff'):s.c;
+  pEditing={s,isNew};const top=anchorTops()[s.anchor||'']??0;ta.value=s.txt||'';ta.style.font=fontSpec(s);ta.style.color=s.t==='callout'?contrast(s.fill&&s.fill!=='none'?s.fill:'#ffffff'):s.c;if(s.t==='callout')ta.style.background=s.fill&&s.fill!=='none'?s.fill:TYPE_TINT;
   if(s.t==='callout'){const r=norm(s);Object.assign(ta.style,{left:r.x+8+'px',top:top+r.y+8+'px',width:r.w-16+'px',height:r.h-16+'px',textAlign:'center',whiteSpace:'pre-wrap'})}
   else{Object.assign(ta.style,{left:s.x1+'px',top:top+s.y1+'px',width:'40px',height:s.fs*1.3+'px',textAlign:'left',whiteSpace:'pre'})}
-  const size=()=>{if(s.t!=='text')return;ta.style.width='10px';ta.style.height='10px';ta.style.width=ta.scrollWidth+24+'px';ta.style.height=ta.scrollHeight+4+'px'};size();
+  const size=()=>{if(s.t==='callout'){const h0=norm(s).h-16;ta.style.height=h0+'px';if(ta.scrollHeight>ta.clientHeight+1)ta.style.height=(ta.scrollHeight+4)+'px';return}if(s.t!=='text')return;ta.style.width='10px';ta.style.height='10px';ta.style.width=ta.scrollWidth+24+'px';ta.style.height=ta.scrollHeight+4+'px'};size();
   ta.oninput=size;ta.onkeydown=ev=>{ev.stopPropagation();if(ev.key==='Escape'||(ev.key==='Enter'&&(ev.ctrlKey||ev.metaKey))){ev.preventDefault();ta.blur()}};
   ta.onblur=()=>{const v=ta.value;ta.remove();const ed=pEditing;pEditing=null;if(!ed)return;const g=S.cur;
     if(ed.s.t==='text'){if(ed.isNew){if(v.trim()){snap();ed.s.txt=v;ed.s._w=null;g.pageShapes.push(ed.s);S.sel=ed.s}}else{snap();ed.s.txt=v;ed.s._w=null;if(!v.trim()){g.pageShapes.splice(g.pageShapes.indexOf(ed.s),1);S.sel=null}}}
