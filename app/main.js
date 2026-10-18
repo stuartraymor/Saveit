@@ -9,6 +9,17 @@ const fs = require('fs');
 if (process.env.SAVEIT_REVIEW_DATA) app.setPath('userData', process.env.SAVEIT_REVIEW_DATA);
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 app.setAppUserModelId('com.saveit.app');
+// 10.0.12: right-click menu for text everywhere (Grabbed text box, step titles, names, search): Cut, Copy, Paste, Select all.
+// Pages that draw their own right-click menu (canvas, thumbnails, timelines) call preventDefault, so Electron skips this for them.
+app.on('web-contents-created', (_e, wc) => {
+  wc.on('context-menu', (_ev, p) => {
+    if (wc.isDestroyed()) return;
+    const items = [];
+    if (p.isEditable) items.push({ role: 'cut', enabled: p.editFlags.canCut }, { role: 'copy', enabled: p.editFlags.canCopy }, { role: 'paste', enabled: p.editFlags.canPaste }, { type: 'separator' }, { role: 'selectAll' });
+    else if (p.selectionText && p.selectionText.trim()) items.push({ role: 'copy' });
+    if (items.length) Menu.buildFromTemplate(items).popup({ window: BrowserWindow.fromWebContents(wc) || undefined });
+  });
+});
 // Keep the library from earlier versions (stored under the old app name)
 try { const old = path.join(app.getPath('appData'), 'Capture Bench'); if (!process.env.SAVEIT_REVIEW_DATA && fs.existsSync(old)) app.setPath('userData', old); } catch (_) { }
 

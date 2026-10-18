@@ -31,4 +31,10 @@ const {_electron}=require('playwright'),path=require('path'),fs=require('fs'),as
   assert.equal(running('saveit-steps.exe'),false,'no helper before');
   await w.evaluate(()=>window.bench.startSteps(0));await new Promise(r=>setTimeout(r,2000));assert.equal(running('saveit-steps.exe'),true,'helper running during Step Capture');
   await app.evaluate(({ipcMain})=>ipcMain.emit('steps-cmd',{},'stop'));await new Promise(r=>setTimeout(r,1500));assert.equal(running('saveit-steps.exe'),false,'helper ended after Stop')});
+ await test('Right-click on text shows Cut / Copy / Paste / Select all in a field and Copy on plain selected text',async()=>{
+  const r=await app.evaluate(({Menu,BrowserWindow})=>{const wc=BrowserWindow.getAllWindows()[0].webContents,orig=Menu.buildFromTemplate,seen=[];
+   Menu.buildFromTemplate=t=>{seen.push(t.map(i=>i.role||i.type+(i.enabled===false?'(off)':'')));return{popup(){}}};
+   try{wc.emit('context-menu',{},{isEditable:true,selectionText:'x',editFlags:{canCut:true,canCopy:true,canPaste:false}});
+    wc.emit('context-menu',{},{isEditable:false,selectionText:'some words',editFlags:{}});wc.emit('context-menu',{},{isEditable:false,selectionText:'  ',editFlags:{}})}finally{Menu.buildFromTemplate=orig}return seen});
+  assert.deepEqual(r[0],['cut','copy','paste','separator','selectAll']);assert.equal(r.length,2,'nothing for empty selection');assert.deepEqual(r[1],['copy'])});
  console.log(JSON.stringify({passed:results.filter(Boolean).length,failed:results.filter(x=>!x).length,errs}));await app.close();process.exit(results.includes(0)||errs.length?1:0)})().catch(e=>{console.log('FAIL',e.message);process.exit(1)});

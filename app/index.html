@@ -923,7 +923,7 @@ async function icoBlob(c){const k=Math.min(1,256/Math.max(c.width,c.height)),w=M
 let saveTarget9=null,saveOwner9=null;
 // 10.0.9: Save asks once per session per item before it starts writing over the same file
 const sessionSaved34=new Set();
-function saveExts9(it){const k=it.kind==='image'&&it.guide?'image':it.kind,l=(FORMATS[k]||FORMATS.image).map(x=>x[0]);if(it.kind==='video')return l.filter(x=>x==='mp4'?it.mp4:x==='webm'?it.webm:false);if(it.kind==='audio')return l;return['saveit',...l.filter(x=>x!=='saveit')]}
+function saveExts9(it){const k=it.kind==='image'&&it.guide?'image':it.kind,l=(FORMATS[k]||FORMATS.image).map(x=>x[0]);if(it.kind==='video')return l.filter(x=>x==='mp4'?it.mp4:x==='webm'?it.webm:x==='gif');if(it.kind==='audio')return l;return['saveit',...l.filter(x=>x!=='saveit')]}
 async function save(fmtArg){const it=S.cur;if(!it)return;commitText();saveTarget9=null;saveOwner9=null;let fmt=typeof fmtArg==='string'?fmtArg:$('#fmt').value;
   if(typeof fmtArg!=='string'&&window.bench?.savePick){let p=it.savedPath;if(!p||!sessionSaved34.has(it.id)){const ex=saveExts9(it),pe=p?p.split('.').pop().toLowerCase():'';if(pe&&ex.includes(pe)){ex.splice(ex.indexOf(pe),1);ex.unshift(pe)}p=await window.bench.savePick(p?p.replace(/\.[^.\\]+$/,''):baseName(it),ex);if(!p)return;sessionSaved34.add(it.id)}fmt=p.split('.').pop().toLowerCase();saveTarget9=p;saveOwner9=it}
   if(it.kind==='video'){if(fmt==='gif'){saveTarget9=null;saveOwner9=null;if(vid&&vid._ctl)vid._ctl.saveGif();return}const ctl97=vid&&vid._ctl;if(ctl97&&ctl97.needsRender&&ctl97.needsRender()){const tgt=saveTarget9,own=saveOwner9,len=ctl97.duration?ctl97.duration():0,lenT=len?' ('+Math.floor(len/60)+':'+String((len%60).toFixed(1)).padStart(4,'0')+')':'';saveTarget9=null;saveOwner9=null;
@@ -1598,7 +1598,8 @@ function openLibrary(){if($('#libModal'))return;const m=document.createElement('
     else if(e.key==='Delete'&&libSel.size){e.preventDefault();e.stopPropagation();libDelete()}};
   document.addEventListener('keydown',key,true);
   m.onclick=e=>{if(e.target===m||e.target.closest('[data-x]'))close()};
-  m.querySelector('#libQ').value=libQuery;m.querySelector('#libQ').oninput=e=>{libQuery=e.target.value;libraryPage=0;libPrune();renderLib()};
+  libQuery='';m.querySelector('#libQ').value=libQuery; // 10.0.12: a new Library starts with no search, so nothing is hidden for no visible reason
+  m.querySelector('#libQ').oninput=e=>{libQuery=e.target.value;libraryPage=0;libPrune();renderLib()};
   m.querySelector('#libAll').onchange=e=>{const v=libVisible();if(e.target.checked)v.forEach(i=>libSel.add(i.id));else v.forEach(i=>libSel.delete(i.id));renderLib()};
   m.querySelector('#libOpen').onclick=()=>{const l=libChosen();if(!l.length)return;close();openItem(l[0])};
   m.querySelector('#libRen').onclick=()=>{const l=libChosen();if(l.length===1){libRename=l[0].id;renderLib()}};
@@ -2091,7 +2092,7 @@ function stepTitleFrom(i){if(i&&i.ctype&&!/^ControlType\./.test(i.type||''))i={.
   if(i.menu&&/MenuItem/.test(i.type)&&i.name&&i.menu!==i.name)r.title=`Select "${i.name}" from the "${i.menu}" menu`;
   if(i.button==='right')r.title=r.title.replace(/^(Click in|Click|Select|Open|Check)\b/,'Right-click');
   return r}
-function stepTitleFrom0(i){const clean=v=>String(v||'').replace(/\s+/g,' ').trim().slice(0,70);const n=clean(i.name),w=clean(i.window),t=String(i.type||'').replace('ControlType.','');
+function stepTitleFrom0(i){const clean=v=>String(v||'').replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g,'').replace(/\s+/g,' ').trim().slice(0,70);const n=clean(i.name),w=clean(i.window),t=String(i.type||'').replace('ControlType.','');
   const q=n?`"${n}"`:'';
   const map={Button:q?`Click ${q}`:'Click the button',SplitButton:q?`Click ${q}`:'Click the button',Hyperlink:q?`Click the ${q} link`:'Click the link',MenuItem:q?`Select ${q}`:'Select the menu item',MenuBar:q?`Click ${q}`:'Open the menu',
     TabItem:q?`Open the ${q} tab`:'Open the tab',Edit:q?`Click in the ${q} box`:'Click in the text box',Document:q?`Click in ${q}`:'Click in the document',CheckBox:q?`Check ${q}`:'Check the box',RadioButton:q?`Select ${q}`:'Select the option',
