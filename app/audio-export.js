@@ -20,6 +20,20 @@ async function m4a(buf,k){if(!root.MediaRecorder||!MediaRecorder.isTypeSupported
   try{await ctx.resume();src.start();await done}finally{try{ctx.close()}catch(e){}}
   return new Blob(chunks,{type:'audio/mp4'})}
 // fmt: 'wav' | 'mp3' | 'm4a'
-async function renderAs(it,fmt,k){if(fmt!=='mp3'&&fmt!=='m4a')return A.renderWav(it);const buf=await A.mix(it);return fmt==='mp3'?mp3(buf,k):m4a(buf,k)}
+async function renderAs(it,fmt,k){if(fmt!=='mp3'&&fmt!=='m4a')return A.renderWav(it);const buf=await A.mix(it),encode=b=>fmt==='mp3'?mp3(b,k):m4a(b,k);let blob=await encode(buf);
+  if(!it.audioProject?.loudnessStereo115||buf.duration<.4)return blob;
+  // Lossy encoding can change weighted energy (especially hiss). Match the
+  // actual decoded file to the current mix, without changing the project.
+  const measure=b=>root.AudioCleanup.job('measure',b).promise,reference=await measure(buf);if(reference.lufs===null)return blob;
+  let gainDb=0,pcm=buf;
+  for(let attempt=0;attempt<3;attempt++){
+    const decoded=await A.decode(blob),encoded=await measure(decoded);if(encoded.lufs===null)throw Error('The encoded audio has no measurable loudness. Save as WAV instead.');
+    const difference=reference.lufs-encoded.lufs,headroom=-1-root.AudioFX.db(encoded.peak);
+    if(Math.abs(difference)<.1&&headroom>=-.01)return blob;
+    const change=Math.min(difference,headroom,-1-root.AudioFX.db(await root.AudioFX.peak(pcm)));if(Math.abs(change)<.01)return blob;
+    if(attempt===2)throw Error('The encoded loudness could not stabilize. Save as WAV for the measured result.');
+    gainDb+=change;pcm=new AudioBuffer({numberOfChannels:buf.numberOfChannels,length:buf.length,sampleRate:buf.sampleRate});const scale=10**(gainDb/20);for(let ch=0;ch<buf.numberOfChannels;ch++){const src=buf.getChannelData(ch),dest=pcm.getChannelData(ch);for(let i=0;i<src.length;i++)dest[i]=src[i]*scale}blob=await encode(pcm);
+  }
+  return blob}
 A.renderAs=renderAs;A.encodeMp3=mp3;A.encodeM4a=m4a;A.audioKbps={list:KBPS,get:kbps,set:setKbps};
 })(window);
