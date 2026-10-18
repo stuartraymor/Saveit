@@ -141,6 +141,8 @@ Also fixed in 10.1.7 from this review: **B5** (offline clips + Relink), **B6** (
 
 **10.1.8 (playback engine):** fixed B4 (one element pool per source), B2 (audio clock, speed nudging; drift under load 34 ms → 3 ms), B3 (splits continue on the same element; hold the last picture), B14 (idle redraws 165/s → 2/s), B16 (seeks coalesce), B22 (Space/Enter press a keyboard-focused button). B3 could not be reproduced with the synthetic test clip even on 10.1.7, so its fix is not yet proven by measurement.
 
+**10.1.9 (saving):** fixed B1/V1 and B18. Edited saves are drawn frame by frame from WebCodecs-decoded source frames, with offline sound. ffprobe shows exact frame counts, constant frame rate, continuous sound, also under CPU load; a 3 s 720p edit saves in 0.8–2.5 s in Electron. Frame rate choice (24/25/30/60, or same as recording). V3 (fade in from black) should now show in saved files, since the first frame is drawn at t=0; not separately measured.
+
 ## 7. What this review did not cover
 - Screen **recording** quality (frame rate, cursor capture, MediaRecorder settings). It is a separate module and worth its own pass, because export quality can't beat recording quality.
 - Measured performance numbers (CPU, memory, save times). B4, B14, B15 and B16 should be profiled with a 30–60 minute recording.

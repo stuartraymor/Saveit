@@ -54,7 +54,7 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
    const saved=__saved.at(-1);return{ms,same:fixed===again,grew:fixed.size-b.size,savedMs:saved?await W.duration(new Blob([saved.data])):-1,savedName:saved&&saved.name}});
   assert.ok(Math.abs(r.ms-1500)<300,'measured '+r.ms);assert.equal(r.same,true,'cached');assert.equal(r.grew,11);assert.ok(r.savedMs>1000&&r.savedMs<2200,'saved file length '+r.savedMs+' ('+r.savedName+')')});
  await test('B10: a video exported from the editor has its WebM length written',async()=>{
-  const r=await ev(async()=>{await QA.openVideo(1);let ctl=null;for(let i=0;i<40&&!(ctl=__T.vid&&__T.vid._ctl);i++)await new Promise(r=>setTimeout(r,100));const o=await ctl.renderBlob();return{keys:Object.keys(o||{}),ms:o&&o.webm?await WebmFix.duration(o.webm):-1}});
+  const r=await ev(async()=>{await QA.openVideo(1);let ctl=null;for(let i=0;i<40&&!(ctl=__T.vid&&__T.vid._ctl);i++)await new Promise(r=>setTimeout(r,100));/* 10.1.9: Save makes only the format asked for */const o=await ctl.renderBlob('webm');return{keys:Object.keys(o||{}),ms:o&&o.webm?await WebmFix.duration(o.webm):-1}});
   assert.ok(r.keys.includes('webm'),'no webm: '+r.keys);assert.ok(r.ms>500&&r.ms<2500,'exported WebM length '+r.ms)});
  await test('B10: a screen recording (with a pause) is stored with its WebM length, excluding the paused time',async()=>{
   const r=await ev(async()=>{const T=__T,c=document.createElement('canvas');c.width=160;c.height=120;const g=c.getContext('2d'),stream=c.captureStream(15);let n=0;const iv=setInterval(()=>{g.fillStyle='hsl('+(n++*20%360)+',70%,50%)';g.fillRect(0,0,160,120)},60);

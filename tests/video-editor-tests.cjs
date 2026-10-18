@@ -2,21 +2,29 @@
 // node tests/video-editor-tests.cjs http://127.0.0.1:8944 <evidence-folder>
 // Tests marked todo cover bugs planned for a later version: they are reported (TODO-FAIL / TODO-PASS)
 // but do not fail the run. When a todo test passes, move it out of todo in the version that fixes it.
-const {chromium}=require('playwright'),assert=require('assert/strict'),fs=require('fs'),path=require('path');
+const {chromium}=require('playwright'),assert=require('assert/strict'),fs=require('fs'),path=require('path'),{execFileSync}=require('child_process');
+// ffprobe measures the saved files when it is available (set FFPROBE to its path)
+const FFPROBE=[process.env.FFPROBE,'C:/Users/stuar/AppData/Local/Programs/TasiaCraft/tools/ffprobe.exe'].find(p=>p&&fs.existsSync(p));
+const probe=file=>FFPROBE?JSON.parse(execFileSync(FFPROBE,['-v','error','-count_frames','-show_entries','stream=codec_type,codec_name,width,height,r_frame_rate,nb_read_frames,duration:format=duration','-of','json',file]).toString()):null;
 (async()=>{
 const out=path.resolve(process.argv[3]||'../video-editor-evidence');fs.mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--autoplay-policy=no-user-gesture-required']});
 const page=await browser.newPage({viewport:{width:1440,height:1000}}),results=[],errors=[];page.on('pageerror',e=>errors.push(e.stack));page.setDefaultTimeout(15000);
 const ev=(fn,arg)=>page.evaluate(fn,arg),near=(a,b,t=.02,m='')=>assert.ok(Math.abs(a-b)<=t,m+' '+a+' vs '+b);
-const test=async(name,fn,o={})=>{const tag=o.todo?'['+o.todo+'] ':'';try{const detail=await fn();results.push({name,todo:o.todo||null,pass:true,detail});console.log(o.todo?'TODO-PASS':'PASS',tag+name,detail?JSON.stringify(detail):'')}
+// ONLY=<regex> runs just the matching checks
+const test=async(name,fn,o={})=>{if(process.env.ONLY&&!new RegExp(process.env.ONLY).test(name))return;const tag=o.todo?'['+o.todo+'] ':'';try{const detail=await Promise.race([fn(),new Promise((_,j)=>setTimeout(()=>j(Error('timed out after 120 s')),120000))]);results.push({name,todo:o.todo||null,pass:true,detail});console.log(o.todo?'TODO-PASS':'PASS',tag+name,detail?JSON.stringify(detail):'')}
   catch(e){results.push({name,todo:o.todo||null,pass:false,error:e.stack});console.log(o.todo?'TODO-FAIL':'FAIL',tag+name,'-',e.message.split('\n')[0]);await page.screenshot({path:path.join(out,(o.todo?'todo-':'failure-')+results.length+'.png')})}};
 try{
 await page.goto(process.argv[2]||'http://127.0.0.1:8944');await page.waitForFunction(()=>window.__T?.addVideo&&window.QA);
 // one recorded test clip, reused by every test (recording takes real time)
 await ev(async()=>{const v=await QA.video(3);window.vblob=v.blob;window.vmp4=v.mp4});
+// the same kind of clip as a WebM (VP9 + Opus), the way Saveit records
+await ev(async()=>{const w=640,h=360,c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d'),st=c.captureStream(30),ac=new AudioContext(),o=ac.createOscillator(),d=ac.createMediaStreamDestination();o.connect(d);o.start();st.addTrack(d.stream.getAudioTracks()[0]);
+  const mr=new MediaRecorder(st,{mimeType:'video/webm;codecs=vp9,opus'}),ch=[];mr.ondataavailable=e=>e.data.size&&ch.push(e.data);const t0=performance.now(),iv=setInterval(()=>{const t=(performance.now()-t0)/1000;g.fillStyle=`hsl(${t*60},60%,45%)`;g.fillRect(0,0,w,h);g.fillStyle='#fff';g.font='bold 60px Segoe UI';g.fillText(t.toFixed(1)+' s',40,120)},33);
+  mr.start(250);await QA.sleep(3000);mr.stop();await new Promise(r=>mr.onstop=r);clearInterval(iv);o.stop();ac.close();window.vwebm=new Blob(ch,{type:'video/webm'})});
 await ev(()=>{
   window.D=()=>__T.vid._ctl._dbg;window.P=()=>__T.vid._ctl.getProject();
-  window.openV=async(setup)=>{document.querySelectorAll('.modal').forEach(m=>m.remove());const it=__T.addVideo(vblob,'VE test '+Date.now());if(vmp4)it.mp4=vblob;else it.webm=vblob;if(setup)setup(it);__T.openItem(it);
+  window.openV=async(setup,blob=vblob)=>{document.querySelectorAll('.modal').forEach(m=>m.remove());const it=__T.addVideo(blob,'VE test '+Date.now());if(blob.type.includes('mp4'))it.mp4=blob;else it.webm=blob;if(setup)setup(it);__T.openItem(it);
     await QA.until(()=>__T.vid?._ctl?._dbg?.ready&&__T.vid._ctl._dbg.eng);await QA.sleep(150);window.cur=it;return it};
   window.splitAt=async t=>{await D().eng.seek(t);D().act.split()};
   // keeps the page busy for ms of every frame, like a slow PC
@@ -86,6 +94,26 @@ await test('VU1 every editor button and tab has a tooltip',async()=>{const r=awa
 
 await test('VU3 every editor field has a clear accessible name',async()=>{const r=await ev(async()=>{await openV();const bad=[];for(const i of document.querySelectorAll('.vside input:not([type=file]):not([type=checkbox]), .vside select, .vpanel input:not([type=checkbox])')){if(i.closest('[hidden]')&&!i.closest('[data-sec]'))continue;const n=(i.getAttribute('aria-label')||(i.labels&&i.labels[0]?i.labels[0].textContent:'')||'').trim();if(n.length<3)bad.push((i.dataset.cr||i.dataset.c||i.dataset.r||i.dataset.fx||i.dataset.eq||i.type)+':"'+n+'"')}return bad});
   assert.deepEqual(r,[],'unclear names: '+r.join(', '));return r.length});
+
+// ---------- 10.1.9: frame-by-frame saving (B1 / V1) ----------
+const saveEdit=async(o)=>{const r=await ev(async o=>{await openV(null,o.src==='webm'?vwebm:vblob);if(o.cut){await D().eng.seek(1);D().act.setin();await D().eng.seek(2);D().act.setout();D().act.cut()}if(o.speed){const i=document.querySelector('[data-c="speed"]');D().select('clip',P().clips[0]);i.value=String(o.speed);i.dispatchEvent(new Event('change',{bubbles:true}))}
+    const stop=busy(o.load||0),t0=performance.now();let res;try{res=await __T.vid._ctl.renderBlob(o.fmt)}finally{stop()}const b=res[o.fmt],secs=(performance.now()-t0)/1000,want=__T.vid._ctl.duration();
+    // sound: decoded back, checked for gaps and pitch
+    const ac=new OfflineAudioContext(1,48000,48000),buf=await ac.decodeAudioData(await b.arrayBuffer()),d=buf.getChannelData(0),sr=buf.sampleRate,win=Math.round(sr*.02);let gap=0,run=0;/* the last 0.2 s is skipped: MediaRecorder test recordings stop their sound a little before their picture */for(let i=Math.round(sr*.1);i<d.length-Math.round(sr*.2);i+=win){let m=0;for(let j=i;j<i+win&&j<d.length;j++)m=Math.max(m,Math.abs(d[j]));if(m<.01){run+=win/sr;gap=Math.max(gap,run)}else run=0}
+    const tone=QA.toneAnalysis(buf,.2,Math.max(.4,buf.duration-.2));
+    // the file plays and seeks
+    const v=document.createElement('video');v.muted=true;v.src=URL.createObjectURL(b);await new Promise((r,j)=>{v.onloadedmetadata=r;v.onerror=()=>j(Error('saved file does not open'))});const sought=await new Promise(r=>{v.onseeked=()=>r(true);v.currentTime=want/2;setTimeout(()=>r(false),4000)});
+    const bytes=[...new Uint8Array(await b.arrayBuffer())];return{want,stats:D().eng.S.lastExport,secs:+secs.toFixed(2),audioSecs:+buf.duration.toFixed(3),longestSilence:+gap.toFixed(3),hz:Math.round(tone.hz),playerDuration:v.duration,sought,size:b.size,bytes}},o);
+  const file=path.join(out,'saved-'+(o.src||'mp4')+'-'+o.fmt+(o.load?'-load':'')+(o.speed?'-speed':'')+'.'+o.fmt);fs.writeFileSync(file,Buffer.from(r.bytes));delete r.bytes;r.file=file;r.ffprobe=probe(file);return r};
+const checkSave=(r,fps=30)=>{assert.equal(r.stats.mode,'frames','used '+r.stats.mode+': '+r.stats.reason);const n=Math.round(r.want*fps);assert.equal(r.stats.frames,n);
+  near(r.audioSecs,r.want,.08,'sound length');assert.ok(r.longestSilence<.03,'silence '+r.longestSilence+' s');assert.ok(r.sought,'saved file does not seek');near(r.playerDuration,r.want,.1,'player length');
+  if(r.ffprobe){const v=r.ffprobe.streams.find(x=>x.codec_type==='video'),a=r.ffprobe.streams.find(x=>x.codec_type==='audio');assert.ok(a,'no audio stream');assert.equal(+v.nb_read_frames,n,'frames in file');near(+r.ffprobe.format.duration,r.want,.08,'file length')}};
+for(const [src,fmt] of [['mp4','mp4'],['mp4','webm'],['webm','mp4'],['webm','webm']])
+  await test('B1 an edited '+src.toUpperCase()+' saved as '+fmt.toUpperCase()+' keeps every frame and all of its sound',async()=>{const r=await saveEdit({src,fmt,cut:true});checkSave(r);near(r.hz,440,6,'pitch');return r});
+await test('B1 saving under CPU load still keeps every frame and all of its sound',async()=>{const r=await saveEdit({src:'webm',fmt:'mp4',cut:true,load:25});checkSave(r);return r});
+await test('B1 a 2× clip saves at half length with the sound at its own pitch',async()=>{const r=await saveEdit({src:'webm',fmt:'mp4',speed:2});assert.ok(r.want>1.3&&r.want<1.7,'length '+r.want);checkSave(r);near(r.hz,440,10,'pitch at 2×');return r});
+await test('B18 Frame rate 60 makes a 60 fps file',async()=>{await ev(async()=>{await openV(null,vwebm);change('[data-r="ofps"]','60')});const r=await ev(async()=>{const o=await __T.vid._ctl.renderBlob('mp4');return{stats:D().eng.S.lastExport,need:__T.vid._ctl.needsRender(),fps:P().fps,want:__T.vid._ctl.duration()}});
+  assert.equal(r.stats.fps,60);assert.equal(r.stats.frames,Math.round(r.want*60));assert.equal(r.fps,60);assert.ok(r.need,'a new frame rate alone is not rendered');return r});
 
 // ---------- later versions (todo) ----------
 await test('B4 one video element per source, not per clip',async()=>{const r=await ev(async()=>{await openV();for(const t of [.5,1,1.5,2,2.5])await splitAt(t);await D().eng.seek(0);await D().eng.play();await QA.sleep(2800);D().eng.pause();

@@ -1,0 +1,29 @@
+// Real Electron: an edited recording saved frame by frame through the real Save button, dialog and file writing. Disposable profile only.
+// node tests/native-video119.cjs <electron.exe> <app folder> <evidence folder>     (set FFPROBE to measure the files with ffprobe)
+const {_electron}=require('playwright'),assert=require('assert/strict'),fs=require('fs'),path=require('path'),{execFileSync}=require('child_process');
+(async()=>{
+const [exe,appDir,outArg]=process.argv.slice(2),out=path.resolve(outArg),source=path.resolve(appDir),profile=path.join(out,'profile');fs.rmSync(out,{recursive:true,force:true});fs.mkdirSync(out,{recursive:true});
+const FFPROBE=[process.env.FFPROBE,'C:/Users/stuar/AppData/Local/Programs/TasiaCraft/tools/ffprobe.exe'].find(p=>p&&fs.existsSync(p));
+const probe=f=>FFPROBE?JSON.parse(execFileSync(FFPROBE,['-v','error','-count_frames','-show_entries','stream=codec_type,codec_name,nb_read_frames,r_frame_rate:format=duration','-of','json',f]).toString()):null;
+const app=await _electron.launch({executablePath:path.resolve(exe),args:[source],env:{...process.env,SAVEIT_REVIEW_DATA:profile},timeout:30000}),results=[],errors=[];
+try{const page=await app.firstWindow();page.setDefaultTimeout(20000);page.on('pageerror',e=>errors.push(e.stack));await page.waitForFunction(()=>document.body.dataset.catalogCount);
+const test=async(name,fn)=>{try{const detail=await fn();results.push({name,pass:true,detail});console.log('PASS',name,detail?JSON.stringify(detail):'')}catch(e){results.push({name,pass:false,error:e.stack});console.log('FAIL',name,e.message);await page.screenshot({path:path.join(out,'failure-'+results.length+'.png')})}};
+await test('Native version/runtime/profile match intended test app',async()=>{const r=await app.evaluate(({app})=>({version:app.getVersion(),electron:process.versions.electron,profile:app.getPath('userData')}));assert.equal(r.version,require(path.join(source,'package.json')).version);assert.equal(r.electron,'33.2.1');assert.equal(r.profile,profile);return r});
+// a 4 s recording made the way Saveit records (VP9 + Opus, 30 fps, a 440 Hz tone)
+const bytes=await page.evaluate(async()=>{const w=1280,h=720,c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d'),st=c.captureStream(30),ac=new AudioContext(),o=ac.createOscillator(),d=ac.createMediaStreamDestination();o.connect(d);o.start();st.addTrack(d.stream.getAudioTracks()[0]);
+  const mr=new MediaRecorder(st,{mimeType:'video/webm;codecs=vp9,opus'}),ch=[];mr.ondataavailable=e=>e.data.size&&ch.push(e.data);const t0=performance.now(),iv=setInterval(()=>{const t=(performance.now()-t0)/1000;g.fillStyle=`hsl(${t*60},60%,45%)`;g.fillRect(0,0,w,h);g.fillStyle='#fff';g.font='bold 90px Segoe UI';g.fillText(t.toFixed(1)+' s',60,160)},33);
+  mr.start(250);await new Promise(r=>setTimeout(r,4000));mr.stop();await new Promise(r=>mr.onstop=r);clearInterval(iv);o.stop();ac.close();return[...new Uint8Array(await new Blob(ch).arrayBuffer())]});
+const fixture=path.join(out,'Tutorial take.webm');fs.writeFileSync(fixture,Buffer.from(bytes));
+await page.locator('#file').setInputFiles(fixture);await page.waitForSelector('.vtl');await page.waitForFunction(()=>/\d:\d\d\.\d \/ \d/.test(document.querySelector('[data-r="time"]')?.textContent||''));
+const total=async()=>page.evaluate(()=>{const m=document.querySelector('[data-r="time"]').textContent.match(/\/ (\d+):(\d+\.\d)/);return +m[1]*60+ +m[2]});
+const before=await total();
+await test('Cut out In–Out in the real editor',async()=>{for(const [k,v] of [['in','1'],['out','2']]){await page.locator('[data-r="'+k+'"]').fill(v);await page.locator('[data-r="'+k+'"]').press('Tab')}await page.locator('[data-a="cut"]').click();const after=await total();assert.ok(Math.abs(before-1-after)<.15,before+' -> '+after);return{before,after}});
+for(const fmt of ['mp4','webm'])await test('Save writes an edited '+fmt.toUpperCase()+' with every frame and all of its sound',async()=>{const target=path.join(out,'Edited take.'+fmt);
+  await app.evaluate(({dialog},target)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:target})},target);await page.evaluate(()=>document.querySelectorAll('.toast').forEach(t=>t.remove()));const t0=Date.now();
+  await page.locator('#saveAsBtn').click();await page.locator('#saveAsModal [data-f="'+fmt+'"]').click();await page.waitForFunction(()=>/Saved the edited video/.test(document.querySelector('.toast')?.textContent||''),null,{timeout:120000});const secs=(Date.now()-t0)/1000;
+  assert.ok(fs.existsSync(target),'no file');const len=await total(),p=probe(target);let frames=null;
+  if(p){const v=p.streams.find(s=>s.codec_type==='video'),a=p.streams.find(s=>s.codec_type==='audio');assert.ok(a,'no sound');frames=+v.nb_read_frames;assert.ok(Math.abs(frames-Math.round(len*30))<=1,'frames '+frames+' for '+len+' s');assert.equal(v.r_frame_rate,'30/1');assert.ok(Math.abs(+p.format.duration-len)<.12,'length '+p.format.duration)}
+  return{secs,videoSeconds:len,frames,size:fs.statSync(target).size,codecs:p&&p.streams.map(s=>s.codec_name).join('+')}});
+results.push({name:'No native renderer errors',pass:errors.length===0,errors});
+}finally{fs.writeFileSync(path.join(out,'native-video119-results.json'),JSON.stringify({passed:results.filter(r=>r.pass).length,failed:results.filter(r=>!r.pass).length,results},null,2));try{await app.evaluate(({app})=>app.isQuitting=true);await app.close()}catch(_){}}process.exitCode=results.some(r=>!r.pass)?1:0;
+})().catch(e=>{console.error(e);process.exitCode=1});

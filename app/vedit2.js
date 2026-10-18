@@ -30,7 +30,7 @@ function buildFx(ac){
   const dry=ac.createGain(),rin=ac.createGain(),conv=ac.createConvolver(),rg=ac.createGain(),dl=ac.createDelay(1.5),fb=ac.createGain(),eg=ac.createGain();
   conv.buffer=impulse(ac,1.8);mk.connect(dry);dry.connect(out);mk.connect(rin);rin.connect(conv);conv.connect(rg);rg.connect(out);
   mk.connect(dl);dl.connect(fb);fb.connect(dl);dl.connect(eg);eg.connect(out);fb.gain.value=.35;rg.gain.value=0;eg.gain.value=0;
-  const T=(p,v)=>{try{p.setTargetAtTime(v,ac.currentTime,.02)}catch(_){p.value=v}};
+  const offline=typeof OfflineAudioContext!=='undefined'&&ac instanceof OfflineAudioContext,T=(p,v)=>{if(offline){p.value=v;return}try{p.setTargetAtTime(v,ac.currentTime,.02)}catch(_){p.value=v}};
   return{input:inp,output:out,apply(fx){fx=Object.assign(defFx(),fx||{});eq.forEach((b,i)=>T(b.gain,+fx.eq[i]||0));
     T(hp.frequency,fx.lc>0?fx.lc:10);T(lp.frequency,fx.hc>0?fx.hc:22000);
     const a=(+fx.comp||0)/100;comp.threshold.value=-8-a*32;comp.ratio.value=1+a*11;comp.knee.value=12;comp.attack.value=.004;comp.release.value=.2;T(mk.gain,(fx.gain||1)*(1+a*.9));
@@ -216,10 +216,13 @@ function makeEngine(P){
   // --- drawing (all in project space W x H, scaled onto each target) ---
   function offs(cw,ch){for(const k of ['offA','offB']){let c=S[k];if(!c){c=S[k]=document.createElement('canvas')}if(c.width!==cw||c.height!==ch){c.width=cw;c.height=ch}}return[S.offA,S.offB]}
   // 10.1.8: if the clip's picture isn't decoded yet, hold the last picture drawn instead of flashing black
-  function drawClip(g,c){const o=S.els[c.id];let el=o&&o.el;if(!el||el.readyState<2||!el.videoWidth){el=S.held;if(!el||el.readyState<2||!el.videoWidth)return}else S.held=el;const W=e.W,H=e.H,cr=(S.cropEdit===c&&S.mode!=='export'?null:c.crop)||{},l=Math.round(el.videoWidth*(cr.l||0)/100),tp=Math.round(el.videoHeight*(cr.t||0)/100),r=Math.round(el.videoWidth*(cr.r||0)/100),b=Math.round(el.videoHeight*(cr.b||0)/100),sw=Math.max(2,el.videoWidth-l-r),sh=Math.max(2,el.videoHeight-tp-b),k=Math.min(W/sw,H/sh),dw=sw*k,dh=sh*k;
+  // 10.1.9: a picture is {img,w,h}: a playing element in the preview, or a decoded frame (S.xf) while saving
+  const picOf=o=>{const el=o&&o.el;return el&&el.readyState>=2&&el.videoWidth?{img:el,w:el.videoWidth,h:el.videoHeight}:null};
+  function clipPic(c){if(S.mode==='export'&&S.xf)return S.xf[c.id]||null;const p=picOf(S.els[c.id]);if(p){S.held=p;return p}return S.held&&S.held.img.readyState>=2?S.held:null}
+  function drawClip(g,c){const p=clipPic(c);if(!p)return;const el=p.img,vw=p.w,vh=p.h,W=e.W,H=e.H,cr=(S.cropEdit===c&&S.mode!=='export'?null:c.crop)||{},l=Math.round(vw*(cr.l||0)/100),tp=Math.round(vh*(cr.t||0)/100),r=Math.round(vw*(cr.r||0)/100),b=Math.round(vh*(cr.b||0)/100),sw=Math.max(2,vw-l-r),sh=Math.max(2,vh-tp-b),k=Math.min(W/sw,H/sh),dw=sw*k,dh=sh*k;
     g.drawImage(el,l,tp,sw,sh,(W-dw)/2,(H-dh)/2,dw,dh)}
   // 9.5: Zoom & pan - the picture (video and on-screen items) eases into the chosen box and back out again
-  function zoomAt(t){if(S.noZoom&&!S.playing)return null;const z=(e.zooms||[]).find(z=>t>=z.t0&&t<=z.t1);if(!z)return null;const W=e.W,H=e.H,ea=Math.max(0,Math.min(+z.ease||0,(z.t1-z.t0)/2));let p=1;
+  function zoomAt(t){if(S.noZoom&&!S.playing&&S.mode!=='export')return null;const z=(e.zooms||[]).find(z=>t>=z.t0&&t<=z.t1);if(!z)return null;const W=e.W,H=e.H,ea=Math.max(0,Math.min(+z.ease||0,(z.t1-z.t0)/2));let p=1;
     if(ea>0){if(t<z.t0+ea)p=(t-z.t0)/ea;else if(t>z.t1-ea)p=(z.t1-t)/ea}p=clamp(p,0,1);p=p*p*(3-2*p);const w=W+(clamp(z.w,W/8,W)-W)*p;return{k:W/w,x:z.x*p,y:z.y*p}}
   function drawFrame(g,t,cw,ch){const W=e.W,H=e.H,LK=lookOf(e),LR=lookRects(LK,W,H,hasCam()&&!!camAt(Math.min(t,Math.max(0,total(e)-1e-3)))),SB=LR.S;g.save();g.setTransform(1,0,0,1,0,0);paintBg(g,cw,ch,LK);g.scale(cw/W,ch/H);
     // the screen recording (with zooms, effects, transitions and on-screen items) is drawn into its box S
@@ -246,8 +249,8 @@ function makeEngine(P){
   // 10.1.8: seeks never pile up. While one is being prepared, later ones only move the target; the loop then prepares the newest one.
   function seek(t){S.t=clamp(t,0,total(e));S.tok++;if(!S.seekP)S.seekP=(async()=>{try{let done=-1;while(done!==S.tok){done=S.tok;S.seeking++;try{await prepare(S.t)}finally{S.seeking--}render()}}finally{S.seekP=null}})();return S.seekP}
   function pauseEls(){for(const o of [...poolEls(),...(S.els.__cam?[S.els.__cam]:[])])try{o.el.pause()}catch(_){}}
-  function drawCam(g,C,L){const o=S.els.__cam,el=o&&o.el;if(!el||el.readyState<2||!el.videoWidth)return;const co=(e.cam&&e.cam.o)||{},vr=el.videoWidth/el.videoHeight,br=C.w/C.h;let sx=0,sy=0,sW=el.videoWidth,sH=el.videoHeight;
-    if(vr>br){sW=sH*br;sx=(el.videoWidth-sW)/2}else{sH=sW/br;sy=(el.videoHeight-sH)/2}const circ=!C.full&&L.shape==='circle'&&!['side-r','side-l','split'].includes(L.layout),r=C.full?0:circ?0:Math.min(C.w,C.h)*(L.shape==='square'?0:.08);
+  function drawCam(g,C,L){const p=S.mode==='export'&&S.xf?S.xf.__cam:picOf(S.els.__cam);if(!p)return;const el=p.img,co=(e.cam&&e.cam.o)||{},vr=p.w/p.h,br=C.w/C.h;let sx=0,sy=0,sW=p.w,sH=p.h;
+    if(vr>br){sW=sH*br;sx=(p.w-sW)/2}else{sH=sW/br;sy=(p.h-sH)/2}const circ=!C.full&&L.shape==='circle'&&!['side-r','side-l','split'].includes(L.layout),r=C.full?0:circ?0:Math.min(C.w,C.h)*(L.shape==='square'?0:.08);
     const path=()=>{if(circ){g.beginPath();g.ellipse(C.x+C.w/2,C.y+C.h/2,C.w/2,C.h/2,0,0,Math.PI*2)}else rrect(g,C.x,C.y,C.w,C.h,r)};
     g.save();if(!C.full&&L.shadow){g.shadowColor='rgba(0,0,0,.45)';g.shadowBlur=e.W/60;g.shadowOffsetY=e.W/320}path();g.fillStyle='#000';g.fill();g.shadowColor='transparent';g.clip();
     if(co.mirror!==false){g.translate(C.x+C.w,C.y);g.scale(-1,1);g.drawImage(el,sx,sy,sW,sH,0,0,C.w,C.h)}else g.drawImage(el,sx,sy,sW,sH,C.x,C.y,C.w,C.h);g.restore();
@@ -258,7 +261,7 @@ function makeEngine(P){
     syncPlay(S.t);tickAudio(S.t);render();S.onTick&&S.onTick(S.t);if(!S.playing)return;if(S.mode==='export')S.tmo=setTimeout(step,33);else S.raf=requestAnimationFrame(step)}
   async function play(){unlock();if(S.playing)return;const T=total(e);if(S.t>=T-.02)S.t=0;S.playing=true;S.tok++;await prepare(S.t);if(!S.playing)return;tickAudio(S.t);await startEls(S.t);if(!S.playing)return;[S.lastK,S.last]=clockNow();step()}
   function pause(){const was=S.playing;stopPlay();if(was)render()}
-  async function exportRun(cw,ch,onProg,ctl){stopPlay();const ac=unlock(),T=total(e);if(T<=0)throw new Error('There is nothing on the timeline yet.');
+  async function exportRealtime(cw,ch,onProg,ctl){stopPlay();const ac=unlock(),T=total(e);if(T<=0)throw new Error('There is nothing on the timeline yet.');
     const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;const g=cv.getContext('2d'),stream=cv.captureStream(30),dest=ac.createMediaStreamDestination();
     S.out.disconnect();S.out.connect(dest);dest.stream.getAudioTracks().forEach(t=>stream.addTrack(t));
     const want=[['webm',['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']],['mp4',['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4']]],recs=[];
@@ -271,6 +274,67 @@ function makeEngine(P){
     }finally{recs.forEach(x=>x.r.state!=='inactive'&&x.r.stop());await Promise.all(recs.map(x=>x.done));stopPlay();S.out.disconnect();S.out.connect(ac.destination);S.targets=saved;S.mode='preview';S.onTick=savedTick;S.onEnd=savedEnd;S.t=0;sync()}
     if(ctl&&ctl.cancel)return null;const o={};for(const x of recs){let b=new Blob(x.chunks,{type:x.m.split(';')[0]});if(x.k==='webm'&&window.WebmFix)b=await WebmFix.fix(b,T*1000); // 10.1.1: write the length into the WebM
       o[x.k]=b}return o}
+  // ---------- 10.1.9: saving frame by frame ----------
+  // Every output frame is drawn at its exact time from decoded source frames, and the sound is mixed offline, so a busy computer can make
+  // saving slower but can't drop frames or sound. If this can't run (no WebCodecs, an unreadable file), saving falls back to exportRealtime.
+  const bytesOf=x=>x instanceof Uint8Array?x:ArrayBuffer.isView(x)?new Uint8Array(x.buffer,x.byteOffset,x.byteLength):new Uint8Array(x);
+  const pause0=()=>new Promise(r=>setTimeout(r,0));
+  async function blobOf(id){const s=rt.src[id];if(!s)return null;if(s.blob)return s.blob;if(s.url){try{return await (await fetch(s.url)).blob()}catch(_){}}return null}
+  function trackOf(id,cache){if(!(id in cache))cache[id]=(async()=>{const b=await blobOf(id);try{return b&&root.VExport?await VExport.demux(b):null}catch(_){return null}})();return cache[id]}
+  // files the frame reader can't read are read by seeking an element to every frame (slower, still exact)
+  function seekReader(id){const el=document.createElement('video');el.muted=true;el.preload='auto';el.src=rt.src[id].url;return{async at(us){await seekEl(el,us/1e6);return el.readyState>=2&&el.videoWidth?{img:el,w:el.videoWidth,h:el.videoHeight}:null},close(){try{el.removeAttribute('src');el.load()}catch(_){}}}}
+  // one reader per clip, so two clips from the same recording (for example during a transition) each keep their own place
+  async function readerFor(key,id,cache,readers,stats){if(readers[key])return readers[key];const tr=await trackOf(id,cache);if(!tr)stats.seek.add(id);const r=tr?VExport.frames(tr):seekReader(id);r.src=id;return readers[key]=r}
+  async function mixAudio(T,rate){const oac=new OfflineAudioContext(2,Math.max(1,Math.ceil(T*rate)),rate),bufs={};
+    const dec=id=>{if(!(id in bufs))bufs[id]=(async()=>{const b=await blobOf(id);if(!b)return null;try{return await oac.decodeAudioData(await b.arrayBuffer())}catch(_){return null}})();return bufs[id]};
+    const master=buildFx(oac);master.apply(e.master);const mg=oac.createGain(),out=oac.createGain();master.output.connect(mg);mg.connect(out);out.connect(oac.destination);
+    const curve=(node,t0,len,f)=>{const n=Math.max(2,Math.ceil(len*100)+1),cv=new Float32Array(n);for(let i=0;i<n;i++)cv[i]=f(Math.min(t0+i/100,t0+len-1e-4));node.setValueCurveAtTime(cv,t0,(n-1)/100)};
+    curve(out.gain,0,T,t=>{let m=1;if(e.fadeIn&&t<.6)m=Math.min(m,t/.6);if(e.fadeOut&&T-t<.6)m=Math.min(m,Math.max(0,(T-t)/.6));return m});
+    for(const [list,isAud] of [[e.clips,false],[e.aud,true]])for(const c of list){const buf=await dec(c.src);if(!buf)continue;const sp=c.speed||1,len=clipLen(c),a0=Math.max(0,c.a),a1=Math.min(buf.duration,c.b);if(len<=0||a1<=a0)continue;
+      let src=buf,off=a0,dur=a1-a0;
+      if(Math.abs(sp-1)>1e-3){const i0=Math.floor(a0*buf.sampleRate),i1=Math.floor(a1*buf.sampleRate),chs=[];for(let k=0;k<buf.numberOfChannels;k++)chs.push(buf.getChannelData(k).slice(i0,i1));const st=VExport.stretch(chs,sp);
+        src=oac.createBuffer(st.length,st[0].length,buf.sampleRate);st.forEach((d,k)=>src.copyToChannel(d,k));off=0;dur=Math.min(src.duration,len);await pause0()}
+      const bs=oac.createBufferSource(),g=oac.createGain();bs.buffer=src;let node=bs;
+      if(c.fx&&JSON.stringify(Object.assign(defFx(),c.fx))!==JSON.stringify(defFx())){const fx=buildFx(oac);fx.apply(c.fx);bs.connect(fx.input);node=fx.output}
+      node.connect(g);g.connect(master.input);curve(g.gain,c.start,len,t=>gainFor(c,t,isAud));bs.start(c.start,off,dur)}
+    return oac.startRendering()}
+  async function exportFrames(cw,ch,onProg,ctl,opts){if(!root.VExport||!VExport.ok)throw Error('This computer has no frame-by-frame encoder.');stopPlay();const T=total(e);if(T<=0)throw new Error('There is nothing on the timeline yet.');
+    const fmt=opts.fmt==='webm'?'webm':'mp4',cache={},readers={},stats={seek:new Set()},prog=p=>{try{onProg&&onProg(p)}catch(_){}};
+    let fps=+opts.fps||+e.fps||0;if(!fps){const s0=e.srcs.find(s=>s.self),tr=s0?await trackOf(s0.id,cache):null,f=(tr&&tr.fps)||30;fps=[24,25,30,50,60].reduce((a,b)=>Math.abs(b-f)<Math.abs(a-f)?b:a,30)}
+    const N=Math.max(1,Math.round(T*fps)),fdur=1e6/fps,bitrate=Math.round(clamp(cw*ch*fps*.14,1.5e6,40e6));
+    const vchunks=[];let vmeta=null,verr=null;const venc=new VideoEncoder({output:(c,m)=>{const d=new Uint8Array(c.byteLength);c.copyTo(d);vchunks.push({ts:c.timestamp,dur:c.duration||fdur,key:c.type==='key',data:d});if(m&&m.decoderConfig&&!vmeta)vmeta=m.decoderConfig},error:x=>{verr=x}});
+    try{let vcfg=null;const cands=fmt==='mp4'?VExport.avcCodec(cw,ch,fps).map(codec=>({codec,avc:{format:'avc'}})):[{codec:'vp09.00.40.08'},{codec:'vp09.00.10.08'},{codec:'vp8'}];
+      for(const c of cands){const cfg={...c,width:cw,height:ch,bitrate,framerate:fps,latencyMode:'quality'};try{if((await VideoEncoder.isConfigSupported(cfg)).supported){vcfg=cfg;break}}catch(_){}}
+      if(!vcfg)throw Error('No '+fmt.toUpperCase()+' video encoder for '+cw+'×'+ch+'.');venc.configure(vcfg);prog(0);
+      const rate=48000,pcm=await mixAudio(T,rate);if(ctl&&ctl.cancel)return null;prog(.05);
+      const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;const g=cv.getContext('2d'),saved=S.targets;S.mode='export';S.xf={};
+      try{for(let i=0;i<N;i++){if(ctl&&ctl.cancel)return null;if(verr)throw verr;const t=Math.min(i/fps,T-1e-4);S.t=t;
+          const act=active(t),xf={},idle=Object.keys(readers).filter(k=>k!=='__cam'&&!act.some(c=>c.id===k));
+          // a clip that starts after another clip of the same recording ends takes over its reader, so it doesn't decode the file again from the start
+          for(const c of act)if(!readers[c.id]){const k=idle.find(k=>readers[k]&&readers[k].src===c.src);if(k){readers[c.id]=readers[k];delete readers[k]}}
+          for(const k of idle)if(readers[k]){readers[k].close();delete readers[k]}
+          for(const c of act){const r=await readerFor(c.id,c.src,cache,readers,stats);xf[c.id]=await r.at(wantTime(c,t)*1e6)}
+          const ca=camAt(t);if(ca){const r=await readerFor('__cam',e.cam.src,cache,readers,stats);xf.__cam=await r.at(Math.max(0,ca.t)*1e6)}
+          S.xf=xf;drawFrame(g,t,cw,ch);
+          const vf=new VideoFrame(cv,{timestamp:Math.round(i*fdur),duration:Math.round(fdur)});while(venc.encodeQueueSize>4)await new Promise(r=>setTimeout(r,2));venc.encode(vf,{keyFrame:i%Math.round(fps*2)===0});vf.close();
+          if(i%4===3){prog(.05+.88*i/N);await pause0()}}
+        await venc.flush();if(verr)throw verr}
+      finally{for(const r of Object.values(readers))r.close();S.mode='preview';S.xf=null;S.targets=saved}
+      // sound
+      const achunks=[];let ameta=null,aerr=null,acodec=null;const aenc=new AudioEncoder({output:(c,m)=>{const d=new Uint8Array(c.byteLength);c.copyTo(d);achunks.push({ts:c.timestamp,dur:c.duration||0,data:d});if(m&&m.decoderConfig&&!ameta)ameta=m.decoderConfig},error:x=>{aerr=x}});
+      try{for(const [codec,br] of (fmt==='mp4'?[['mp4a.40.2',192000],['opus',160000]]:[['opus',160000]])){const cfg={codec,sampleRate:rate,numberOfChannels:2,bitrate:br};try{if((await AudioEncoder.isConfigSupported(cfg)).supported){aenc.configure(cfg);acodec=codec;break}}catch(_){}}
+        if(acodec){const F=4800,L=pcm.getChannelData(0),R=pcm.getChannelData(1);for(let p=0;p<pcm.length;p+=F){if(aerr)throw aerr;const n=Math.min(F,pcm.length-p),data=new Float32Array(n*2);data.set(L.subarray(p,p+n),0);data.set(R.subarray(p,p+n),n);
+            const ad=new AudioData({format:'f32-planar',sampleRate:rate,numberOfFrames:n,numberOfChannels:2,timestamp:Math.round(p*1e6/rate),data});while(aenc.encodeQueueSize>8)await new Promise(r=>setTimeout(r,1));aenc.encode(ad);ad.close()}
+          await aenc.flush();if(aerr)throw aerr}}finally{try{aenc.state!=='closed'&&aenc.close()}catch(_){}}
+      prog(.97);const ms=T*1000,head=ameta&&ameta.description?bytesOf(ameta.description):null;let blob;
+      if(fmt==='mp4'){if(!vmeta||!vmeta.description)throw Error('The video encoder gave no H.264 header.');
+        blob=VExport.mp4({video:{chunks:vchunks,w:cw,h:ch,avcC:bytesOf(vmeta.description)},audio:acodec?{chunks:achunks,rate,channels:2,codec:acodec==='opus'?'opus':'aac',asc:head||new Uint8Array([0x11,0x90]),bitrate:192000,preskip:312}:null,durationMs:ms})}
+      else blob=VExport.webm({video:{chunks:vchunks,w:cw,h:ch,codecId:vcfg.codec.startsWith('vp8')?'V_VP8':'V_VP9'},audio:acodec?{chunks:achunks,rate,channels:2,head:head&&head.length>=19?head:null,preskip:head&&head.length>=12?new DataView(head.buffer,head.byteOffset).getUint16(10,true):312}:null,durationMs:ms});
+      S.lastExport={mode:'frames',fmt,fps,frames:N,codec:vcfg.codec,audio:acodec,seekSources:stats.seek.size};prog(1);return{[fmt]:blob}}
+    finally{try{venc.state!=='closed'&&venc.close()}catch(_){}sync()}}
+  // opts: {fmt:'mp4'|'webm', fps}. Returns {mp4} or {webm} (the real-time fallback may return both), or null when cancelled.
+  async function exportRun(cw,ch,onProg,ctl,opts={}){try{return await exportFrames(cw&~1,ch&~1,onProg,ctl,opts)}catch(err){if(ctl&&ctl.cancel)return null;console.warn('Saving frame by frame failed, so the edit is recorded in real time instead:',err);
+      S.lastExport={mode:'realtime',reason:String(err&&err.message||err)};return exportRealtime(cw,ch,onProg,ctl)}}
   async function renderTimes(times,cw,ch,cb,ctl){stopPlay();const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;const g=cv.getContext('2d',{willReadFrequently:true});
     for(let i=0;i<times.length;i++){if(ctl&&ctl.cancel)return false;S.t=times[i];await prepare(times[i]);drawFrame(g,times[i],cw,ch);await cb(g,i);if(i%3===2)await new Promise(r=>setTimeout(r,0))}return true}
   function snapshot(cw,ch){const c=document.createElement('canvas');c.width=cw||e.W;c.height=ch||e.H;drawFrame(c.getContext('2d'),S.t,c.width,c.height);return c}
@@ -374,9 +438,9 @@ function mount(host,it,api){css();HK=api;
      <button class="btn" data-a="lkreset" title="Back to the plain recording: screen filling the frame on black">Reset layout</button></div>
    <div class="vsec" data-sec="caps" hidden><div class="vrow"><button class="btn" data-a="addcap" title="Add a caption that starts at the playhead">Add caption at playhead</button></div><div class="vcaps" data-r="caps"></div></div>
    <div class="vsec" data-sec="export" hidden>
-     <div class="vrow"><span class="vh">Video</span><label>Quality <select data-r="osize"><option value="project">Full size</option><option value="720">720p</option><option value="480">480p</option></select></label><button class="btn pri" data-a="apply">Save edited video</button></div>
+     <div class="vrow"><span class="vh">Video</span><label>Quality <select data-r="osize"><option value="project">Full size</option><option value="720">720p</option><option value="480">480p</option></select></label><label title="Frames per second for every save of this video, including the top-bar Save">Frame rate <select data-r="ofps"><option value="">Same as recording</option><option value="24">24</option><option value="25">25</option><option value="30">30</option><option value="60">60</option></select></label><button class="btn pri" data-a="apply" title="Save the edit as a new video in your library">Save edited video</button></div>
      <div class="vrow"><span class="vh">GIF</span><label>frames/sec <input type="number" min="1" max="30" value="10" data-r="fps"></label><label>width <input type="number" min="64" max="1920" step="20" value="480" data-r="gw"></label><button class="btn pri" data-a="gif">Save GIF</button><button class="btn" data-a="stop" hidden>Cancel</button></div>
-     <p class="vnote">Saving plays your edit once in real time (a 1-minute edit takes about a minute) and adds the result to your library.</p></div>
+     <p class="vnote">Saving draws every frame of your edit and mixes the sound separately, so no frames or sound are lost. On most computers it takes less time than the video lasts.</p></div>
   </div>
   <div class="vpane" data-pane="effects" hidden>
    <div class="vsec">
@@ -634,6 +698,7 @@ function mount(host,it,api){css();HK=api;
     for(const s of e.ovs){for(const [a,b] of [['x1','y1'],['x2','y2'],['tx','ty'],['cx','cy']])if(s[a]!=null){s[a]=X(s[a]);s[b]=Y(s[b])}if(Array.isArray(s.pts))s.pts.forEach(p=>{p[0]=X(p[0]);p[1]=Y(p[1])});for(const f of ['w','fs'])if(+s[f])s[f]=Math.max(1,s[f]*k);s._w=null}
     for(const z of e.zooms){const cx=X(z.x+z.w/2),cy=Y(z.y+z.w*H0/W0/2);z.w=z.w*k;z.x=cx-z.w/2;z.y=cy-z.w*H/W/2;zfit(z)}}
   R('canvas').onchange=()=>{snap();const v=R('canvas').value,W0=e.W,H0=e.H;if(v==='auto'){const f=vclips(e)[0],s=f&&rt.src[f.src];if(s&&s.w){e.W=s.w;e.H=s.h}}else{const [w,h]=v.split('x').map(Number);e.W=w;e.H=h}refit(W0,H0);sizePrev();changed()};
+  R('ofps').onchange=()=>{snap();e.fps=+R('ofps').value||null;changed()};
   R('fi').onchange=()=>{snap();e.fadeIn=R('fi').checked;redraw();changed()};R('fo').onchange=()=>{snap();e.fadeOut=R('fo').checked;redraw();changed()};
   R('muteall').onchange=()=>{snap();e.muteVideo=R('muteall').checked;changed()};
   // audio fx
@@ -749,8 +814,8 @@ function mount(host,it,api){css();HK=api;
   // ----- export -----
   async function run(kind){if(exp||!ready)return;exp={cancel:false};eng.pause();const bar=R('prog'),fill=bar.firstElementChild,stopB=q('[data-a="stop"]');bar.hidden=false;stopB.hidden=false;fill.style.width='0';const prog=p=>{fill.style.width=Math.round(p*100)+'%'};
     try{
-      if(kind==='video'){const sz=R('osize').value;let cw=e.W,ch=e.H;if(sz!=='project'){ch=+sz;cw=Math.round(ch*e.W/e.H)}cw&=~1;ch&=~1;toast('Saving edited video… keep this window open and in front until it finishes.',6000);
-        const o=await eng.exportRun(cw,ch,prog,exp);if(!o)return;const n=api.addVideo(o.webm||o.mp4,(it.name||'Video')+' (edited)',it.thumb);n.webm=o.webm||null;n.mp4=o.mp4||null;api.persist(n);toast('Saved as a new video in your library.')}
+      if(kind==='video'){const sz=R('osize').value;let cw=e.W,ch=e.H;if(sz!=='project'){ch=+sz;cw=Math.round(ch*e.W/e.H)}cw&=~1;ch&=~1;toast('Saving edited video… every frame is drawn, so nothing is dropped.',6000);
+        const o=await eng.exportRun(cw,ch,prog,exp,{fmt:'mp4'});if(!o)return;const n=api.addVideo(o.mp4||o.webm,(it.name||'Video')+' (edited)',it.thumb);n.webm=o.webm||null;n.mp4=o.mp4||null;api.persist(n);toast('Saved as a new video in your library.')}
       else{const fps=clamp(+R('fps').value||10,1,30),w=Math.max(2,Math.min(e.W,Math.max(64,+R('gw').value||480)))&~1,h=Math.round(w*e.H/e.W)&~1,T=D();let n=Math.max(1,Math.floor(T*fps)),times=Array.from({length:n},(_,i)=>i/fps),capped=false;if(n>900){times=Array.from({length:900},(_,i)=>i*T/900);capped=true}
         const gw=new GifWriter(w,h,true);toast('Making GIF…',3000);const ok=await eng.renderTimes(times,w,h,(g,i)=>{gw.addFrame(g.getImageData(0,0,w,h).data,Math.round(100/(capped?900/T:fps)));prog((i+1)/times.length)},exp);
         if(!ok)return;await api.saveBlob(gw.finish(),api.baseName(it)+'.gif');if(capped)toast('That was long, so frames were thinned to keep the GIF a sensible size.',5000)}
@@ -771,10 +836,10 @@ function mount(host,it,api){css();HK=api;
     else if(k==='escape'){select(null);playRange=null}else if(k===' '){ev.preventDefault();if(ev.shiftKey)playSel();else togglePlay()}else if(k==='i')act.setin();else if(k==='o')act.setout();else if(k==='s'&&!ev.ctrlKey&&!ev.metaKey)act.split();
     else if(k==='arrowleft'){ev.preventDefault();eng.pause();eng.seek(eng.t-(ev.shiftKey?1:.1))}else if(k==='arrowright'){ev.preventDefault();eng.pause();eng.seek(eng.t+(ev.shiftKey?1:.1))}else return;ev.stopPropagation()};
   document.addEventListener('keydown',key,true);
-  function refreshAll(){refreshProps();caplist();ovui();offlineUi();R('canvas').value=['1920x1080','1280x720','854x480','1080x1080','1080x1920'].includes(e.W+'x'+e.H)?e.W+'x'+e.H:'auto';R('fi').checked=!!e.fadeIn;R('fo').checked=!!e.fadeOut;R('muteall').checked=!!e.muteVideo;showFx()}
+  function refreshAll(){refreshProps();caplist();ovui();offlineUi();R('canvas').value=['1920x1080','1280x720','854x480','1080x1080','1080x1920'].includes(e.W+'x'+e.H)?e.W+'x'+e.H:'auto';R('fi').checked=!!e.fadeIn;R('fo').checked=!!e.fadeOut;R('muteall').checked=!!e.muteVideo;R('ofps').value=e.fps?String(e.fps):'';showFx()}
   // 9.8: true when the timeline is anything other than the untouched recording, so Save renders the edit.
   function isEdited(){const s0=rt.src.s0||{},dur=s0.dur||0,nz=v=>!!v&&v!=='none';if(e.clips.length!==1||e.aud.length||e.vfx.length||e.zooms.length||e.ovs.length||e.caps.some(c=>c.text)||e.fadeIn||e.fadeOut||e.muteVideo)return true;
-    if(s0.w&&s0.h&&(e.W!==s0.w||e.H!==s0.h))return true; // 10.1.7: a new Size alone needs rendering
+    if(s0.w&&s0.h&&(e.W!==s0.w||e.H!==s0.h))return true;if(e.fps)return true; // 10.1.7: a new Size alone needs rendering
     const c=e.clips[0],src=e.srcs.find(s=>s.id===c.src);if(!src||!src.self||c.a>.05||(dur&&Math.abs(c.b-dur)>.05)||c.start>.01||(c.speed||1)!==1||(c.vol==null?1:c.vol)!==1||c.mute||c.afi||c.afo||(c.trans&&nz(c.trans.type)))return true;
     if(c.crop&&(c.crop.l||c.crop.t||c.crop.r||c.crop.b))return true;if(c.fx&&JSON.stringify(Object.assign(defFx(),c.fx))!==JSON.stringify(defFx()))return true;
     if(JSON.stringify(Object.assign(defFx(),e.master||{}))!==JSON.stringify(defFx()))return true;
@@ -816,8 +881,8 @@ function mount(host,it,api){css();HK=api;
   // 8.0: the side panel shows one view at a time (video, effects or drawing tools); the editor's toolbar buttons pick it.
   const showPane=k=>{if(crop&&k!=='video')cropStop(true);pane=k;qa('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==k);if(k==='effects'&&e)refreshProps()};
   return{insertClip,get time(){return eng?.t||0},pause:()=>eng?.pause(),seek:t=>eng?.seek(t),undo:()=>act.undo(),redo:()=>act.redo(),info:q('.vinfo'),video:prev,pane:k=>{if(k)showPane(k);return pane},tool:t=>{if(t!==undefined){if(crop)cropStop(true);otool=t;if(!otool&&sel&&sel.type==='ov')select(null);ovui()}return otool},destroy(){dead=true;fitObs.disconnect();cancelAnimationFrame(raf);document.removeEventListener('keydown',key,true);document.removeEventListener('pointerdown',onPtr,true);document.removeEventListener('keydown',onKey,true);document.removeEventListener('keydown',dirty,true);if(exp)exp.cancel=true;try{rec&&rec.mr.stop()}catch(_){}if(eng)eng.destroy();pasteUrls.forEach(url=>URL.revokeObjectURL(url))},saveGif:()=>run('gif'),needsRender:()=>!!(e&&eng&&(eng.hasCam()||(e.look&&(lookOf(e).layout!=='full'||lookOf(e).bg!=='black'))||isEdited())),isEdited:()=>!!(e&&eng&&isEdited()),duration:()=>D(),
-    renderBlob:async()=>{if(exp)throw new Error('An export is already running.');exp={cancel:false};eng.pause();const bar=R('prog'),fill=bar.firstElementChild,stopB=q('[data-a="stop"]');bar.hidden=false;stopB.hidden=false;fill.style.width='0';
-      try{return await eng.exportRun((e.W&~1)||2,(e.H&~1)||2,p=>{fill.style.width=Math.round(p*100)+'%'},exp)}finally{exp=null;bar.hidden=true;stopB.hidden=true;try{await eng.seek(0)}catch(_){}}},grab:()=>eng?eng.snapshot(e.W,e.H):null,getProject:()=>e,
+    renderBlob:async(fmt='mp4')=>{if(exp)throw new Error('An export is already running.');exp={cancel:false};eng.pause();const bar=R('prog'),fill=bar.firstElementChild,stopB=q('[data-a="stop"]');bar.hidden=false;stopB.hidden=false;fill.style.width='0';
+      try{return await eng.exportRun((e.W&~1)||2,(e.H&~1)||2,p=>{fill.style.width=Math.round(p*100)+'%'},exp,{fmt})}finally{exp=null;bar.hidden=true;stopB.hidden=true;try{await eng.seek(0)}catch(_){}}},grab:()=>eng?eng.snapshot(e.W,e.H):null,getProject:()=>e,
     // 10.1.7: read-only view of editor state for the automated tests
     _dbg:{get sel(){return sel},select,get inT(){return inT},get outT(){return outT},get eng(){return eng},act,get hist(){return hist.length},get rt(){return rt},get ready(){return ready}}}}
 // Copy edited Library videos as they currently look/sound, without opening them in the destination editor.
@@ -825,7 +890,7 @@ async function copyClip(item,api,onProgress){const source=item.mp4||item.webm||i
   try{const url=urlFor(item.blob),meta=await loadMeta(url),temp={...item,edit:clone(item.edit)},e=ensureProject(temp,meta),rt={src:{}};
     const used=new Set([...e.clips,...e.aud].map(c=>c.src));
     for(const s of e.srcs){if(!s.self&&!used.has(s.id))continue;let blob=s.self?item.blob:item._edBlobs?.[s.id];if(!blob&&s.itemId){const other=api.itemById(s.itemId);if(other){await api.hydrate(other);blob=other.blob}}if(!blob)throw Error('A source clip for this edited video could not be found.');const u=s.self?url:urlFor(blob),m=await loadMeta(u,s.kind==='audio');rt.src[s.id]={url:u,blob,dur:m.dur,w:m.w,h:m.h}}
-    engine=makeEngine({e,rt});const result=await engine.exportRun((e.W&~1)||2,(e.H&~1)||2,onProgress,{cancel:false});return result.mp4||result.webm
+    engine=makeEngine({e,rt});const result=await engine.exportRun((e.W&~1)||2,(e.H&~1)||2,onProgress,{cancel:false},{fmt:'mp4'});return result.mp4||result.webm
   }finally{engine?.destroy();urls.forEach(u=>URL.revokeObjectURL(u));if(HK===copyHK)HK=previousHK}}
 root.VEdit={mount,pack,copyClip,Core:{clipLen,clipEnd,total,ensureProject,makeEngine}};
 })(window);
