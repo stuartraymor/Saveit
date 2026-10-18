@@ -1,0 +1,15 @@
+# Saveit 10.1.9
+
+**Edited videos are saved frame by frame.** This fixes the company review's top problem: V1 / B1, edited saves dropping 13–22% of frames, freezing and going silent near the start.
+
+- **How it works now.** Before, Saveit played the edit and recorded the screen of it in real time, so any delay lost frames and sound. Now every output frame is drawn at its exact time from frames decoded straight out of the source files (WebCodecs), then encoded. The sound is mixed separately, offline, with the same clip volumes, fades, transitions, effects and master sound as the preview. A busy computer can make saving slower, but it can no longer drop frames or sound.
+- **Faster than real time.** Measured in real Electron 33: a 3-second 720p edit saved in 2.5 s as MP4 and 0.8 s as WebM. Before, it always took at least as long as the video.
+- **Measured files** (ffprobe): every edited save has exactly length × frame rate frames at a constant frame rate, sound for the whole length with no gaps, and the right duration. Saved files open, play and seek. This was checked for MP4 and WebM sources saved as MP4 (H.264 + AAC) and WebM (VP9 + Opus), and also under simulated CPU load.
+- **Speed keeps its pitch.** Clips at 0.25×–4× keep their pitch in the saved sound, as in the preview (2× measured at 440 Hz for a 440 Hz tone).
+- **Frame rate (B18).** A new Frame rate choice in the Export tab: Same as recording (detected from the file), 24, 25, 30 or 60. It applies to every save of that video, including the top-bar Save, and choosing one counts as an edit. 60 fps recordings are no longer saved at 30.
+- **One format per save.** Save makes only the file type you chose; before, it encoded WebM and MP4 at the same time. Save edited video (Export tab) adds an MP4 to the library, not both formats.
+- **Safety net.** If a computer has no WebCodecs encoder or a file can't be read, Saveit falls back to seeking every frame or, as a last resort, the old real-time save. `S.lastExport` records which was used.
+- `WebmFix.duration` (webm.js) now also reads the length of WebM files that start with a seek index, as Saveit's own saved WebM files do. Writing a length into a file is unchanged.
+- New `app/vexport.js`: WebM and MP4 readers (including MediaRecorder's fragmented MP4), a frame reader, MP4 and WebM writers (with seek index), H.264 level choice and a pitch-keeping time-stretch. No downloaded libraries.
+- Tests: `tests/video-editor-tests.cjs` adds 7 saving checks (30 required in total) and measures the saved files with ffprobe when it is available (`FFPROBE`). New `tests/native-video119.cjs` cuts and saves a recording through the real Save as window and dialog in Electron 33 (5 checks).
+- Known limits: the source file and the encoded result are held in memory while saving, so very long recordings need a lot of RAM. A file with only one keyframe (as MediaRecorder's MP4s often are) is decoded from its start when a clip starts far into it. GIF still uses its own seek-per-frame path.
