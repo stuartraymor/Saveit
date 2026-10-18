@@ -19,6 +19,8 @@ await ev(()=>{
   window.openV=async(setup)=>{document.querySelectorAll('.modal').forEach(m=>m.remove());const it=__T.addVideo(vblob,'VE test '+Date.now());if(vmp4)it.mp4=vblob;else it.webm=vblob;if(setup)setup(it);__T.openItem(it);
     await QA.until(()=>__T.vid?._ctl?._dbg?.ready&&__T.vid._ctl._dbg.eng);await QA.sleep(150);window.cur=it;return it};
   window.splitAt=async t=>{await D().eng.seek(t);D().act.split()};
+  // keeps the page busy for ms of every frame, like a slow PC
+  window.busy=ms=>{let on=true;const f=()=>{if(!on)return;const t=performance.now();while(performance.now()-t<ms);requestAnimationFrame(f)};requestAnimationFrame(f);return()=>{on=false}};
   window.change=(sel,val)=>{const el=document.querySelector(sel);if(el.type==='checkbox')el.checked=val;else el.value=val;el.dispatchEvent(new Event('change',{bubbles:true}))};
 });
 
@@ -66,8 +68,8 @@ await test('B10 Shift+Space plays only the selection',async()=>{const r=await ev
 await test('V2 changing only the Size makes Save render at that size',async()=>{const r=await ev(async()=>{await openV();const before=__T.vid._ctl.needsRender();change('[data-r="canvas"]','1280x720');return{before,after:__T.vid._ctl.needsRender()}});
   assert.equal(r.before,false,'untouched video should still be copied');assert.equal(r.after,true,'a new Size alone is not rendered');return r});
 
-await test('V7 the Export tab quality does not change the top-bar Save size',async()=>{const r=await ev(async()=>{await openV();change('[data-r="osize"]','480');change('[data-r="fi"]',true);const o=await __T.vid._ctl.renderBlob(),b=o.webm||o.mp4,v=document.createElement('video');v.src=URL.createObjectURL(b);await new Promise(r=>v.onloadedmetadata=r);return{w:v.videoWidth,h:v.videoHeight}});
-  assert.equal(r.w+'x'+r.h,'640x360');return r});
+await test('V7 the Export tab quality does not change the top-bar Save size',async()=>{const r=await ev(async()=>{await openV();change('[data-r="osize"]','480');change('[data-r="fi"]',true);const o=await __T.vid._ctl.renderBlob(),b=o.webm||o.mp4,v=document.createElement('video');v.src=URL.createObjectURL(b);await new Promise(r=>v.onloadedmetadata=r);return{w:v.videoWidth,h:v.videoHeight,dur:await QA.duration(b),want:__T.vid._ctl.duration()}});
+  assert.equal(r.w+'x'+r.h,'640x360');near(r.dur,r.want,.25,'edited save length');return r});
 
 await test('V4 typed crop applies with no clip selected (single clip under the playhead)',async()=>{const r=await ev(async()=>{await openV();D().select(null);await D().eng.seek(1);await QA.sleep(200);
   const g=c=>{const x=c.getContext('2d').getImageData(10,180,1,1).data;return[...x].slice(0,3)},before=g(__T.vid._ctl.grab());
@@ -87,10 +89,10 @@ await test('VU3 every editor field has a clear accessible name',async()=>{const 
 
 // ---------- later versions (todo) ----------
 await test('B4 one video element per source, not per clip',async()=>{const r=await ev(async()=>{await openV();for(const t of [.5,1,1.5,2,2.5])await splitAt(t);await D().eng.seek(0);await D().eng.play();await QA.sleep(2800);D().eng.pause();
-  const els=Object.values(D().eng.S.els).filter(o=>!o.isAud).length;return{clips:P().clips.length,videoElements:els}});assert.ok(r.videoElements<=2,r.videoElements+' video elements for '+r.clips+' clips');return r},{todo:'10.1.8'});
+  const els=Object.values(D().eng.S.pool).flat().filter(o=>!o.isAud).length;return{clips:P().clips.length,videoElements:els}});assert.ok(r.videoElements<=2,r.videoElements+' video elements for '+r.clips+' clips');return r});
 
 await test('B14 the editor does not redraw the timeline while idle',async()=>{const r=await ev(async()=>{await openV();D().eng.pause();await QA.sleep(300);const g=document.querySelector('.vtl').getContext('2d'),orig=g.clearRect;let n=0;g.clearRect=function(...a){n++;return orig.apply(this,a)};await QA.sleep(1000);g.clearRect=orig;return{redrawsPerSecond:n}});
-  assert.ok(r.redrawsPerSecond<5,r.redrawsPerSecond+' redraws in 1 s idle');return r},{todo:'10.1.8'});
+  assert.ok(r.redrawsPerSecond<5,r.redrawsPerSecond+' redraws in 1 s idle');return r});
 
 await test('B7 the timeline scale stays fixed while dragging the last clip',async()=>{await ev(async()=>{await openV();await splitAt(1.5);await D().eng.seek(0)});
   const box=await page.locator('.vtl').boundingBox(),m=await ev(()=>({D:__T.vid._ctl.duration(),start:P().clips.find(c=>c.start>1).start}));
@@ -109,8 +111,21 @@ await test('B9 ripple delete keeps spanning audio in sync with the picture',asyn
   assert.ok(r.at0.some(a=>Math.abs(a-1.5)<.05),'audio at 0 s starts at source '+r.at0);return r},{todo:'10.1.10'});
 
 await test('B22 Space on a focused button presses that button and does not start playback',async()=>{const r=await ev(async()=>{await openV();await D().eng.seek(1);const before=P().clips.length;return{before}});
-  await page.locator('[data-a="split"]').focus();await page.keyboard.press('Space');await page.waitForTimeout(400);
-  const r2=await ev(()=>{const x={clips:P().clips.length,playing:D().eng.playing};D().eng.pause();return x});assert.ok(r2.clips>r.before,'the focused Split button was not pressed');assert.ok(!r2.playing,'playback started');return{...r,...r2}},{todo:'10.1.8'});
+  await page.keyboard.press('Shift');await page.locator('[data-a="split"]').focus();await page.keyboard.press('Space');await page.waitForTimeout(400);
+  const r2=await ev(()=>{const x={clips:P().clips.length,playing:D().eng.playing};D().eng.pause();return x});assert.ok(r2.clips>r.before,'the focused Split button was not pressed');assert.ok(!r2.playing,'playback started');return{...r,...r2}});
+
+await test('B22 after clicking a button with the mouse, Space still plays',async()=>{await ev(async()=>{await openV();await D().eng.seek(1)});await page.locator('[data-a="split"]').click();await page.waitForTimeout(150);
+  const n=await ev(()=>P().clips.length);await page.keyboard.press('Space');await page.waitForTimeout(400);const r=await ev(()=>{const x={clips:P().clips.length,playing:D().eng.playing};D().eng.pause();return x});
+  assert.equal(r.clips,n,'Space pressed the button again');assert.ok(r.playing,'Space did not play');return r});
+
+for(const load of [0,25])await test('B3 no black or blank frames at cuts (split, and a cut to another video)'+(load?' under CPU load':''),async()=>{const r=await ev(async load=>{const stop=busy(load);try{await openV();await splitAt(1.5);await __T.vid._ctl.insertClip({blob:vblob,name:'Second'},'stack',P().clips.reduce((m,c)=>Math.max(m,c.start+(c.b-c.a)),0));
+  const cv=document.querySelector('.vprev'),g=cv.getContext('2d'),runs=[];
+  for(const [a,b] of [[1.1,1.9],[2.5,3.4]]){await D().eng.seek(a);await D().eng.play();let min=999,n=0;await new Promise(res=>{const f=()=>{const t=D().eng.t;if(t>a+.1){const d=g.getImageData(cv.width>>1,cv.height>>1,1,1).data,v=d[0]+d[1]+d[2];min=Math.min(min,v);n++}if(t>=b||!D().eng.playing)return res();requestAnimationFrame(f)};requestAnimationFrame(f)});D().eng.pause();runs.push({a,b,minBrightness:min,frames:n})}return runs}finally{stop()}},load);
+  for(const x of r)assert.ok(x.minBrightness>60,'dark frame near '+x.a+'-'+x.b+': '+x.minBrightness);return r});
+
+for(const load of [0,25])await test('B2 picture stays within 25 ms of the timeline clock while playing'+(load?' under CPU load':''),async()=>{const r=await ev(async load=>{const stop=busy(load);try{await openV();await D().eng.seek(0);await D().eng.play();await QA.sleep(600);let max=0,n=0;const c=P().clips[0];
+  await new Promise(res=>{const t0=performance.now(),f=()=>{const o=D().eng.S.els[c.id];if(o&&!o.el.paused&&!o.el.seeking){const want=c.a+(D().eng.t-c.start)*(c.speed||1);max=Math.max(max,Math.abs(o.el.currentTime-want));n++}if(performance.now()-t0>1500)return res();requestAnimationFrame(f)};requestAnimationFrame(f)});D().eng.pause();return{maxDriftMs:Math.round(max*1000),samples:n}}finally{stop()}},load);
+  assert.ok(r.samples>10,'too few samples');assert.ok(r.maxDriftMs<25,'drift '+r.maxDriftMs+' ms');return r});
 
 results.push({name:'No renderer errors',pass:errors.length===0,errors});if(errors.length)console.log('FAIL No renderer errors',errors[0]);
 }finally{const req=results.filter(r=>!r.todo),todo=results.filter(r=>r.todo);

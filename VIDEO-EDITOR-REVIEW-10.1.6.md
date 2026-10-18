@@ -139,6 +139,8 @@ Also fixed in 10.1.7 from this review: **B5** (offline clips + Relink), **B6** (
 
 `tests/video-editor-tests.cjs` reproduced each of these before the fix. Before the fix, it also confirmed B4 (6 video elements for 6 clips), B7 (a 100 px drag moved the clip 1.0 s instead of 0.28 s), B9, B14 (about 165 timeline redraws a second while idle) and B17. Those stay as todo checks for their versions. B22 turned out different from my guess: Space on a focused button does **not** press the button; it starts playback instead. That is a keyboard-access bug.
 
+**10.1.8 (playback engine):** fixed B4 (one element pool per source), B2 (audio clock, speed nudging; drift under load 34 ms → 3 ms), B3 (splits continue on the same element; hold the last picture), B14 (idle redraws 165/s → 2/s), B16 (seeks coalesce), B22 (Space/Enter press a keyboard-focused button). B3 could not be reproduced with the synthetic test clip even on 10.1.7, so its fix is not yet proven by measurement.
+
 ## 7. What this review did not cover
 - Screen **recording** quality (frame rate, cursor capture, MediaRecorder settings). It is a separate module and worth its own pass, because export quality can't beat recording quality.
 - Measured performance numbers (CPU, memory, save times). B4, B14, B15 and B16 should be profiled with a 30–60 minute recording.

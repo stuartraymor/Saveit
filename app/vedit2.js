@@ -158,33 +158,65 @@ function makeEngine(P){
   const wantTime=(c,t)=>c.a+(clamp(t,c.start,clipEnd(c))-c.start)*(c.speed||1);
   const CAMC={id:'__cam',get src(){return e.cam&&e.cam.src}},hasCam=()=>!!(e.cam&&rt.src[e.cam.src]);
   function camAt(t){if(!hasCam())return null;const s0=e.srcs.find(s=>s.self),act=active(t).filter(c=>s0&&c.src===s0.id),c=act[act.length-1];return c?{t:wantTime(c,t)+(+e.cam.off||0),rate:c.speed||1}:null}
-  function camEl(){const o=ensureEl(CAMC,false);o.el.muted=true;return o.el}
-  function connect(o,c){if(!S.ac||o.srcNode)return;const ac=S.ac;try{o.srcNode=ac.createMediaElementSource(o.el)}catch(_){return}o.fx=buildFx(ac);o.gain=ac.createGain();o.srcNode.connect(o.fx.input);o.fx.output.connect(o.gain);o.gain.connect(S.master.input);o.fx.apply(c.fx)}
-  function ensureEl(c,isAud){const s=rt.src[c.src];const url=s&&s.url;let o=S.els[c.id];if(o&&o.url===url)return o;if(o)drop(c.id);
-    const el=document.createElement(isAud?'audio':'video');el.preload='auto';el.playsInline=true;el.src=url||'';o={el,url,isAud,srcNode:null,fx:null,gain:null};S.els[c.id]=o;connect(o,c);return o}
-  function drop(id){const o=S.els[id];if(!o)return;try{o.el.pause();o.srcNode&&o.srcNode.disconnect();o.gain&&o.gain.disconnect();o.el.removeAttribute('src');o.el.load()}catch(_){}delete S.els[id]}
-  function sync(){const ids=new Set([...e.clips,...e.aud].map(c=>c.id));if(hasCam())ids.add('__cam');for(const id of Object.keys(S.els))if(!ids.has(id))drop(id)}
+  // 10.1.8: media elements are pooled per source instead of one per clip (S.pool[srcId]). S.els maps a clip id to the element it is using now.
+  // A clip that carries straight on from the clip before it (a split) takes over that clip's element while it is still playing, so the cut needs no seek.
+  S.pool={};
+  const clipById=id=>e.clips.find(c=>c.id===id)||e.aud.find(c=>c.id===id);
+  function camEl(){let o=S.els.__cam;const s=rt.src[CAMC.src],url=s&&s.url;if(o&&o.url!==url){killEl(o);o=null}
+    if(!o){const el=document.createElement('video');el.preload='auto';el.playsInline=true;el.muted=true;el.src=url||'';o=S.els.__cam={el,url,isAud:false,cam:true}}return o.el}
+  function newEl(srcId,isAud){const s=rt.src[srcId],url=s&&s.url,el=document.createElement(isAud?'audio':'video');el.preload='auto';el.playsInline=true;el.src=url||'';
+    const o={el,url,isAud,srcId,srcNode:null,fx:null,gain:null,clip:null,last:null,fxOf:undefined};(S.pool[srcId]=S.pool[srcId]||[]).push(o);connect(o);return o}
+  function connect(o){if(!S.ac||o.srcNode||o.cam)return;const ac=S.ac;try{o.srcNode=ac.createMediaElementSource(o.el)}catch(_){return}o.fx=buildFx(ac);o.gain=ac.createGain();o.gain.gain.value=0;o.srcNode.connect(o.fx.input);o.fx.output.connect(o.gain);o.gain.connect(S.master.input);o.fxOf=undefined;applyFx(o)}
+  function applyFx(o){if(!o.fx)return;const c=o.clip&&clipById(o.clip),fx=(c&&c.fx)||null,k=JSON.stringify(fx);if(o.fxOf===k)return;o.fxOf=k;o.fx.apply(fx)}
+  function killEl(o){try{o.el.pause();o.srcNode&&o.srcNode.disconnect();o.gain&&o.gain.disconnect();o.el.removeAttribute('src');o.el.load()}catch(_){}}
+  const pred=(c,list)=>list.find(p=>p!==c&&p.src===c.src&&Math.abs(clipEnd(p)-c.start)<1e-3&&Math.abs(p.b-c.a)<1e-3&&(p.speed||1)===(c.speed||1));
+  // give every clip that is playing at t, or starts within 1.5 s, an element (clips that carry on from a playing clip wait for its element)
+  function assign(t){const need=[];
+    for(const [list,isAud] of [[e.clips,false],[e.aud,true]])for(const c of list){if(!rt.src[c.src])continue;const act=t>=c.start&&t<clipEnd(c),p=act?null:pred(c,list);
+      if(act||(c.start>t&&c.start-t<1.5&&!(p&&t>=p.start)))need.push({c,isAud})}
+    const want=new Set(need.map(n=>n.c.id));
+    for(const id of Object.keys(S.els)){if(id==='__cam'||want.has(id))continue;const o=S.els[id];o.last=id;o.clip=null;delete S.els[id]}
+    for(const {c,isAud} of need){if(S.els[c.id])continue;const url=rt.src[c.src].url,free=(S.pool[c.src]||[]).filter(o=>!o.clip&&o.isAud===isAud&&o.url===url),p=pred(c,isAud?e.aud:e.clips);
+      let o=p&&free.find(x=>x.last===p.id);if(!o){const w=wantTime(c,Math.max(t,c.start));o=free.sort((x,y)=>Math.abs(x.el.currentTime-w)-Math.abs(y.el.currentTime-w))[0]}
+      if(!o)o=newEl(c.src,isAud);o.clip=c.id;S.els[c.id]=o;applyFx(o)}
+    // keep at most one spare element per source
+    for(const sid of Object.keys(S.pool)){let spare=0;S.pool[sid]=S.pool[sid].filter(o=>{if(o.clip)return true;if(++spare<=1)return true;killEl(o);return false})}}
+  function sync(){for(const id of Object.keys(S.els)){if(id==='__cam'){if(!hasCam()){killEl(S.els.__cam);delete S.els.__cam}continue}const c=clipById(id),o=S.els[id];if(!c||!rt.src[c.src]||o.url!==rt.src[c.src].url||o.srcId!==c.src){o.clip=null;delete S.els[id]}}
+    const used=new Set([...e.clips,...e.aud].map(c=>c.src));
+    for(const sid of Object.keys(S.pool)){const s=rt.src[sid];S.pool[sid]=S.pool[sid].filter(o=>{if(s&&used.has(sid)&&o.url===s.url)return true;if(o.clip)delete S.els[o.clip];killEl(o);return false});if(!S.pool[sid].length)delete S.pool[sid]}}
+  const poolEls=()=>Object.values(S.pool).flat();
   function unlock(){if(!S.ac){const AC=window.AudioContext||window.webkitAudioContext;S.ac=new AC();S.master=buildFx(S.ac);S.mgain=S.ac.createGain();S.out=S.ac.createGain();S.master.output.connect(S.mgain);S.mgain.connect(S.out);S.out.connect(S.ac.destination);S.master.apply(e.master);
-      for(const c of e.clips){const o=S.els[c.id];if(o)connect(o,c)}for(const c of e.aud){const o=S.els[c.id];if(o)connect(o,c)}}
+      for(const o of poolEls())connect(o)}
     if(S.ac.state==='suspended')S.ac.resume();return S.ac}
-  function refreshFx(){if(!S.ac)return;S.master.apply(e.master);for(const c of [...e.clips,...e.aud]){const o=S.els[c.id];if(o&&o.fx)o.fx.apply(c.fx)}}
+  function refreshFx(){if(!S.ac)return;S.master.apply(e.master);for(const o of poolEls()){o.fxOf=undefined;applyFx(o)}}
   function gainFor(c,t,isAud){let g=c.mute?0:(c.vol==null?1:c.vol);if(!isAud&&e.muteVideo)g=0;const len=clipLen(c),l=t-c.start;
     if(c.afi>0&&l<c.afi)g*=Math.max(0,l/c.afi);if(c.afo>0&&len-l<c.afo)g*=Math.max(0,(len-l)/c.afo);
     if(!isAud){const act=active(t),B=act[act.length-1],A=act.length>1?act[act.length-2]:null;
       if(B&&c!==B){if(c===A&&B.trans&&B.trans.type!=='none'){const T=Math.max(.05,Math.min(clipEnd(A),clipEnd(B))-B.start);g*=1-clamp((t-B.start)/T,0,1)}else g=0}
       else if(B&&c===B&&A&&B.trans&&B.trans.type!=='none'){const T=Math.max(.05,Math.min(clipEnd(A),clipEnd(B))-B.start);g*=clamp((t-B.start)/T,0,1)}}
     return clamp(g,0,4)}
-  function tickAudio(t){if(!S.ac)return;for(const c of e.clips){const o=S.els[c.id];if(o&&o.gain)o.gain.gain.setTargetAtTime(gainFor(c,t,false),S.ac.currentTime,.02)}
-    for(const c of e.aud){const o=S.els[c.id];if(o&&o.gain)o.gain.gain.setTargetAtTime(gainFor(c,t,true),S.ac.currentTime,.02)}
-    const T=total(e);let m=1;if(e.fadeIn&&t<.6)m=Math.min(m,t/.6);if(e.fadeOut&&T-t<.6)m=Math.min(m,Math.max(0,(T-t)/.6));S.out.gain.setTargetAtTime(m,S.ac.currentTime,.02)}
-  function syncPlay(t){for(const [c,isAud] of [...e.clips.map(c=>[c,false]),...e.aud.map(c=>[c,true])]){const o=ensureEl(c,isAud),el=o.el,act=t>=c.start&&t<clipEnd(c);
-      if(act){const want=wantTime(c,t);if(el.playbackRate!==(c.speed||1))el.playbackRate=c.speed||1;if(el.paused){if(Math.abs(el.currentTime-want)>.04)el.currentTime=want;el.play().catch(()=>{})}else if(Math.abs(el.currentTime-want)>.35)el.currentTime=want}
-      else{if(!el.paused)el.pause();const ds=c.start-t;if(!isAud&&ds>0&&ds<1.5&&Math.abs(el.currentTime-c.a)>.1)el.currentTime=c.a}}
-    const ca=camAt(t);if(ca){const el=camEl();if(el.playbackRate!==ca.rate)el.playbackRate=ca.rate;if(el.paused){if(Math.abs(el.currentTime-ca.t)>.04)el.currentTime=ca.t;el.play().catch(()=>{})}else if(Math.abs(el.currentTime-ca.t)>.35)el.currentTime=ca.t}else if(hasCam()){const el=camEl();if(!el.paused)el.pause()}}
-  async function prepare(t){const ca=camAt(t);await Promise.all([...(ca?[seekEl(camEl(),ca.t)]:[]),...active(t).map(c=>seekEl(ensureEl(c,false).el,wantTime(c,t))),...e.aud.filter(c=>t>=c.start&&t<clipEnd(c)).map(c=>seekEl(ensureEl(c,true).el,wantTime(c,t)))])}
+  function tickAudio(t){if(!S.ac)return;const now=S.ac.currentTime;for(const o of poolEls()){if(!o.gain)continue;const c=o.clip&&clipById(o.clip),on=c&&t>=c.start&&t<clipEnd(c);o.gain.gain.setTargetAtTime(on?gainFor(c,t,o.isAud):0,now,.02)}
+    const T=total(e);let m=1;if(e.fadeIn&&t<.6)m=Math.min(m,t/.6);if(e.fadeOut&&T-t<.6)m=Math.min(m,Math.max(0,(T-t)/.6));S.out.gain.setTargetAtTime(m,now,.02)}
+  // 10.1.8: keep an element on time. Small drift is corrected by nudging its speed (up to 8%); only drift over 0.25 s jumps.
+  function drive(el,want,rate){if(el.paused){if(Math.abs(el.currentTime-want)>.04)el.currentTime=want;el.playbackRate=rate;el.play().catch(()=>{});return}
+    if(el.seeking)return;const d=el.currentTime-want;if(Math.abs(d)>.25){el.currentTime=want;el.playbackRate=rate;return}
+    const r=Math.abs(d)>.015?rate*clamp(1-d*1.5,.92,1.08):rate;if(Math.abs(el.playbackRate-r)>.002)el.playbackRate=r}
+  function syncPlay(t){assign(t);
+    for(const [id,o] of Object.entries(S.els)){if(id==='__cam')continue;const c=clipById(id);if(!c)continue;
+      if(t>=c.start&&t<clipEnd(c))drive(o.el,wantTime(c,t),c.speed||1);else{if(!o.el.paused)o.el.pause();if(!o.el.seeking&&Math.abs(o.el.currentTime-c.a)>.1)o.el.currentTime=c.a}}
+    for(const o of poolEls())if(!o.clip&&!o.el.paused)o.el.pause();
+    const ca=camAt(t);if(ca)drive(camEl(),ca.t,ca.rate);else if(hasCam()){const el=camEl();if(!el.paused)el.pause()}}
+  async function prepare(t){assign(t);const ca=camAt(t),jobs=ca?[seekEl(camEl(),ca.t)]:[];
+    for(const [id,o] of Object.entries(S.els)){if(id==='__cam')continue;const c=clipById(id);if(c)jobs.push(seekEl(o.el,t>=c.start&&t<clipEnd(c)?wantTime(c,t):c.a))}await Promise.all(jobs)}
+  // start the elements that should be playing at t and wait (up to 1.5 s) until they really play, so the clock starts with the picture and sound
+  async function startEls(t){const ps=[];for(const [id,o] of Object.entries(S.els)){if(id==='__cam')continue;const c=clipById(id);if(c&&t>=c.start&&t<clipEnd(c)){o.el.playbackRate=c.speed||1;ps.push(o.el.play().catch(()=>{}))}}
+    const ca=camAt(t);if(ca){const el=camEl();el.playbackRate=ca.rate;ps.push(el.play().catch(()=>{}))}await Promise.race([Promise.all(ps),new Promise(r=>setTimeout(r,1500))])}
+  // the clock follows the audio hardware when it is running, so the picture keeps time with the sound
+  const clockNow=()=>S.ac&&S.ac.state==='running'?['a',S.ac.currentTime]:['p',performance.now()/1000];
   // --- drawing (all in project space W x H, scaled onto each target) ---
   function offs(cw,ch){for(const k of ['offA','offB']){let c=S[k];if(!c){c=S[k]=document.createElement('canvas')}if(c.width!==cw||c.height!==ch){c.width=cw;c.height=ch}}return[S.offA,S.offB]}
-  function drawClip(g,c){const o=S.els[c.id];if(!o)return;const el=o.el;if(el.readyState<2||!el.videoWidth)return;const W=e.W,H=e.H,cr=(S.cropEdit===c&&S.mode!=='export'?null:c.crop)||{},l=Math.round(el.videoWidth*(cr.l||0)/100),tp=Math.round(el.videoHeight*(cr.t||0)/100),r=Math.round(el.videoWidth*(cr.r||0)/100),b=Math.round(el.videoHeight*(cr.b||0)/100),sw=Math.max(2,el.videoWidth-l-r),sh=Math.max(2,el.videoHeight-tp-b),k=Math.min(W/sw,H/sh),dw=sw*k,dh=sh*k;
+  // 10.1.8: if the clip's picture isn't decoded yet, hold the last picture drawn instead of flashing black
+  function drawClip(g,c){const o=S.els[c.id];let el=o&&o.el;if(!el||el.readyState<2||!el.videoWidth){el=S.held;if(!el||el.readyState<2||!el.videoWidth)return}else S.held=el;const W=e.W,H=e.H,cr=(S.cropEdit===c&&S.mode!=='export'?null:c.crop)||{},l=Math.round(el.videoWidth*(cr.l||0)/100),tp=Math.round(el.videoHeight*(cr.t||0)/100),r=Math.round(el.videoWidth*(cr.r||0)/100),b=Math.round(el.videoHeight*(cr.b||0)/100),sw=Math.max(2,el.videoWidth-l-r),sh=Math.max(2,el.videoHeight-tp-b),k=Math.min(W/sw,H/sh),dw=sw*k,dh=sh*k;
     g.drawImage(el,l,tp,sw,sh,(W-dw)/2,(H-dh)/2,dw,dh)}
   // 9.5: Zoom & pan - the picture (video and on-screen items) eases into the chosen box and back out again
   function zoomAt(t){if(S.noZoom&&!S.playing)return null;const z=(e.zooms||[]).find(z=>t>=z.t0&&t<=z.t1);if(!z)return null;const W=e.W,H=e.H,ea=Math.max(0,Math.min(+z.ease||0,(z.t1-z.t0)/2));let p=1;
@@ -211,8 +243,9 @@ function makeEngine(P){
     const T=total(e);let a=0;if(e.fadeIn)a=Math.max(a,1-t/.6);if(e.fadeOut)a=Math.max(a,1-(T-t)/.6);if(a>0){g.fillStyle=`rgba(0,0,0,${clamp(a,0,1)})`;g.fillRect(0,0,W,H)}
     g.restore()}
   function render(){for(const tg of S.targets)drawFrame(tg.g,S.t,tg.cw,tg.ch)}
-  async function seek(t){S.t=clamp(t,0,total(e));const tok=++S.tok;S.seeking++;try{await prepare(S.t)}finally{S.seeking--}if(tok===S.tok&&!S.playing)render();else if(S.playing)render()}
-  function pauseEls(){for(const o of Object.values(S.els))try{o.el.pause()}catch(_){}}
+  // 10.1.8: seeks never pile up. While one is being prepared, later ones only move the target; the loop then prepares the newest one.
+  function seek(t){S.t=clamp(t,0,total(e));S.tok++;if(!S.seekP)S.seekP=(async()=>{try{let done=-1;while(done!==S.tok){done=S.tok;S.seeking++;try{await prepare(S.t)}finally{S.seeking--}render()}}finally{S.seekP=null}})();return S.seekP}
+  function pauseEls(){for(const o of [...poolEls(),...(S.els.__cam?[S.els.__cam]:[])])try{o.el.pause()}catch(_){}}
   function drawCam(g,C,L){const o=S.els.__cam,el=o&&o.el;if(!el||el.readyState<2||!el.videoWidth)return;const co=(e.cam&&e.cam.o)||{},vr=el.videoWidth/el.videoHeight,br=C.w/C.h;let sx=0,sy=0,sW=el.videoWidth,sH=el.videoHeight;
     if(vr>br){sW=sH*br;sx=(el.videoWidth-sW)/2}else{sH=sW/br;sy=(el.videoHeight-sH)/2}const circ=!C.full&&L.shape==='circle'&&!['side-r','side-l','split'].includes(L.layout),r=C.full?0:circ?0:Math.min(C.w,C.h)*(L.shape==='square'?0:.08);
     const path=()=>{if(circ){g.beginPath();g.ellipse(C.x+C.w/2,C.y+C.h/2,C.w/2,C.h/2,0,0,Math.PI*2)}else rrect(g,C.x,C.y,C.w,C.h,r)};
@@ -220,10 +253,10 @@ function makeEngine(P){
     if(co.mirror!==false){g.translate(C.x+C.w,C.y);g.scale(-1,1);g.drawImage(el,sx,sy,sW,sH,0,0,C.w,C.h)}else g.drawImage(el,sx,sy,sW,sH,C.x,C.y,C.w,C.h);g.restore();
     if(!C.full&&L.border){g.save();path();g.lineWidth=Math.max(1,3*e.W/1280);g.strokeStyle='#ffffff';g.stroke();g.restore()}}
   function stopPlay(){S.playing=false;cancelAnimationFrame(S.raf);clearTimeout(S.tmo);pauseEls()}
-  function step(){if(!S.playing)return;const now=performance.now();S.t+=(now-S.last)/1000;S.last=now;const T=total(e);
+  function step(){if(!S.playing)return;const [k,now]=clockNow();if(k===S.lastK){const dt=now-S.last;if(dt>0&&dt<1)S.t+=dt}S.last=now;S.lastK=k;const T=total(e);
     if(S.t>=T){S.t=T;stopPlay();render();S.onEnd&&S.onEnd();return}
     syncPlay(S.t);tickAudio(S.t);render();S.onTick&&S.onTick(S.t);if(!S.playing)return;if(S.mode==='export')S.tmo=setTimeout(step,33);else S.raf=requestAnimationFrame(step)}
-  async function play(){unlock();if(S.playing)return;const T=total(e);if(S.t>=T-.02)S.t=0;S.playing=true;S.tok++;await prepare(S.t);if(!S.playing)return;S.last=performance.now();step()}
+  async function play(){unlock();if(S.playing)return;const T=total(e);if(S.t>=T-.02)S.t=0;S.playing=true;S.tok++;await prepare(S.t);if(!S.playing)return;tickAudio(S.t);await startEls(S.t);if(!S.playing)return;[S.lastK,S.last]=clockNow();step()}
   function pause(){const was=S.playing;stopPlay();if(was)render()}
   async function exportRun(cw,ch,onProg,ctl){stopPlay();const ac=unlock(),T=total(e);if(T<=0)throw new Error('There is nothing on the timeline yet.');
     const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;const g=cv.getContext('2d'),stream=cv.captureStream(30),dest=ac.createMediaStreamDestination();
@@ -232,8 +265,8 @@ function makeEngine(P){
     for(const [k,l] of want){const m=l.find(x=>MediaRecorder.isTypeSupported(x));if(!m)continue;const chunks=[],r=new MediaRecorder(stream,{mimeType:m,videoBitsPerSecond:8e6,audioBitsPerSecond:192000});r.ondataavailable=ev=>{if(ev.data.size)chunks.push(ev.data)};recs.push({k,r,chunks,m,done:new Promise(res=>r.onstop=res)})}
     if(!recs.length){S.out.disconnect();S.out.connect(ac.destination);throw new Error('This computer cannot encode video here.')}
     const saved=S.targets,savedTick=S.onTick,savedEnd=S.onEnd;S.targets=[{g,cw,ch}];S.mode='export';
-    try{S.t=0;await prepare(0);drawFrame(g,0,cw,ch);recs.forEach(x=>x.r.start(500));
-      await new Promise(res=>{S.onEnd=res;S.onTick=t=>{onProg&&onProg(Math.min(1,t/T));if(ctl&&ctl.cancel){stopPlay();res()}};S.playing=true;S.tok++;S.last=performance.now();step()});
+    try{S.t=0;await prepare(0);S.playing=true;tickAudio(0);await startEls(0);drawFrame(g,0,cw,ch);recs.forEach(x=>x.r.start(500));
+      await new Promise(res=>{S.onEnd=res;S.onTick=t=>{onProg&&onProg(Math.min(1,t/T));if(ctl&&ctl.cancel){stopPlay();res()}};S.tok++;[S.lastK,S.last]=clockNow();step()});
       await new Promise(r=>setTimeout(r,40));
     }finally{recs.forEach(x=>x.r.state!=='inactive'&&x.r.stop());await Promise.all(recs.map(x=>x.done));stopPlay();S.out.disconnect();S.out.connect(ac.destination);S.targets=saved;S.mode='preview';S.onTick=savedTick;S.onEnd=savedEnd;S.t=0;sync()}
     if(ctl&&ctl.cancel)return null;const o={};for(const x of recs){let b=new Blob(x.chunks,{type:x.m.split(';')[0]});if(x.k==='webm'&&window.WebmFix)b=await WebmFix.fix(b,T*1000); // 10.1.1: write the length into the WebM
@@ -241,8 +274,9 @@ function makeEngine(P){
   async function renderTimes(times,cw,ch,cb,ctl){stopPlay();const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;const g=cv.getContext('2d',{willReadFrequently:true});
     for(let i=0;i<times.length;i++){if(ctl&&ctl.cancel)return false;S.t=times[i];await prepare(times[i]);drawFrame(g,times[i],cw,ch);await cb(g,i);if(i%3===2)await new Promise(r=>setTimeout(r,0))}return true}
   function snapshot(cw,ch){const c=document.createElement('canvas');c.width=cw||e.W;c.height=ch||e.H;drawFrame(c.getContext('2d'),S.t,c.width,c.height);return c}
-  function destroy(){stopPlay();for(const id of Object.keys(S.els))drop(id);try{S.ac&&S.ac.close()}catch(_){}}
-  return{S,e,zoomAt,hasCam,unlock,play,pause,seek,render,sync,refreshFx,exportRun,renderTimes,snapshot,destroy,active,ensureEl,prepare,drawFrame,get t(){return S.t},set t(v){S.t=v},get playing(){return S.playing},setTargets(a){S.targets=a},onEnd(f){S.onEnd=f},onTick(f){S.onTick=f},gainFor}}
+  function destroy(){stopPlay();for(const o of poolEls())killEl(o);if(S.els.__cam)killEl(S.els.__cam);S.pool={};S.els={};try{S.ac&&S.ac.close()}catch(_){}}
+  const elFor=c=>{const o=S.els[c.id]||(S.pool[c.src]||[]).find(x=>x.el.videoWidth);return o?o.el:null};
+  return{S,e,zoomAt,hasCam,unlock,play,pause,seek,render,sync,refreshFx,exportRun,renderTimes,snapshot,destroy,active,elFor,prepare,drawFrame,get t(){return S.t},set t(v){S.t=v},get playing(){return S.playing},setTargets(a){S.targets=a},onEnd(f){S.onEnd=f},onTick(f){S.onTick=f},gainFor}}
 
 // ---------- styles ----------
 function css(){if(document.getElementById('vedCss2'))return;const s=document.createElement('style');s.id='vedCss2';s.textContent=`
@@ -371,11 +405,11 @@ function mount(host,it,api){css();HK=api;
   const snap=()=>{hist.push(JSON.stringify(e));if(hist.length>100)hist.shift();fut=[]};
   // 8.07: a click fires pointerdown and focus; save one undo step, not two.
   const snapOnce=()=>{if(hist[hist.length-1]!==JSON.stringify(e))snap()};
-  const changed=()=>{try{api.changed&&api.changed()}catch(_){}};
+  const changed=()=>{vDirty=true;try{api.changed&&api.changed()}catch(_){}};
   const redraw=()=>{if(eng)eng.seek(eng.t)};
   // 8.04: keep the whole preview inside its area (the CSS cap alone let the timeline cover the bottom on smaller windows).
   const stageEl=q('.vstage'),fitPrev=()=>{const h=stageEl.clientHeight-16;if(h>0)prev.style.maxHeight=Math.max(120,h)+'px'};
-  const fitObs=new ResizeObserver(fitPrev);fitObs.observe(stageEl);
+  const fitObs=new ResizeObserver(()=>{fitPrev();vDirty=true});fitObs.observe(stageEl);
   function sizePrev(){const cw=Math.min(960,e.W),ch=Math.round(cw*e.H/e.W);prev.width=cw;prev.height=ch;ov.width=e.W;ov.height=e.H;prev.style.aspectRatio=cw+'/'+ch;eng.setTargets([{g:pg,cw,ch}]);redraw()}
   function select(type,ref){if(crop&&ref!==crop.c)cropStop(true);sel=type?{type,ref}:null;if(type==='zoom'&&tab!=='zoom')setTab('zoom');if(type==='vfx'&&tab!=='vfx')setTab('vfx');refreshProps();ovui()}
 
@@ -648,7 +682,7 @@ function mount(host,it,api){css();HK=api;
   // Start crop shows the clip's whole frame with a box over it; dragging the box or its handles sets the
   // clip's L/T/R/B crop %, which the number boxes follow. Stop crop keeps it, Cancel goes back.
   const r1=v=>Math.round(v*10)/10;
-  function cropGeom(c){const o=eng.S.els[c.id],el=o&&o.el;if(!el||!el.videoWidth)return null;const vw=el.videoWidth,vh=el.videoHeight,k=Math.min(e.W/vw,e.H/vh),fw=vw*k,fh=vh*k,fx=(e.W-fw)/2,fy=(e.H-fh)/2,cr=c.crop;
+  function cropGeom(c){const el=eng.elFor(c);if(!el||!el.videoWidth)return null;const vw=el.videoWidth,vh=el.videoHeight,k=Math.min(e.W/vw,e.H/vh),fw=vw*k,fh=vh*k,fx=(e.W-fw)/2,fy=(e.H-fh)/2,cr=c.crop;
     return{fx,fy,fw,fh,x0:fx+fw*cr.l/100,x1:fx+fw*(1-cr.r/100),y0:fy+fh*cr.t/100,y1:fy+fh*(1-cr.b/100)}}
   const cropHandles=G=>{const mx=(G.x0+G.x1)/2,my=(G.y0+G.y1)/2;return[['nw',G.x0,G.y0],['n',mx,G.y0],['ne',G.x1,G.y0],['e',G.x1,my],['se',G.x1,G.y1],['s',mx,G.y1],['sw',G.x0,G.y1],['w',G.x0,my]]};
   const CROP_CUR={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',move:'move'};
@@ -723,7 +757,12 @@ function mount(host,it,api){css();HK=api;
     }catch(err){toast('Export failed: '+(err.message||err),6000)}
     finally{exp=null;bar.hidden=true;stopB.hidden=true;try{eng.seek(0)}catch(_){}}}
   // ----- keys -----
-  const key=ev=>{if(dead||!ready||!host.isConnected||!host.offsetParent||document.querySelector('.modal'))return;if(ev.target.matches&&ev.target.matches('input,select,textarea,[contenteditable],[contenteditable] *'))return;const k=ev.key.toLowerCase();if(crop&&(k==='enter'||k==='escape')){cropStop(k==='enter');ev.preventDefault();ev.stopPropagation();return}
+  // which buttons were reached with the keyboard (Chrome's :focus-visible turns on for any focused button once a key is pressed, so it can't tell)
+  let lastInput='key';const kbdFocused=new WeakSet(),onPtr=()=>{lastInput='mouse'},onKey=()=>{lastInput='key'},onFocus=ev=>{if(ev.target&&ev.target.matches&&ev.target.matches('button,summary,[role=button],a')){if(lastInput==='key')kbdFocused.add(ev.target);else kbdFocused.delete(ev.target)}};
+  document.addEventListener('pointerdown',onPtr,true);document.addEventListener('keydown',onKey,true);host.addEventListener('focusin',onFocus);
+  const key=ev=>{if(dead||!ready||!host.isConnected||!host.offsetParent||document.querySelector('.modal'))return;if(ev.target.matches&&ev.target.matches('input,select,textarea,[contenteditable],[contenteditable] *'))return;const k=ev.key.toLowerCase();
+    // 10.1.8: Space or Enter on a button reached with the keyboard presses that button (after a mouse click, Space still plays)
+    if((k===' '||k==='enter')&&kbdFocused.has(ev.target))return;if(crop&&(k==='enter'||k==='escape')){cropStop(k==='enter');ev.preventDefault();ev.stopPropagation();return}
     if((ev.ctrlKey||ev.metaKey)&&!ev.altKey&&k==='v'){ev.preventDefault();ev.stopPropagation();api.pasteMedia?.(ev.shiftKey?'insert':'stack');return}
     if((ev.ctrlKey||ev.metaKey)&&!ev.altKey&&(k==='z'||k==='y')){ev.preventDefault();if(k==='y'||ev.shiftKey)act.redo();else act.undo()}
     else if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
@@ -741,7 +780,12 @@ function mount(host,it,api){css();HK=api;
     if(JSON.stringify(Object.assign(defFx(),e.master||{}))!==JSON.stringify(defFx()))return true;
     const known=new Set(['id','src','a','b','start','speed','vol','mute','crop','trans','afi','afo','fx','name','peaks','lane','color']);for(const [k,v] of Object.entries(c))if(!known.has(k)&&v&&!(typeof v==='object'&&!Object.keys(v).length))return true;
     return false}
-  let lkLastT=-1;function ui(){if(!ready){return}if(!sel&&!crop&&playClip()!==lastPlayClip&&!host.contains(document.activeElement&&document.activeElement.matches('input,select')?document.activeElement:null))refreshProps();if(eng.t!==lkLastT&&!eng.playing){lkLastT=eng.t;lkFollow()}if(crop&&eng.playing)cropStop(true);const r=curRange();R('time').textContent=`${fmt(eng.t)} / ${fmt(D())}`;{const pb=q('[data-a="play"]'),sb=q('[data-a="playsel"]'),pt=eng.playing&&!playRange?'Pause':'Play',st=eng.playing&&playRange?'Pause':r?'Play '+r[2]:'Play selection';if(pb.textContent!==pt)pb.textContent=pt;if(sb.textContent!==st)sb.textContent=st;sb.disabled=!r&&!(eng.playing&&playRange)}drawTl();ovDraw()}
+  let lkLastT=-1;function ui(){if(!ready){return}if(!sel&&!crop&&playClip()!==lastPlayClip&&!host.contains(document.activeElement&&document.activeElement.matches('input,select')?document.activeElement:null))refreshProps();if(eng.t!==lkLastT&&!eng.playing){lkLastT=eng.t;lkFollow()}if(crop&&eng.playing)cropStop(true);const r=curRange();{const tt=`${fmt(eng.t)} / ${fmt(D())}`,te=R('time');if(te.textContent!==tt)te.textContent=tt}{const pb=q('[data-a="play"]'),sb=q('[data-a="playsel"]'),pt=eng.playing&&!playRange?'Pause':'Play',st=eng.playing&&playRange?'Pause':r?'Play '+r[2]:'Play selection';if(pb.textContent!==pt)pb.textContent=pt;if(sb.textContent!==st)sb.textContent=st;sb.disabled=!r&&!(eng.playing&&playRange)}
+    // 10.1.8: redraw the timeline and overlay only while playing or when something may have changed (plus twice a second as a safety net)
+    const now=performance.now(),sig=[eng.t,D(),zoom,tl.clientWidth,sel&&sel.type,inT,outT,hist.length,fut.length,otool,tab,pane].join('|');
+    if(eng.playing||vDirty||sig!==lastSig||sel?.ref!==lastSelRef||now-lastDraw>500){vDirty=false;lastSig=sig;lastSelRef=sel?.ref;lastDraw=now;drawTl();ovDraw()}}
+  let vDirty=true,lastSig='',lastSelRef=null,lastDraw=0;const dirty=()=>{vDirty=true};
+  for(const t of ['pointerdown','pointermove','pointerup','input','change','click','wheel','keydown'])host.addEventListener(t,dirty,true);document.addEventListener('keydown',dirty,true);
   function tick(){if(dead)return;ui();raf=requestAnimationFrame(tick)}
   // ----- offline media (10.1.7) -----
   function offlineSrcs(){const ids=new Set((e.offline||[]).map(o=>o.c.src));return e.srcs.filter(s=>ids.has(s.id))}
@@ -771,7 +815,7 @@ function mount(host,it,api){css();HK=api;
   raf=requestAnimationFrame(tick);
   // 8.0: the side panel shows one view at a time (video, effects or drawing tools); the editor's toolbar buttons pick it.
   const showPane=k=>{if(crop&&k!=='video')cropStop(true);pane=k;qa('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==k);if(k==='effects'&&e)refreshProps()};
-  return{insertClip,get time(){return eng?.t||0},pause:()=>eng?.pause(),seek:t=>eng?.seek(t),undo:()=>act.undo(),redo:()=>act.redo(),info:q('.vinfo'),video:prev,pane:k=>{if(k)showPane(k);return pane},tool:t=>{if(t!==undefined){if(crop)cropStop(true);otool=t;if(!otool&&sel&&sel.type==='ov')select(null);ovui()}return otool},destroy(){dead=true;fitObs.disconnect();cancelAnimationFrame(raf);document.removeEventListener('keydown',key,true);if(exp)exp.cancel=true;try{rec&&rec.mr.stop()}catch(_){}if(eng)eng.destroy();pasteUrls.forEach(url=>URL.revokeObjectURL(url))},saveGif:()=>run('gif'),needsRender:()=>!!(e&&eng&&(eng.hasCam()||(e.look&&(lookOf(e).layout!=='full'||lookOf(e).bg!=='black'))||isEdited())),isEdited:()=>!!(e&&eng&&isEdited()),duration:()=>D(),
+  return{insertClip,get time(){return eng?.t||0},pause:()=>eng?.pause(),seek:t=>eng?.seek(t),undo:()=>act.undo(),redo:()=>act.redo(),info:q('.vinfo'),video:prev,pane:k=>{if(k)showPane(k);return pane},tool:t=>{if(t!==undefined){if(crop)cropStop(true);otool=t;if(!otool&&sel&&sel.type==='ov')select(null);ovui()}return otool},destroy(){dead=true;fitObs.disconnect();cancelAnimationFrame(raf);document.removeEventListener('keydown',key,true);document.removeEventListener('pointerdown',onPtr,true);document.removeEventListener('keydown',onKey,true);document.removeEventListener('keydown',dirty,true);if(exp)exp.cancel=true;try{rec&&rec.mr.stop()}catch(_){}if(eng)eng.destroy();pasteUrls.forEach(url=>URL.revokeObjectURL(url))},saveGif:()=>run('gif'),needsRender:()=>!!(e&&eng&&(eng.hasCam()||(e.look&&(lookOf(e).layout!=='full'||lookOf(e).bg!=='black'))||isEdited())),isEdited:()=>!!(e&&eng&&isEdited()),duration:()=>D(),
     renderBlob:async()=>{if(exp)throw new Error('An export is already running.');exp={cancel:false};eng.pause();const bar=R('prog'),fill=bar.firstElementChild,stopB=q('[data-a="stop"]');bar.hidden=false;stopB.hidden=false;fill.style.width='0';
       try{return await eng.exportRun((e.W&~1)||2,(e.H&~1)||2,p=>{fill.style.width=Math.round(p*100)+'%'},exp)}finally{exp=null;bar.hidden=true;stopB.hidden=true;try{await eng.seek(0)}catch(_){}}},grab:()=>eng?eng.snapshot(e.W,e.H):null,getProject:()=>e,
     // 10.1.7: read-only view of editor state for the automated tests
