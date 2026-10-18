@@ -41,7 +41,7 @@ async 'F9 F5 F16 video Save writes the visible edit'(){await QA.openVideo(3);con
   check('F16 long caption stays inside the picture (no box at the edges)',dark===0,dark+'/'+tot+' edge samples dark');
   let mid=0;for(let y=Math.round(H*.6);y<H;y+=2){const p=g.getImageData(W>>1,y,1,1).data;if(p[0]+p[1]+p[2]<150)mid++}check('F16 the caption is drawn (box present mid-frame)',mid>3,'dark mid samples '+mid);
   // cancelled render: nothing written
-  __saved.length=0;__toasts.length=0;it.savedPath=null;T().save();await sleep(400);document.querySelector('[data-a="stop"]').click();await sleep(1200);
+  __saved.length=0;__toasts.length=0;it.savedPath=null;T().save();/* 10.1.9: saving is faster than real time, so press Cancel as soon as it shows */{const t0=performance.now();let b;while(!(b=document.querySelector('[data-a="stop"]'))||b.hidden){if(performance.now()-t0>3000)break;await sleep(5)}b&&b.click()}await sleep(1200);
   check('F9 Cancel during Save writes nothing',__saved.length===0&&__toasts.some(t=>/cancelled/i.test(t)),__toasts.join(' | '))},
 async 'F4 F6 F7 video side panel'(){if(!(T().vid&&T().vid._ctl))await QA.openVideo(2);const vs=document.querySelector('.vside');document.querySelector('[data-tab="vfx"]').click();await sleep(150);
   const ic=[...document.querySelectorAll('[data-vfx]')].map(b=>b.querySelector('svg')?b.querySelector('svg').innerHTML:'');check('F7 all 12 visual effects have an icon',ic.length===12&&ic.every(Boolean),ic.filter(Boolean).length+'/'+ic.length);
