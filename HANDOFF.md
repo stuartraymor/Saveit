@@ -215,6 +215,8 @@ The owner sometimes receives folders from outside reviewers or other AI assistan
 | `video-editor-tests.cjs` | 30 + todo | video editor bugs from `VIDEO-EDITOR-REVIEW-10.1.6.md`. Checks marked todo (for example `[10.1.8]`) cover bugs planned for a later version; they print TODO-FAIL/TODO-PASS and don't fail the run. Promote a todo check to required in the version that fixes it. The editor exposes `__T.vid._ctl._dbg` (selection, In/Out, engine, actions) for these tests. |
 | `audio-pitch-tests.cjs` | 7 + the 82-check regression | pitch/speed checks; **the "full browser regression suite" (`ui-tests.js`, 82 checks) runs from here**: `SAVEIT_QA_URL=http://127.0.0.1:8944 node tests/audio-pitch-tests.cjs` |
 
+**Real-Electron callout typing:** `node tests/native-callout1111.cjs <electron.exe> app <scratch folder>` (16 checks: letters visible while typing for every Fill and Quick style; long text stays in view).
+
 **Real-Electron clipboard:** `node tests/native-clipboard1110.cjs <electron.exe> app <scratch folder>` (9 checks with the real Windows clipboard; it overwrites the clipboard). Since 10.1.10, editable annotations are kept in memory (`annoClip`, matched by `imgSig` of the picture read back from the clipboard), not as JSON text on the clipboard.
 
 **Real-Electron video save:** `node tests/native-video119.cjs <electron.exe> app <scratch folder>` (5 checks: record a VP9 take, Cut out In–Out, Save as MP4 and WebM through the real dialog; frames, frame rate and length measured with ffprobe when `FFPROBE` or the TasiaCraft copy is present). Saving edited video is frame by frame since 10.1.9 (`app/vexport.js` + `exportFrames` in vedit2.js); the old real-time path remains as `exportRealtime`, the fallback.
