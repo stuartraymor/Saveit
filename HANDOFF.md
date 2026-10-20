@@ -107,7 +107,7 @@ app/                      the whole application (this folder is what gets instal
   saveit-steps.exe        native Step Capture helper (built from native/saveit-steps.cs)
 native/saveit-steps.cs    source of that helper (C#, builds with the compiler that ships with Windows)
 tests/                    all automated tests and the harness (section 7)
-tools/                    version.js (bump versions), update-installed.ps1 (back up + install), build-steps-helper.ps1, build-setup.ps1 (builds Saveit-Setup.exe), sign-release.js (sign a release zip), make-signing-key.js
+tools/                    version.js (bump versions), update-installed.ps1 (back up + install), build-steps-helper.ps1, build-setup.ps1 (builds Saveit-Setup.exe), build-updating.ps1 (builds app\saveit-updating.exe, the update progress window), sign-release.js (sign a release zip), make-signing-key.js
 install.ps1, Install.cmd, Reinstall.cmd, Uninstall.cmd, uninstall.ps1    the installer
 CHANGES-<version>.md      one release note per version, back to 3.6.0 (the history of every decision)
 PLAN-*.md, VALIDATION-*.md, INSPECTION-*.md   older planning and validation records
