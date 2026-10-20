@@ -1,7 +1,7 @@
 {
   "name": "saveit",
   "productName": "Saveit",
-  "version": "10.2.6",
+  "version": "10.2.7",
   "description": "Screen capture, recording and markup",
   "main": "main.js"
 }
