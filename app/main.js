@@ -125,6 +125,8 @@ ipcMain.on('widget-open', (e, opts, logo) => {
 });
 ipcMain.on('widget-opts', (e, o) => { widgetOpts = o; if (win) win.webContents.send('widget-opts', o); });
 ipcMain.on('widget-go', (e, o) => { widgetOpts = o; reopenWidget = true; closeWidget(); if (win) win.webContents.send('widget-go', o); });
+// The red button on the widget: put the bar away without opening the editor. Saveit keeps running (tray icon, Print Screen).
+ipcMain.on('widget-hide', e => { if (!widgetWin || widgetWin.isDestroyed() || e.sender !== widgetWin.webContents) return; reopenWidget = false; closeWidget(); });
 ipcMain.on('widget-editor', () => {
   // Bring the editor back with its logo where the widget's logo is (a maximized editor stays put).
   if (win && editorLogo && widgetWin && !widgetWin.isDestroyed() && !win.isMaximized() && !win.isFullScreen()) {

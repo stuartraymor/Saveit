@@ -22,6 +22,9 @@ button.go{background:#e5483b;border-color:#e5483b;color:#fff}
 .seg{display:flex;border:1px solid #3a3f45;border-radius:8px;overflow:hidden}
 .seg button{border:0;border-radius:0;background:transparent;color:#b4bac0}
 .seg button[aria-pressed=true]{background:#2db3a0;color:#06211d}
+#hide{position:absolute;right:5px;bottom:5px;width:16px;height:16px;padding:0;border-radius:50%;border:0;background:#e5483b;color:#fff;font-size:12px;line-height:16px;font-weight:700;display:grid;place-items:center}
+#hide:hover:not(:disabled){background:#ff5a4c;border:0}
+.bar{position:relative;padding-right:28px}
 [hidden]{display:none!important}
 </style></head>
 <body>
@@ -35,6 +38,7 @@ button.go{background:#e5483b;border-color:#e5483b;color:#fff}
   <span id="imgOpts" style="display:contents"><label>Effect <select id="fxSel"></select></label><button id="fxGear" title="Settings for this effect" aria-label="Effect settings">⚙</button></span>
   <label>Delay <select id="delay"><option value="0">None</option><option value="3">3 s</option><option value="5">5 s</option><option value="10">10 s</option></select></label>
   
+  <button id="hide" type="button" title="Hide this bar (Saveit keeps running; click the tray icon to open the editor)" aria-label="Hide the capture bar">&times;</button>
 </div>
 <script src="fxdefs.js"></script><script src="fxui.js"></script><link rel="stylesheet" href="capbar.css"><script src="devices.js"></script><script src="audiobar.js"></script><script src="camdraw.js"></script>
 <script>
@@ -68,6 +72,6 @@ addEventListener('storage',e=>{if(e.key!=='saveit.cam')return;const id=CAMDRAW.l
   r1.append(document.querySelector('.seg'),areaL,curL,clipL);if(vmode==='video'){r1.append(delayL);r2.append($('vidOpts'))}else r2.append($('imgOpts'),delayL);r2.append(vmode==='video'?$('imgOpts'):$('vidOpts'));r1.append(E.mic1,E.add);r2.append(E.mic2,E.sys)};
  for(const b of [E.add,E.mic2.querySelector('.amic-x')])b.addEventListener('click',()=>setTimeout(resize,30));
  const labelsBefore=labels;labels=function(){labelsBefore();place()};place()}navigator.mediaDevices.addEventListener('devicechange',refreshDevices);
-$('ok').onclick=()=>window.widget.go(collect());$('ed').onclick=()=>window.widget.editor();
+$('ok').onclick=()=>window.widget.go(collect());$('ed').onclick=()=>window.widget.editor();$('hide').onclick=()=>window.widget.hide();
 addEventListener('keydown',e=>{if(e.key==='Escape')window.widget.editor()});
 </script></body></html>
