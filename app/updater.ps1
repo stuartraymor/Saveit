@@ -24,6 +24,9 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 function Log([string]$m) { try { Add-Content -Path $LogFile -Value ('{0:yyyy-MM-dd HH:mm:ss} {1}' -f (Get-Date), $m) } catch { } }
+# Progress for the "Updating Saveit" window (saveit-updating.exe reads these lines; harmless when nothing does)
+function Progress([int]$pct, [string]$text) { try { [Console]::Out.WriteLine("##P $pct $text"); [Console]::Out.Flush() } catch { } }
+function Problem([string]$text) { try { [Console]::Out.WriteLine("##E $text"); [Console]::Out.Flush() } catch { } }
 function Write-Result([string]$status, [string]$message, [string]$installed) {
   $o = [ordered]@{ status = $status; message = $message; version = $installed; attempted = $NewVersion; previous = $OldVersion; log = $LogFile; at = (Get-Date).ToString('o') }
   try { New-Item -ItemType Directory -Path (Split-Path $ResultFile -Parent) -Force | Out-Null; ($o | ConvertTo-Json) | Set-Content -Path $ResultFile -Encoding UTF8 } catch { Log "could not write the result file: $_" }
@@ -108,6 +111,7 @@ try {
 
   # ---- 1. wait for Saveit to close by itself (never forced) ----
   Log 'waiting for Saveit to close'
+  Progress 3 'Waiting for Saveit to close...'
   $deadline = (Get-Date).AddSeconds($WaitSeconds)
   while ((Saveit-Processes).Count -gt 0 -and (Get-Date) -lt $deadline) {
     # Saveit asks for a cancel when it did not close; nothing has been changed at this point
@@ -119,6 +123,7 @@ try {
     exit 0
   }
   Log 'Saveit has closed'
+  Progress 15 'Backing up your current version...'
 
   # ---- 2. back up the installed version and check the backup ----
   if (Test-Path $backup) { Remove-Item $backup -Recurse -Force }
@@ -128,6 +133,7 @@ try {
   Set-Content -Path (Join-Path $backup 'version.txt') -Value $OldVersion
   if ((Tree-Differences $appCur (Join-Path $backup 'app')) -ne 0) { throw 'The backup of the current version could not be verified.' }
   Log 'backup verified'
+  Progress 35 'Installing the new version...'
 
   # ---- 3. copy the new app next to the old one, check it, then swap ----
   foreach ($d in @($appTmp, $appOld, $appBad)) { if (Test-Path $d) { Remove-Item $d -Recurse -Force } }
@@ -137,19 +143,22 @@ try {
   try { Rename-Retry $appTmp 'app' } catch { Rename-Item -LiteralPath $appOld -NewName 'app' -ErrorAction SilentlyContinue; throw }
   $swapped = $true
   Log 'new app in place'
+  Progress 65 'Checking the new version...'
   foreach ($f in $support) { $s = Join-Path $StageRoot $f; if (Test-Path $s) { Copy-Item $s (Join-Path $InstallDir $f) -Force } }
   $ni = Join-Path $appNew 'icon.ico'; if (Test-Path $ni) { Copy-Item $ni (Join-Path $InstallDir 'icon.ico') -Force }
   Set-RegVersion $NewVersion
 
   # ---- 4. start the new version and wait for it to say it is running ----
   Remove-Item $HealthFile -Force -ErrorAction SilentlyContinue
+  Progress 75 "Starting Saveit $NewVersion..."
   $proc = Start-Saveit $true
   Log "started the new version (pid $($proc.Id))"
-  $healthy = $false; $end = (Get-Date).AddSeconds($HealthSeconds)
+  $healthy = $false; $end = (Get-Date).AddSeconds($HealthSeconds); $lastPp = 0
   while ((Get-Date) -lt $end) {
     if (Test-Path $HealthFile) { try { $h = Get-Content -LiteralPath $HealthFile -Raw | ConvertFrom-Json; if ($h.version -eq $NewVersion) { $healthy = $true; break } } catch { } }
     if ($proc.HasExited) { break }
     Start-Sleep -Milliseconds 400
+    $pp = [int][Math]::Min(97, 75 + 22 * ((Get-Date) - $end.AddSeconds(-$HealthSeconds)).TotalSeconds / [Math]::Max(1, $HealthSeconds)); if ($pp -ne $lastPp) { $lastPp = $pp; Progress $pp "Starting Saveit $NewVersion..." }
   }
   if ($healthy) {
     Remove-Item $appOld -Recurse -Force -ErrorAction SilentlyContinue
@@ -160,6 +169,7 @@ try {
       Remove-Item (Join-Path $stageDir "Saveit-$NewVersion.zip") -Force -ErrorAction SilentlyContinue
     } catch { }
     Write-Result 'ok' "Saveit was updated to version $NewVersion and is running." $NewVersion
+    Progress 100 'Done'
     exit 0
   }
   throw 'The new version did not start properly.'
@@ -167,6 +177,7 @@ try {
 catch {
   $why = $_.Exception.Message
   Log "FAILED: $why"
+  Progress 85 'Something went wrong. Putting your previous version back...'
   $installed = $OldVersion
   try {
     if ($swapped) { Stop-NewInstance; Restore-Previous }
@@ -174,10 +185,12 @@ catch {
     if ($swapped) { Write-Result 'rolled-back' "The update to $NewVersion could not be completed ($why). Saveit put back version $OldVersion and it is running normally." $OldVersion }
     else { Write-Result 'unchanged' "The update to $NewVersion could not be installed ($why). Nothing was changed, and version $OldVersion is running normally." $OldVersion }
     $again = Start-Saveit $false
+    Problem "The update to $NewVersion could not be completed, so Saveit is on version $OldVersion and has been opened again."
     Log "started the previous version (pid $($again.Id))"
   }
   catch {
     $installed = ''
+    Problem "The update could not be completed and the previous version could not be put back automatically. Run Saveit-Setup.exe again to repair it; your library and settings are untouched."
     Log "RECOVERY PROBLEM: $($_.Exception.Message)"
     Write-Result 'failed' "The update to $NewVersion failed ($why) and the previous version could not be restored automatically. A backup of version $OldVersion is in $backup. Re-run Install.cmd from a downloaded release to repair Saveit; your library and settings are untouched." $installed
   }

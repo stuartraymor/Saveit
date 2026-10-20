@@ -178,9 +178,13 @@ function startUpdater(staged, userDataDir, currentVersion) {
   // test profiles only: shorter waits so the automated tests do not take minutes
   if (TEST_MODE) { const n = v => /^\d{1,3}$/.test(v || '') ? v : null; if (n(process.env.SAVEIT_UPDATE_HEALTH_SECONDS)) args.push('-HealthSeconds', n(process.env.SAVEIT_UPDATE_HEALTH_SECONDS)); if (n(process.env.SAVEIT_UPDATE_WAIT_SECONDS)) args.push('-WaitSeconds', n(process.env.SAVEIT_UPDATE_WAIT_SECONDS)); }
   const env = { ...process.env }; delete env.SAVEIT_UPDATE_HEALTH;
+  // The "Updating Saveit" window (a copy runs from the staging folder, because the install folder is being swapped). It runs the updater itself, hidden, and shows progress.
+  // If it is not there (a development copy), the updater is started directly as before.
+  let ui = null; try { const src = path.join(__dirname, 'saveit-updating.exe'); if (fs.existsSync(src)) { ui = path.join(staged.stage, 'saveit-updating.exe'); fs.copyFileSync(src, ui); } } catch (_) { ui = null; }
   // Started through cmd's "start" so the updater is NOT a child of Saveit: it must outlive Saveit, and it is not taken down with it.
   const quote = a => '"' + String(a).replace(/"/g, '') + '"';
-  const child = spawn('cmd.exe', ['/d', '/s', '/c', '"start "" /b powershell.exe ' + args.map(quote).join(' ') + '"'], { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true, env });
+  const launch = ui ? 'start "" /b ' + quote(ui) + ' ' + args.slice(5).map(quote).join(' ') : 'start "" /b powershell.exe ' + args.map(quote).join(' ');
+  const child = spawn('cmd.exe', ['/d', '/s', '/c', '"' + launch + '"'], { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true, env });
   child.unref();
   return { child, cancel };
 }
