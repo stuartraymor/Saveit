@@ -9,8 +9,9 @@
 // To make a new key pair: node tools/make-signing-key.js <folder>   (then put the printed public key in app/updater.js and publish a release signed with the OLD key first).
 const fs = require('fs'), path = require('path'), crypto = require('crypto'), os = require('os');
 const U = require('../app/updater.js');
-const args = process.argv.slice(2), zipPath = args.find(a => !a.startsWith('--') && a !== args[args.indexOf('--key') + 1]);
-const keyArg = args.includes('--key') ? args[args.indexOf('--key') + 1] : null;
+const args = process.argv.slice(2), keyAt = args.indexOf('--key');
+const keyArg = keyAt >= 0 ? args[keyAt + 1] : null;
+const zipPath = args.find((a, i) => !a.startsWith('--') && i !== keyAt + 1 || (keyAt < 0 && !a.startsWith('--')));
 const keyPath = keyArg || path.join(os.homedir(), '.saveit-release-signing', 'release-ed25519-private.pem');
 if (!zipPath || !fs.existsSync(zipPath)) { console.error('Give the release zip, for example: node tools/sign-release.js Saveit-10.2.0.zip'); process.exit(1); }
 const m = /^Saveit-(\d+\.\d+\.\d+)\.zip$/.exec(path.basename(zipPath));
