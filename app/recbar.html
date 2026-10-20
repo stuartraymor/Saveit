@@ -16,7 +16,7 @@ button.stop{background:#e5483b;border-color:#e5483b;color:#fff}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 </style></head>
 <body>
-<div class="bar" id="bar"><span class="dot"></span><span class="t" id="t">00:00</span><span class="info" id="info"></span><span class="sp"></span><button id="pause">Pause</button><button class="stop" id="stop">Stop</button></div>
+<div class="bar" id="bar"><span class="dot"></span><span class="t" id="t" title="Drag the timer or an empty part of this bar to move it to another screen">00:00</span><span class="info" id="info"></span><span class="sp"></span><button id="pause">Pause</button><button class="stop" id="stop">Stop</button></div>
 <script>
 let secs=0,paused=false;
 const $=id=>document.getElementById(id),t=$('t'),bar=$('bar'),pauseBtn=$('pause'),stopBtn=$('stop');
