@@ -32,6 +32,24 @@ await ev(()=>{
   window.change=(sel,val)=>{const el=document.querySelector(sel);if(el.type==='checkbox')el.checked=val;else el.value=val;el.dispatchEvent(new Event('change',{bubbles:true}))};
 });
 
+// ---------- 10.2.9 ----------
+await test('10.2.9 adaptive menus and live In Out fields',async()=>{
+ await ev(async()=>{await openV();await D().eng.seek(.7);D().act.setin()});await QAnoop();
+ async function QAnoop(){await page.waitForTimeout(100)}
+ near(+(await page.locator('[data-r="in"]').inputValue()),.7,.03,'Set In field');
+ await ev(async()=>{await D().eng.seek(2.2);D().act.setout()});await QAnoop();near(+(await page.locator('[data-r="out"]').inputValue()),2.2,.03,'Set Out field');
+ const tl=page.locator('.vtl'),box=await tl.boundingBox();
+ const xx=t=>11+t/3*(box.width-22);
+ await page.mouse.move(box.x+xx(.7),box.y+9);await page.mouse.down();await page.mouse.move(box.x+xx(1),box.y+9,{steps:8});await page.mouse.up();await QAnoop();
+ const live=await ev(()=>({v:D().inT,field:+document.querySelector('[data-r="in"]').value}));near(live.v,live.field,.01,'drag sync');assert.ok(live.v>.85,'marker did not move');
+ await tl.click({button:'right',position:{x:box.width/2,y:45}});await page.getByRole('menuitem',{name:'Mute video audio',exact:true}).click();assert.equal(await ev(()=>P().clips[0].mute),true);
+ await tl.click({button:'right',position:{x:box.width/2,y:45}});await page.getByRole('menuitem',{name:'Undo',exact:true}).click();assert.equal(await ev(()=>P().clips[0].mute),false);
+ await ev(()=>{const c=JSON.parse(JSON.stringify(P().clips[0]));c.id='menu-audio';P().aud.push(c);D().select('aud',c)});await QAnoop();await tl.click({button:'right',position:{x:box.width/2,y:90}});assert.equal(await page.getByRole('menuitem',{name:'Mute audio',exact:true}).count(),1);assert.equal(await page.getByRole('menuitem',{name:'Reset crop',exact:true}).count(),0);await page.keyboard.press('Escape');
+ await ev(()=>{const o=__T.newShape('rect',50,50);Object.assign(o,{x2:100,y2:100,t0:0,t1:3});P().ovs.push(o);D().select('ov',o)});await QAnoop();
+ await ev(()=>{const t=document.querySelector('.vtl');const r=t.getBoundingClientRect();t.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:r.left+30,clientY:r.top+r.height-16}))});
+ assert.equal(await page.getByRole('menuitem',{name:'Mute video audio',exact:true}).count(),0);await page.keyboard.press('Escape');
+ const overlay=page.locator('.vprev'),ob=await overlay.boundingBox();await overlay.click({button:'right',position:{x:75/640*ob.width,y:75/360*ob.height}});assert.equal(await ev(()=>D().sel?.type),'ov');assert.equal(await page.getByRole('menuitem',{name:'Mute audio',exact:true}).count(),0);await page.screenshot({path:path.join(out,'on-screen-context-menu.png')});await page.keyboard.press('Escape');return live;
+});
 // ---------- 10.1.7 ----------
 await test('B5 clips whose media is missing are kept (offline), not deleted on the next edit',async()=>{const r=await ev(async()=>{
   const it=await openV(it=>{it.edit={v:2,srcs:[{id:'s0',self:true,name:'Video',kind:'video'},{id:'s9',name:'Lost music',kind:'audio'}],clips:[{id:'c1',src:'s0',a:0,b:2.8,start:0,speed:1,vol:1}],aud:[{id:'a1',src:'s9',a:0,b:2,start:.5,speed:1,vol:1}],nextId:200,W:640,H:360};it._edBlobs={}});

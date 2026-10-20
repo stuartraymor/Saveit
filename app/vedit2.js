@@ -492,7 +492,7 @@ function mount(host,it,api){css();HK=api;
   const PALETTE=['#2db3a0','#5aa2ff','#b07cf5','#f08a3c','#4cc16b','#e65f8a'];
   const ovName=o=>({arrow:'Arrow',rect:'Box',ellipse:'Circle',line:'Line',highlight:'Highlight',text:'Text',step:'Step '+(o.n||''),stamp:'Stamp',blur:'Blur'})[o.t]||'Item';
   let lastD=0;
-  function drawTl(){{const d=D();if(Math.abs(outT-lastD)<.02||outT>d)outT=d;if(inT>outT-.1)inT=0;lastD=d}const dpr=devicePixelRatio||1,lay=layout();tl.style.width=Math.max(1,zoom)*100+'%';tl.style.height=lay.H+'px';const W=tl.clientWidth,H=lay.H;if(!W)return;
+  function drawTl(){{const d=D();if(Math.abs(outT-lastD)<.02||outT>d)outT=d;if(inT>outT-.1)inT=0;lastD=d}syncRange();const dpr=devicePixelRatio||1,lay=layout();tl.style.width=Math.max(1,zoom)*100+'%';tl.style.height=lay.H+'px';const W=tl.clientWidth,H=lay.H;if(!W)return;
     if(tl.width!==Math.round(W*dpr)||tl.height!==Math.round(H*dpr)){tl.width=Math.round(W*dpr);tl.height=Math.round(H*dpr)}
     const g=tl.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
     const circ=(x,y,r,fill,stroke)=>{g.beginPath();g.arc(x,y,r,0,7);g.fillStyle=fill;g.fill();g.lineWidth=2;g.strokeStyle=stroke;g.stroke()};
@@ -548,7 +548,24 @@ function mount(host,it,api){css();HK=api;
   tl.addEventListener('pointerup',()=>{const d=tdrag;tdrag=null;if(d&&d.moved){changed();eng.seek(eng.t);refreshProps();if(d.it&&d.it.type==='cap')caplist();if(d.it&&d.it.type==='ov')ovui();if(d.it&&d.it.type==='vfx')vfxui()}});
   tl.parentElement.addEventListener('wheel',ev=>{if(!ev.ctrlKey||!ready)return;ev.preventDefault();zoom=ev.deltaY<0?Math.min(16,zoom*1.25):Math.max(1,zoom/1.25);if(zoom<1.05)zoom=1;keepHead()},{passive:false});
 
-  tl.oncontextmenu=ev=>api.mediaMenu?.(ev);
+  let contextMenu=null;
+  function closeContext(){contextMenu?.remove();contextMenu=null}
+  function showContext(ev,target){if(!ready)return;ev.preventDefault();ev.stopPropagation();closeContext();eng.pause();select(target?.type||null,target?.ref);const ty=target?.type,c=target?.ref,rows=[];
+    const add=(label,fn,enabled=true)=>rows.push({label,fn,enabled});
+    if(c){add('Settings',()=>{if(ty==='ov'){showPane('tools')}else{showPane('video');setTab(ty==='aud'?'audio':ty==='cap'?'caps':ty==='zoom'?'zoom':ty==='vfx'?'vfx':'clip')}});
+      if(ty==='clip'||ty==='aud'){add(c.mute?'Unmute '+(ty==='clip'?'video audio':'audio'):'Mute '+(ty==='clip'?'video audio':'audio'),()=>{snap();c.mute=!c.mute;eng.sync();refreshProps();changed()});add('Split at playhead',()=>act.split(),eng.t>c.start+MIN&&eng.t<clipEnd(c)-MIN);add('Duplicate',()=>act.dupclip());if(ty==='clip')add('Reset crop',()=>act.cropreset());else add('Reset sound effects',()=>{snap();c.fx=defFx();eng.refreshFx();showFx();changed()})}
+      else {add('Duplicate',()=>{if(ty==='ov')act.odup();else if(ty==='vfx')act.vfxdup();else{snap();const copy=clone(c);copy.id=newId(e,'i');e[SEL_LIST[ty]].push(copy);select(ty,copy);changed()}})}
+      add('Delete',()=>act.del());if(ty==='clip')add('Delete (keep gap)',()=>act.delgap());
+    }
+    add('Add video…',()=>act.addvid());add('Add audio…',()=>act.addaud());add('Add caption',()=>{showPane('video');setTab('caps');act.addcap()});add('Set In at playhead',()=>act.setin());add('Set Out at playhead',()=>act.setout());add('Reset In/Out range',()=>{inT=0;outT=D();syncRange()});add('Undo',()=>act.undo(),hist.length>0);add('Redo',()=>act.redo(),fut.length>0);
+    if(!c)add('Reset video edit',()=>act.reset());
+    const menu=document.createElement('div');contextMenu=menu;menu.className='vcontext';menu.setAttribute('role','menu');Object.assign(menu.style,{position:'fixed',zIndex:100000,background:'#20262c',color:'#fff',border:'1px solid #65717c',borderRadius:'8px',padding:'5px',boxShadow:'0 6px 24px #0008',minWidth:'210px',maxHeight:'85vh',overflowY:'auto'});
+    for(const row of rows){const b=document.createElement('button');b.type='button';b.textContent=row.label;b.setAttribute('role','menuitem');b.disabled=!row.enabled;Object.assign(b.style,{display:'block',width:'100%',textAlign:'left',padding:'7px 12px',border:0,borderRadius:'4px',background:'transparent',color:'inherit',opacity:row.enabled?'1':'.4',cursor:'pointer'});b.onmouseenter=()=>b.style.background='#435365';b.onmouseleave=()=>b.style.background='transparent';b.onclick=()=>{closeContext();row.fn();vDirty=true};menu.append(b)}
+    host.append(menu);const r=menu.getBoundingClientRect();menu.style.left=Math.max(4,Math.min(ev.clientX,innerWidth-r.width-4))+'px';menu.style.top=Math.max(4,Math.min(ev.clientY,innerHeight-r.height-4))+'px';const buttons=[...menu.querySelectorAll('button:not(:disabled)')];buttons[0]?.focus();menu.onkeydown=e=>{if(e.key==='Escape'){e.stopPropagation();closeContext();tl.focus()}else if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const i=buttons.indexOf(document.activeElement);buttons[(i+(e.key==='ArrowDown'?1:buttons.length-1))%buttons.length]?.focus()}};
+  }
+  host.addEventListener('pointerdown',ev=>{if(contextMenu&&!contextMenu.contains(ev.target))closeContext()},true);
+  tl.oncontextmenu=ev=>{const r=tl.getBoundingClientRect(),h=hitTl(ev.clientX-r.left,ev.clientY-r.top);showContext(ev,h.it)};
+  prev.oncontextmenu=ov.oncontextmenu=ev=>{const p=ovPt(ev),o=hitOv(p.x,p.y,p.k);showContext(ev,o?{type:'ov',ref:o}:null)};
   function insertGap(at,len){for(const key of ['clips','aud']){const right=[];for(const c of e[key]){const end=clipEnd(c);if(c.start>=at)c.start+=len;else if(end>at+.000001){const b=clone(c);b.id=newId(e,key==='clips'?'c':'a');b.a=c.a+(at-c.start)*(c.speed||1);b.start=at+len;b.afi=0;if(b.trans)b.trans={type:'none'};c.b=b.a;c.afo=0;right.push(b)}}e[key].push(...right)}
     for(const key of ['caps','ovs','zooms','vfx']){const right=[];for(const f of e[key]){if(f.t0>=at){f.t0+=len;f.t1+=len}else if(f.t1>at){const b=clone(f);b.id=newId(e,'i');b.t0=at+len;b.t1+=len;f.t1=at;right.push(b)}}e[key].push(...right)}}
   async function insertClip(media,mode='stack',at=eng?.t||0){if(!ready||dead||exp||pasteBusy)throw Error('Wait until the video editor is ready.');pasteBusy=true;const url=URL.createObjectURL(media.blob);let committed=false;try{const meta=await loadMeta(url);if(dead)throw Error('The video editor was closed.');eng.pause();at=clamp(at,0,D());snap();if(mode==='insert')insertGap(at,meta.dur);const id=newId(e,'s');e.srcs.push({id,name:media.name||'Pasted video',kind:'video'});it._edBlobs[id]=media.blob;rt.src[id]={url,blob:media.blob,dur:meta.dur,w:meta.w,h:meta.h};pasteUrls.add(url);committed=true;
@@ -569,7 +586,7 @@ function mount(host,it,api){css();HK=api;
     cropstart(){cropStart()},cropstop(){cropStop(true)},cropcancel(){cropStop(false)},cropreset(){cropReset()},
     tog(){host.classList.toggle('vmin');q('[data-a="tog"]').textContent=host.classList.contains('vmin')?'▴ Show timeline':'▾ Hide timeline';requestAnimationFrame(()=>{sizePrev&&sizePrev();drawTl()})},mplay(){if(eng.playing)eng.pause();else{playRange=null;eng.unlock();eng.play()}},mrestart(){eng.pause();playRange=null;eng.seek(0);eng.unlock();eng.play()},
     play(){togglePlay()},playsel(){playSel()},playall(){playAll()},zin(){zoom=Math.min(16,zoom*1.6);keepHead()},zout(){zoom=Math.max(1,zoom/1.6);if(zoom<1.05)zoom=1;keepHead()},
-    setin(){select(null);inT=Math.min(eng.t,outT-.1)},setout(){select(null);outT=Math.max(eng.t,inT+.1)},
+    setin(){select(null);inT=clamp(eng.t,0,outT-.1);syncRange()},setout(){select(null);outT=clamp(eng.t,inT+.1,D());syncRange()},
     split(){const t=eng.t,targets=selClip()?[sel]:[...e.clips.map(c=>({type:'clip',ref:c})),...e.aud.map(c=>({type:'aud',ref:c}))];let n=0;snap();
       let skipped=0;for(const tg of targets){const c=tg.ref;if(tg.type==='clip'&&e.clips.some(o=>o!==c&&o.start<t&&clipEnd(o)>t)){skipped++;continue}if(t>c.start+MIN&&t<clipEnd(c)-MIN){const sp=c.speed||1,c2=clone(c);c2.id=newId(e,tg.type==='clip'?'c':'a');c2.a=c.a+(t-c.start)*sp;c2.start=t;c2.afi=0;c2.trans={type:'none'};c.b=c2.a;c.afo=0;(tg.type==='clip'?e.clips:e.aud).push(c2);n++}}
       if(!n){hist.pop();toast(skipped?'The playhead is inside a transition. Move it outside the change between clips to split.':'Move the playhead inside a clip first.');return}eng.sync();redraw();changed()},
@@ -788,7 +805,7 @@ function mount(host,it,api){css();HK=api;
     const o=selOv(),row=R('osel');row.hidden=!o;if(o){R('olbl').textContent=ovName(o);R('of').value=o.t0.toFixed(1);R('ot2').value=o.t1.toFixed(1)}}
   const hitOv=(x,y,k)=>{const tol=10*k;for(const s of activeOvs().reverse()){const b=HK.bbox(s);if(x>=b.x-tol&&x<=b.x+b.w+tol&&y>=b.y-tol&&y<=b.y+b.h+tol)return s}return null};
   const hitHandle=(s,x,y,k)=>{for(const [h,hx,hy] of HK.handles(s))if(Math.abs(x-hx)<9*k&&Math.abs(y-hy)<9*k)return h;return null};
-  ov.addEventListener('pointerdown',ev=>{if(crop&&ready){cropDown(ev);return}
+  ov.addEventListener('pointerdown',ev=>{if(ev.button!==0)return;if(crop&&ready){cropDown(ev);return}
     if(zedit()&&ready){ev.preventDefault();eng.pause();ov.setPointerCapture(ev.pointerId);const z=selZoom(),p=ovPt(ev),h=z.w*e.H/e.W,tol=12*p.k;snap();
       const cn=[[z.x,z.y,z.x+z.w,z.y+h],[z.x+z.w,z.y,z.x,z.y+h],[z.x,z.y+h,z.x+z.w,z.y],[z.x+z.w,z.y+h,z.x,z.y]].find(([cx,cy])=>Math.abs(p.x-cx)<=tol&&Math.abs(p.y-cy)<=tol);
       if(cn)zdrag={mode:'size',ax:cn[2],ay:cn[3]};else if(p.x>z.x&&p.x<z.x+z.w&&p.y>z.y&&p.y<z.y+h)zdrag={mode:'move',lx:p.x,ly:p.y};else zdrag={mode:'size',ax:p.x,ay:p.y};zdrag.moved=false;return}if(!otool||!ready)return;ev.preventDefault();ov.setPointerCapture(ev.pointerId);const {x,y,k}=ovPt(ev),t=eng.t;eng.pause();
@@ -809,6 +826,7 @@ function mount(host,it,api){css();HK=api;
   R('ocol').addEventListener('pointerdown',()=>{if(selOv())snapOnce()});R('ocol').oninput=()=>{HK.setStyle&&HK.setStyle('stroke',R('ocol').value);const o=selOv();if(o){o.c=R('ocol').value;eng.render()}};
   R('owid').onchange=()=>{const w=Math.max(1,+R('owid').value||6);HK.setStyle&&HK.setStyle('width',w);const o=selOv();if(o){snap();o.w=w*Math.max(1,e.H/720);o._w=null;eng.render()}};
   R('of').onchange=()=>{const o=selOv();if(o){snap();o.t0=clamp(+R('of').value||0,0,o.t1-.1);changed()}};R('ot2').onchange=()=>{const o=selOv();if(o){snap();o.t1=Math.max(o.t0+.1,+R('ot2').value||0);changed()}};
+  function syncRange(){for(const [key,value] of [['in',inT],['out',outT]]){const input=R(key);if(input&&document.activeElement!==input)input.value=value.toFixed(2)}}
   R('in').onchange=()=>{inT=clamp(+R('in').value||0,0,outT-.1)};R('out').onchange=()=>{outT=clamp(+R('out').value||0,inT+.1,D())};
   host.addEventListener('keydown',x=>{if(x.target.matches('input,select,textarea'))x.stopPropagation()});
   // ----- export -----

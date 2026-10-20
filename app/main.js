@@ -414,7 +414,8 @@ ipcMain.on('rec-ui', (e, on, info, extra) => {
   rb.setContentProtection(true);
   rb.setAlwaysOnTop(true, 'screen-saver');
   rb.loadFile(asset('recbar.html'), { query: { size: (extra && typeof extra.size === 'string' && extra.size.slice(0, 60)) || (region ? `Region · ${Math.round(region.w * (d.scaleFactor || 1))} × ${Math.round(region.h * (d.scaleFactor || 1))} px` : 'Full screen'), cursor: extra && extra.cursor ? '1' : '0', cam: cam ? '1' : '0', mic: extra && extra.mic ? '1' : '0', sys: extra && extra.sys ? '1' : '0' } });
-  rb.once('ready-to-show', () => rb.showInactive());
+  // Keep the video recording controls hidden: capture backends may ignore content protection.
+  // Stop recording with Ctrl+Shift+R or the Saveit tray menu.
   recWins.push(rb);
 });
 ipcMain.on('rec-cmd', (e, c) => {
