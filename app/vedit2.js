@@ -909,11 +909,12 @@ function mount(host,it,api){css();HK=api;
     // 10.1.7: read-only view of editor state for the automated tests
     _dbg:{get sel(){return sel},select,get inT(){return inT},get outT(){return outT},get eng(){return eng},act,get hist(){return hist.length},get rt(){return rt},get ready(){return ready}}}}
 // Copy edited Library videos as they currently look/sound, without opening them in the destination editor.
-async function copyClip(item,api,onProgress){const source=item.mp4||item.webm||item.blob;if(!item.edit)return source;const previousHK=HK,copyHK={...HK,...api};HK=copyHK;const urls=[],urlFor=blob=>{const u=URL.createObjectURL(blob);urls.push(u);return u};let engine=null;
-  try{const url=urlFor(item.blob),meta=await loadMeta(url),temp={...item,edit:clone(item.edit)},e=ensureProject(temp,meta),rt={src:{}};
+const needsMp4Render=item=>!!(item.webm&&/webm/i.test(item.blob?.type||''));
+async function copyClip(item,api,onProgress){const source=item.mp4||item.webm||item.blob;if(!item.edit&&!needsMp4Render(item))return source;const previousHK=HK,copyHK={...HK,...api};HK=copyHK;const urls=[],urlFor=blob=>{const u=URL.createObjectURL(blob);urls.push(u);return u};let engine=null;
+  try{const url=urlFor(item.blob),meta=await loadMeta(url),temp={...item,edit:item.edit?clone(item.edit):null},e=ensureProject(temp,meta),rt={src:{}};
     const used=new Set([...e.clips,...e.aud].map(c=>c.src));
     for(const s of e.srcs){if(!s.self&&!used.has(s.id))continue;let blob=s.self?item.blob:item._edBlobs?.[s.id];if(!blob&&s.itemId){const other=api.itemById(s.itemId);if(other){await api.hydrate(other);blob=other.blob}}if(!blob)throw Error('A source clip for this edited video could not be found.');const u=s.self?url:urlFor(blob),m=await loadMeta(u,s.kind==='audio');rt.src[s.id]={url:u,blob,dur:m.dur,w:m.w,h:m.h}}
     engine=makeEngine({e,rt});const result=await engine.exportRun((e.W&~1)||2,(e.H&~1)||2,onProgress,{cancel:false},{fmt:'mp4'});return result.mp4||result.webm
   }finally{engine?.destroy();urls.forEach(u=>URL.revokeObjectURL(u));if(HK===copyHK)HK=previousHK}}
-root.VEdit={mount,pack,copyClip,Core:{clipLen,clipEnd,total,ensureProject,makeEngine}};
+root.VEdit={mount,pack,copyClip,needsMp4Render,Core:{clipLen,clipEnd,total,ensureProject,makeEngine}};
 })(window);
