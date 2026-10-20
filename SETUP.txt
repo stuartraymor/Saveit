@@ -1,7 +1,12 @@
-SAVEIT 10.2.3 - WINDOWS SETUP
+SAVEIT 10.2.4 - WINDOWS SETUP
 ============================
 
-INSTALL
+EASIEST WAY
+Download Saveit-Setup.exe from the same page, double-click it and click Install. If Windows shows
+"Windows protected your PC", click "More info", then "Run anyway". That is all; the steps below are the
+alternative that uses the zip.
+
+INSTALL FROM THE ZIP
 1. Right-click the downloaded zip, choose "Extract All...", then open the extracted folder.
 2. Double-click Install.cmd.
 3. If Windows shows "Windows protected your PC", click "More info", then "Run anyway".
