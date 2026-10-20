@@ -269,6 +269,9 @@ details.more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size
     <button class="btn" id="newBtn" title="Blank canvas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Blank</button></div>
   </footer>
   <div class="status" id="status"></div>
+<style>.updbar103{grid-area:status;justify-self:end;align-self:center;padding-right:14px;pointer-events:none;z-index:6}.updbar103 button{pointer-events:auto;background:none;border:0;padding:0;color:var(--muted);font:inherit;font-size:11px;cursor:pointer;opacity:.75}.updbar103 button:hover,.updbar103 button:focus-visible{opacity:1;text-decoration:underline}
+.upd103 .upd-note{white-space:pre-wrap;max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--panel-2);font-size:13px;line-height:1.5;margin:8px 0}.upd103 .upd-big{font-size:16px;margin:6px 0}.upd103 .upd-msg{margin:8px 0}.upd103 .upd-err{color:#ff8a80}.upd103 .row{margin-top:12px;gap:8px;justify-content:flex-end}.upd103 progress{width:100%;height:10px}</style>
+<div class="updbar103" id="updbar103"><button type="button" id="updLink103" title="See whether a newer version of Saveit is available">Check for Updates →</button></div>
 </div>
 
 <script>(function(){const t=document.getElementById("trayEl"),b=document.getElementById("trayTog");function set(m){t.classList.toggle("min",m);b.textContent=m?"▸ Recent":"◂ Hide recent";try{localStorage.setItem("trayMin",m?"1":"")}catch(e){}}let m=false;try{m=!!localStorage.getItem("trayMin")}catch(e){}set(m);b.onclick=()=>set(!t.classList.contains("min"))})()</script>
@@ -2388,6 +2391,88 @@ async function visualResize34(initialW,initialH){const it=S.cur;if(it?.kind!=='i
 
 const toolBefore35=setTool;setTool=function(t){toolBefore35(t);if(t==='ocr'&&S.cur?.kind==='image')toast('Grab Text: drag a box around text, or choose Read whole image on the right.',6500)};
 const propsBefore35=renderProps;renderProps=function(){propsBefore35();if(S.tool!=='ocr'||S.fxOpen||S.sel||S.cur?.kind!=='image')return;const p=$('#props'),box=document.createElement('div');box.id='grabControls35';box.className='grp';box.innerHTML='<h3>Grab Text</h3><p class="hint" style="margin:0">Drag a box around the text in your image, or read the whole image. Text annotations are included.</p><button class="btn pri" id="readWhole35">Read whole image</button><button class="btn" id="selectText35">Select an area</button>';p.prepend(box);$('#ocrAll')?.remove();$('#readWhole35').onclick=()=>grabTextFrom({x:0,y:0,w:S.cur.base.width,h:S.cur.base.height}).catch(actionError);$('#selectText35').onclick=()=>{toast('Drag a box around the text in your image.');cv.focus()}};
+
+// ---------- 10.2.0: Check for Updates ----------
+// A small link at the right end of the status bar. Nothing runs until it is clicked: no automatic checks, no notices.
+let busy103 = 0;
+window.busyEnter103 = () => { busy103++ }; window.busyLeave103 = () => { busy103 = Math.max(0, busy103 - 1) };
+{ const wrap = (fn) => async function () { busy103++; try { return await fn.apply(this, arguments) } finally { busy103 = Math.max(0, busy103 - 1) } };
+  exportDocx = wrap(exportDocx); exportPdf = wrap(exportPdf); exportGuideJpg = wrap(exportGuideJpg); saveSaveit = wrap(saveSaveit); pptx33 = wrap(pptx33); backupLibrary = wrap(backupLibrary); }
+// Why Saveit should not close right now (an empty list means it is safe to ask). Saveit never closes during any of these.
+function updateBusy103() {
+  const why = [];
+  if (rec) why.push('a recording is running');
+  if (typeof stepGuide !== 'undefined' && stepGuide) why.push('Step Capture is running');
+  if (typeof ocrBusy35 !== 'undefined' && ocrBusy35) why.push('text is being read from a picture');
+  if (busy103 > 0) why.push('an export or save is still running');
+  if (vid && vid._ctl && vid._ctl.exporting) why.push('a video is being exported');
+  if (storageFailed) why.push('Saveit could not save to your library a moment ago, so close it only after exporting your work');
+  return why;
+}
+function plainNotes103(t) {
+  return String(t || '').replace(/\r/g, '').replace(/\*\*/g, '').replace(/`/g, '').replace(/^#{1,6}\s*/gm, '').replace(/^\s*[-*]\s+/gm, '\u2022 ').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').trim();
+}
+const updDialog103 = () => $('#updateDialog103');
+function updShow103(html, wire) {
+  let m = updDialog103();
+  if (!m) { m = dialog33('Check for Updates', '<div class="upd103" id="updBody103"></div>', 'updateDialog103'); }
+  const b = $('#updBody103'); b.innerHTML = html; if (wire) wire(b);
+  const first = b.querySelector('button.pri') || m.querySelector('button'); if (first) first.focus();
+  return m;
+}
+async function updateCheck103() {
+  if (!window.bench || !window.bench.updateCheck) return;
+  updShow103('<p class="upd-msg">Checking GitHub for the latest version\u2026</p>');
+  let r; try { r = await window.bench.updateCheck() } catch (e) { r = { ok: false, message: 'The update check could not start.' } }
+  if (!updDialog103()) return;
+  if (!r || !r.ok) return updShow103('<p class="upd-msg upd-err">' + escH((r && r.message) || 'The update check failed.') + '</p><div class="row"><button class="btn pri" id="updRetry103">Try again</button></div>', b => { b.querySelector('#updRetry103').onclick = updateCheck103 });
+  if (r.state === 'current') return updShow103('<p class="upd-big"><b>Saveit is up to date.</b></p><p class="hint">You have version ' + escH(r.current) + ', the latest published release.</p>');
+  if (r.state === 'unavailable') return updShow103('<p class="upd-big"><b>Version ' + escH(r.latest) + ' is available.</b></p><p class="upd-msg">' + escH(r.reason || '') + '</p><div class="row"><button class="btn pri" id="updPage103">Open the release page</button></div>', b => { b.querySelector('#updPage103').onclick = () => window.open('https://github.com/stuartraymor/Saveit/releases/latest') });
+  updShow103('<p class="upd-big"><b>Version ' + escH(r.latest) + ' is available.</b></p><p class="hint">You have version ' + escH(r.current) + '.</p>' + (/^what.?s new/i.test(plainNotes103(r.notes)) ? '' : '<p class="hint" style="margin:6px 0 0">What\u2019s new</p>') + '<div class="upd-note" tabindex="0" aria-label="Release notes">' + escH(plainNotes103(r.notes) || 'No release notes were published.') + '</div>'
+    + (r.canInstall ? '' : '<p class="upd-msg upd-err">Updates can be installed only in the installed version of Saveit.</p>')
+    + '<div class="row"><button class="btn" data-close2>Not now</button><button class="btn pri" id="updInstall103"' + (r.canInstall ? '' : ' disabled') + '>Install Update</button></div>', b => {
+    b.querySelector('[data-close2]').onclick = () => updDialog103()?.remove();
+    b.querySelector('#updInstall103').onclick = () => updateDownload103(r);
+  });
+}
+function updBusyMessage103(why) { return '<p class="upd-msg upd-err">Saveit cannot update right now because ' + escH(why.join(' and ')) + '. Please finish that first, then try again.</p><div class="row"><button class="btn pri" id="updRetry103">OK</button></div>'; }
+async function updateDownload103(r) {
+  const why = updateBusy103(); if (why.length) return updShow103(updBusyMessage103(why), b => { b.querySelector('#updRetry103').onclick = () => updDialog103()?.remove() });
+  updShow103('<p class="upd-msg" id="updStatus103">Downloading version ' + escH(r.latest) + '\u2026</p><progress id="updProg103" max="100" value="0"></progress><p class="hint">It is checked before anything is installed.</p>');
+  if (window.bench.onUpdateProgress && !window.__updProgWired103) { window.__updProgWired103 = true; window.bench.onUpdateProgress(p => { const e = $('#updProg103'); if (e && p && p.total) e.value = Math.min(100, Math.round(p.got / p.total * 100)) }) }
+  let d; try { d = await window.bench.updateDownload() } catch (e) { d = { ok: false, message: 'The download could not start.' } }
+  if (!updDialog103()) return;
+  if (!d || !d.ok) return updShow103('<p class="upd-msg upd-err">' + escH((d && d.message) || 'The update could not be downloaded.') + '</p><p class="hint">Nothing was installed, and Saveit is unchanged.</p><div class="row"><button class="btn" data-close2>Close</button><button class="btn pri" id="updRetry103">Try again</button></div>', b => { b.querySelector('[data-close2]').onclick = () => updDialog103()?.remove(); b.querySelector('#updRetry103').onclick = updateCheck103 });
+  updShow103('<p class="upd-big"><b>Version ' + escH(d.version) + ' is ready to install.</b></p><p class="upd-msg">It was downloaded and verified. Saveit will now close, install it, and open again by itself.</p>'
+    + '<p class="upd-msg"><b>Please save your work first.</b> Saveit keeps your library, settings and shortcuts, and saves your library automatically, but save any file you are working on (for example a recording or document you are exporting) before you continue.</p>'
+    + '<div class="row"><button class="btn" data-close2>Cancel</button><button class="btn pri" id="updGo103">Install and restart</button></div>', b => {
+    b.querySelector('[data-close2]').onclick = () => updDialog103()?.remove();
+    b.querySelector('#updGo103').onclick = () => updateApply103();
+  });
+}
+async function updateApply103() {
+  const why = updateBusy103(); if (why.length) return updShow103(updBusyMessage103(why), b => { b.querySelector('#updRetry103').onclick = () => updDialog103()?.remove() });
+  updShow103('<p class="upd-msg">Saving your library and closing Saveit\u2026</p>');
+  try { commitText(); await flushLibrary() } catch (e) { return updShow103('<p class="upd-msg upd-err">Your library could not be saved, so the update was not started.</p><div class="row"><button class="btn pri" id="updRetry103">OK</button></div>', b => { b.querySelector('#updRetry103').onclick = () => updDialog103()?.remove() }) }
+  let a; try { a = await window.bench.updateApply() } catch (e) { a = { ok: false, message: 'The update could not be started.' } }
+  if (!a || !a.ok) return updShow103('<p class="upd-msg upd-err">' + escH((a && a.message) || 'The update could not be started.') + '</p><p class="hint">Nothing was changed.</p><div class="row"><button class="btn pri" id="updRetry103">OK</button></div>', b => { b.querySelector('#updRetry103').onclick = () => updDialog103()?.remove() });
+  updShow103('<p class="upd-msg">Saveit is closing to finish the update and will open again in a moment.</p>');
+}
+{ const link = $('#updLink103');
+  if (!window.bench || !window.bench.updateCheck) { $('#updbar103').hidden = true }
+  else {
+    link.onclick = updateCheck103;
+    if (window.bench.onUpdateCancelled) window.bench.onUpdateCancelled(() => { updDialog103()?.remove(); toast('Saveit did not close, so the update was cancelled. Nothing was changed.', 9000) });
+    // what happened during the last update (shown once, the first time Saveit opens after it)
+    const showUpdateResult103 = r => { try {
+      if (!r || !r.message) return;
+      if (r.status === 'ok') toast('Saveit was updated to version ' + (r.version || '') + '. Your library and settings were kept.', 12000);
+      else updShow103('<p class="upd-big"><b>' + (r.status === 'failed' ? 'The update could not be completed' : 'The update was not installed') + '</b></p><p class="upd-msg">' + escH(r.message) + '</p>' + (r.log ? '<p class="hint">Details: ' + escH(r.log) + '</p>' : '') + '<div class="row"><button class="btn pri" id="updRetry103">OK</button></div>', b => { b.querySelector('#updRetry103').onclick = () => updDialog103()?.remove() });
+    } catch (e) { } };
+    window.showUpdateResult103 = showUpdateResult103;
+    if (window.bench.onUpdateResult) window.bench.onUpdateResult(showUpdateResult103);
+    if (window.bench.updateStartupResult) setTimeout(async () => { try { showUpdateResult103(await window.bench.updateStartupResult()) } catch (e) { } }, 1500);
+  } }
 
 // ---------- boot ----------
 

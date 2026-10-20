@@ -69,6 +69,10 @@ async function manualScroll33(display,rect,horizontal){const bar=new BrowserWind
 }
 
 
+// 10.2.0: Check for Updates. Nothing here runs by itself; it starts only when the person clicks the link in the editor.
+const updater = require('./updater');
+updater.register({ app, ipcMain, mainSender: mainSender33, getWin: () => win, requestQuit: () => requestQuit(),
+  busyReason: () => recording ? 'A recording is running. Stop it first, then install the update.' : (steps ? 'Step Capture is running. Stop it first, then install the update.' : '') });
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 920, minWidth: 960, minHeight: 620,
@@ -81,6 +85,8 @@ function createWindow() {
   win.once('ready-to-show', () => { if (!process.argv.includes('--hidden')) win.show(); });
   win.on('close', e => { if(app.isQuitting)return;e.preventDefault();win.webContents.send('review-before-close'); });
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  // 10.2.0: when the updater has just started this version, tell it the window is up (it rolls back if it never hears this)
+  win.webContents.once('did-finish-load', () => setTimeout(() => updater.markHealthy(app.getVersion()), 1500));
 }
 
 // ---------- floating capture widget (editor hidden) ----------
