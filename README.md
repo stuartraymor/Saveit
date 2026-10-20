@@ -11,10 +11,11 @@ Saveit is a Snagit-style screen capture app for Windows, built for making clear 
 - **Audio:** record a quick voice message from one or two microphones (each on its own track) and the computer's sound, with live level bars. Edit on a multitrack timeline: cut, trim, split, move and fade clips, add effects per clip, track or master, and save as WAV, MP3 or M4A. The Audio studio adds voice presets, rumble filtering, Voice EQ, compression, sample-peak limiting, editable effect cards with response diagrams, dB gain controls, stereo meters and waveforms, peak normalization, and precise selection playback. Learn a noise-only selection to reduce steady background noise while retaining original audio, then match the whole mix in integrated LUFS with a sample-peak ceiling. A De-esser softens harsh S sounds, with preview-only band listening and live reduction feedback. Every effect has a larger controls window. See the [voice cleanup guide](AUDIO-CLEANUP-10.1.5.md) and [de-esser guide](DEESSER-10.1.6.md).
 
 ## Install
+**Easiest:** [**Download Saveit for Windows (one click)**](https://github.com/stuartraymor/Saveit/releases/latest/download/Saveit-Setup.exe). Double-click the downloaded file and click **Install**. This link always gives you the newest version.
 
-1. Download the latest zip from **Releases** and extract it (right-click, Extract All).
-2. Double-click `Install.cmd`.
-3. If Windows says "Windows protected your PC", click **More info** then **Run anyway** (the app is not code-signed).
+If Windows says "Windows protected your PC", click **More info** then **Run anyway**. The app is not code-signed yet; see [Code signing](CODE_SIGNING_POLICY.md).
+
+**Or use the zip:** download the latest zip from **Releases**, extract it (right-click, Extract All), and double-click `Install.cmd`.
 
 It installs for your user account only, with no admin rights. Setup downloads the Electron runtime (about 110 MB) once. For offline installs, put `electron-v33.2.1-win32-x64.zip`, renamed to `electron.zip`, next to `Install.cmd`.
 
@@ -29,3 +30,6 @@ What's new: [10.2.8](CHANGES-10.2.8.md) · [10.2.7](CHANGES-10.2.7.md) · [10.2.
 ## Run from source
 
 Requires Electron 33: `electron app`.
+
+## License
+Saveit is free and open source under the [MIT License](LICENSE). Anyone may use it, copy it, change it and share it. Third-party components are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). How releases are signed: [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
