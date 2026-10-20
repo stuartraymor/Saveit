@@ -1,4 +1,4 @@
-SAVEIT 10.2.1 - WINDOWS SETUP
+SAVEIT 10.2.2 - WINDOWS SETUP
 ============================
 
 INSTALL
