@@ -40,6 +40,36 @@ class UpdatingForm : Form
     string[] args;
     Button closeBtn;
     System.Windows.Forms.Timer timer;
+    DateTime started = DateTime.Now;
+    int frontTries = 0;
+
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr pid);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool attach);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+
+    // Windows normally keeps a program that was started in the background behind the window the person is using. Saveit has just closed, so this window
+    // asks for the front explicitly (and keeps asking for a few seconds), so the person actually sees the progress.
+    void Front()
+    {
+        try
+        {
+            if (!IsHandleCreated) return;
+            if (WindowState == FormWindowState.Minimized) ShowWindow(Handle, 9);
+            if (GetForegroundWindow() == Handle) return;
+            keybd_event(0x12, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 2, UIntPtr.Zero);   // an Alt tap lets this program take the foreground
+            uint me = GetCurrentThreadId(), ft = 0; IntPtr fg = GetForegroundWindow(); if (fg != IntPtr.Zero) ft = GetWindowThreadProcessId(fg, IntPtr.Zero);
+            bool att = ft != 0 && ft != me && AttachThreadInput(ft, me, true);
+            SetWindowPos(Handle, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040);      // topmost, no move, no resize, show
+            SetForegroundWindow(Handle); Activate(); BringToFront();
+            if (att) AttachThreadInput(ft, me, false);
+        }
+        catch { }
+    }
 
     int S(int v) { return (int)Math.Round(v * k); }
     static Stream Res(string n) { return Assembly.GetExecutingAssembly().GetManifestResourceStream(n); }
@@ -57,9 +87,9 @@ class UpdatingForm : Form
         closeBtn.FlatAppearance.BorderSize = 0; closeBtn.SetBounds((ClientSize.Width - S(130)) / 2, S(268), S(130), S(40)); closeBtn.Click += delegate { Close(); };
         Controls.Add(closeBtn); AcceptButton = closeBtn;
         timer = new System.Windows.Forms.Timer { Interval = 30 };
-        timer.Tick += delegate { if (page != Page.Working) return; shown += (target - shown) * 0.12f; shimmer = (shimmer + 6) % 1000; Invalidate(new Rectangle(0, S(215), ClientSize.Width, S(70))); };
+        timer.Tick += delegate { if (page == Page.Working && frontTries < 120 && ++frontTries % 12 == 1) Front(); if (page != Page.Working) return; shown += (target - shown) * 0.12f; shimmer = (shimmer + 6) % 1000; Invalidate(new Rectangle(0, S(215), ClientSize.Width, S(70))); };
         timer.Start();
-        Shown += delegate { var t = new Thread(Run); t.IsBackground = true; t.Start(); };
+        Shown += delegate { Front(); var t = new Thread(Run); t.IsBackground = true; t.Start(); };
     }
 
     void Progress(int pct, string text) { BeginInvoke((MethodInvoker)delegate { target = pct; status = text; Invalidate(new Rectangle(0, S(215), ClientSize.Width, S(70))); }); }
@@ -98,7 +128,7 @@ class UpdatingForm : Form
         }
         BeginInvoke((MethodInvoker)delegate
         {
-            if (code == 0 && lastPct >= 100) { page = Page.Done; target = shown = 100; Invalidate(); var t = new System.Windows.Forms.Timer { Interval = 1800 }; t.Tick += delegate { Close(); }; t.Start(); }
+            if (code == 0 && lastPct >= 100) { page = Page.Done; target = shown = 100; Invalidate(); var t = new System.Windows.Forms.Timer { Interval = (int)Math.Max(1800, 5500 - (DateTime.Now - started).TotalMilliseconds) }; t.Tick += delegate { Close(); }; t.Start(); }
             else if (code == 0) { Close(); }   // cancelled or nothing to do: the updater changed nothing
             else { error = err ?? "The update did not finish. Saveit put your previous version back."; page = Page.Error; closeBtn.Visible = true; Invalidate(); }
         });

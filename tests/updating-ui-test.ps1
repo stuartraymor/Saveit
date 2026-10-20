@@ -41,7 +41,17 @@ Check 'failure: window opens' (Win $p2)
 Start-Sleep -Seconds 5; Shot $p2 '4-error' | Out-Null
 Check 'failure: window stays open for the person to read' (-not $p2.HasExited)
 if (-not $p2.HasExited) { $p2.Kill() }
-if ($fails) { Write-Host "$fails FAILED"; exit 1 } else { Write-Host 'ALL PASSED' }
+
+# in front: another program is in the foreground, and the window is started the way Saveit starts it (cmd's "start /b", from a background process)
+Add-Type -Name F -Namespace N2 -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int i);'
+$np = Start-Process notepad -PassThru; Start-Sleep -Seconds 2
+$cmd = Start-Process cmd.exe -ArgumentList '/d', '/s', '/c', ('"start "" /b "' + $Exe + '" "' + $ok + '" -NewVersion 9.9.9"') -WindowStyle Hidden -PassThru
+Start-Sleep -Seconds 3
+$ui = Get-Process saveit-updating -ErrorAction SilentlyContinue | Select-Object -First 1
+Check 'started the real way: the window exists' ($null -ne $ui)
+if ($ui) { $ui.Refresh(); Check 'it is in front of the other program' ([N2.F]::GetForegroundWindow() -eq $ui.MainWindowHandle) ('foreground=' + [N2.F]::GetForegroundWindow() + ' window=' + $ui.MainWindowHandle); Check 'it is a topmost window' (([N2.F]::GetWindowLong($ui.MainWindowHandle, -20) -band 8) -ne 0); Shot $ui '5-in-front' | Out-Null; Start-Sleep -Seconds 1; $s = New-Object Drawing.Bitmap ([Windows.Forms.Screen]::PrimaryScreen.Bounds.Width), ([Windows.Forms.Screen]::PrimaryScreen.Bounds.Height); $g = [Drawing.Graphics]::FromImage($s); $g.CopyFromScreen(0, 0, 0, 0, $s.Size); $s.Save((Join-Path $Work '6-whole-screen.png')); $g.Dispose(); $s.Dispose(); $ui.Kill() }
+try { $np.Kill() } catch { }if ($fails) { Write-Host "$fails FAILED"; exit 1 } else { Write-Host 'ALL PASSED' }
+
 
 
 
