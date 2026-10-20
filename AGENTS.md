@@ -11,3 +11,4 @@ Save every iteration to GitHub (https://github.com/stuartraymor/Saveit): commit 
 Every release zip must be signed before it is published: run node tools/sign-release.js Saveit-X.zip and upload the zip, the .sig and the .sha256 together (see HANDOFF.md section 6a). Installed copies refuse unsigned releases. Keep the private signing key outside the repository and backed up.
 
 After installation, ask the user whether to release that version on GitHub. Do not publish a GitHub release or update `main` without the user's approval.
+Every release must also carry Saveit-Setup.exe (toolsuild-setup.ps1) and its notes must start with the one-click link https://github.com/stuartraymor/Saveit/releases/latest/download/Saveit-Setup.exe (HANDOFF.md section 6a, step 5b).
