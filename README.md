@@ -38,6 +38,20 @@ It is **free, with no account, no subscription and no watermark**, and the whole
 - **Record audio:** one or two microphones and the computer's sound, each on its own track, with live level bars. Edit on a multitrack timeline and save as WAV, MP3 or M4A. The audio studio has voice presets, noise reduction, equalizer, compression, de-esser and loudness matching.
 - **Stays out of the way:** it lives in the system tray, so the hotkeys work even when the window is closed.
 
+## See it in action
+
+**Edit a recording.** Trim and cut a screen recording on the timeline, then add a caption and a zoom.
+
+<p align="center"><img src="docs/images/edit-video.gif" alt="Saveit video editor: play a recording, split it, delete a part, add a caption and a zoom" width="860"></p>
+
+**Hide private information.** Blur an email address and a secret key, then spotlight the button that matters.
+
+<p align="center"><img src="docs/images/hide-private-info.gif" alt="Saveit: blur an email and an API key, then spotlight a button" width="860"></p>
+
+**Grab Text.** Drag around any text in a picture and Saveit reads it for you to edit and copy.
+
+<p align="center"><img src="docs/images/grab-text.gif" alt="Saveit Grab Text: select text in a picture and copy the recognized words" width="860"></p>
+
 ## Quick start
 
 | Press | What it does |
