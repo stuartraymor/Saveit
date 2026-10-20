@@ -97,6 +97,7 @@ app/                      the whole application (this folder is what gets instal
   audiobar.js, capbar.css the Image | Video | Audio capture-bar controls, shared by the editor and the widget
   imgtools.js             pixel tools: fill, smart detection, simplify, cut
   webm.js                 writes the missing Duration into WebM files
+  updater.js, updater.ps1 Check for Updates: check, download, verify (Ed25519), unpack, and the separate apply/rollback script (section 6a)
   gif.js, stitch.js       GIF encoder; scrolling-capture stitcher
   fxdefs.js, fxui.js, icons.js, devices.js, camdraw.js   effects, icons, device lists, webcam
   widget.html, overlay.html, recbar.html, steps.html, campreview.html, camsettings.html, picker.html, quick.html, manual.html   the small windows
@@ -106,7 +107,7 @@ app/                      the whole application (this folder is what gets instal
   saveit-steps.exe        native Step Capture helper (built from native/saveit-steps.cs)
 native/saveit-steps.cs    source of that helper (C#, builds with the compiler that ships with Windows)
 tests/                    all automated tests and the harness (section 7)
-tools/                    version.js (bump versions), update-installed.ps1 (back up + install), build-steps-helper.ps1
+tools/                    version.js (bump versions), update-installed.ps1 (back up + install), build-steps-helper.ps1, sign-release.js (sign a release zip), make-signing-key.js
 install.ps1, Install.cmd, Reinstall.cmd, Uninstall.cmd, uninstall.ps1    the installer
 CHANGES-<version>.md      one release note per version, back to 3.6.0 (the history of every decision)
 PLAN-*.md, VALIDATION-*.md, INSPECTION-*.md   older planning and validation records
@@ -193,7 +194,22 @@ The owner sometimes receives folders from outside reviewers or other AI assistan
    - copy `README.txt` over `SETUP.txt` (GitHub keeps both); edit `README.md` (features and the "What's new" links); commit as `Saveit X`.
    - **Do not** put `tests/`, `AGENTS.md`, `CLAUDE.md`, `VERSIONING.md`, `tools/version.js` or `tools/update-installed.ps1` on `main`.
 4. Make the zip: `git -c core.autocrlf=false archive --format=zip --prefix=Saveit/ -o Saveit-X.zip HEAD -- . ":(exclude)README.md" ":(exclude).gitignore"`.
-5. Check the release `app/` is byte-identical to the tested one (`diff -rq`), then `git push origin release-X:main` and `gh release create vX Saveit-X.zip --target main --title "Saveit X" --notes-file notes.md`. Tag `vX` only for published releases.
+5. **Sign it:** `node tools/sign-release.js Saveit-X.zip`. This writes `Saveit-X.zip.sig` and `Saveit-X.sha256` next to the zip and checks the signature against the public key built into the app. Without the `.sig`, installed copies of Saveit will refuse to install the release automatically (see 6a).
+6. Check the release `app/` is byte-identical to the tested one (`diff -rq`), then `git push origin release-X:main` and `gh release create vX Saveit-X.zip Saveit-X.zip.sig Saveit-X.sha256 --target main --title "Saveit X" --notes-file notes.md`. The release must be a normal published release (not a draft, not a pre-release) tagged `vX.Y.Z`. Tag `vX` only for published releases.
+
+### 6a. Releases and updates (Check for Updates)
+
+Since 10.2.0 the editor has a small **Check for Updates →** link at the right end of the status bar. It does nothing until clicked (no background checks, no notices). `app/updater.js` (main process) asks the GitHub Releases API for `stuartraymor/Saveit`'s latest published stable release, compares versions (only a strictly newer release is ever offered), shows the notes, and on **Install Update** downloads the zip to `<userData>\updates\<version>`, verifies it, unpacks it to the staging folder, asks the person to save their work, and hands over to `app/updater.ps1`.
+
+**Trust.** Every release zip must have a detached **Ed25519 signature** `Saveit-X.zip.sig` over the text `Saveit-release-v1 / version=X / sha256=<hash of the zip>`. The matching public key is `PUBLIC_KEY_PEM` in `app/updater.js` (fingerprint in the comment there). The updater also checks GitHub's own SHA-256 for the asset and the `Saveit-X.sha256` file, builds download addresses itself (never from the API answer), follows redirects only to GitHub hosts, caps sizes, and reads the zip with its own reader that refuses unsafe names. Nothing from a download is executed: the install script that runs is `updater.ps1` from the **already installed** app, copied out before Saveit closes.
+
+**The signing key is a secret and a single point of failure.** The private key is `%USERPROFILE%\.saveit-release-signing\release-ed25519-private.pem` on the owner's computer (not in the repository; `*.pem` is git-ignored). **Back it up somewhere safe and private.** If it is lost, installed copies cannot verify future releases (people would have to reinstall manually from GitHub). If it leaks, anyone could sign a malicious release. To change the key, run `node tools/make-signing-key.js <folder>`, put the new public key in `app/updater.js`, and ship that version signed with the OLD key (installed copies only trust the key built into the version they run).
+
+**What the apply step does** (`updater.ps1`, a separate process that is not a child of Saveit): waits for Saveit to close by itself (it never closes or kills Saveit; if Saveit is still open after the wait it changes nothing); backs up the installed `app` to `<install>\update-backup` and verifies the copy file by file; copies the new app next to the old one, verifies it, and swaps the folders; copies the uninstall files; sets the Settings > Apps version only if that entry belongs to this install folder; starts the new version and waits up to 45 s for it to report healthy (`SAVEIT_UPDATE_HEALTH` file, written by `markHealthy` once the window is up); if it does not, it stops that copy, restores the previous version and starts it. The runtime, shortcuts, library and settings are never touched. The result is written to `<userData>\updates\result.json` and logged to `update.log`; the next window shows it once. Saveit refuses to start the update while a recording, Step Capture, an export/save, a video export or Grab Text is running (`updateBusy103` in the editor, `busyReason` in `main.js`).
+
+**Why `install.ps1` is not reused:** it stops Saveit with `Stop-Process -Force` and deletes the whole install folder, which would break "never force-close" and could lose the backup. The updater reuses its copy logic and registry entry instead.
+
+**First updater version.** 10.2.0 is the first version that contains the updater, so a person on 10.1.12 or older installs 10.2.0 the normal way (zip + `Install.cmd`). Releases before 10.2.0 have no signature and are shown as "cannot be installed automatically".
 
 ---
 
@@ -212,8 +228,13 @@ The owner sometimes receives folders from outside reviewers or other AI assistan
 | `stepguide-tests.cjs` | 10 | step-guide exports, messages, Save rules, step wording |
 | `review103-tests.cjs` | 8 | fixes from the first review |
 | `review2-tests.cjs` | 11 | fixes from the second review (Fill, WebM, Grab Text…) |
+| `update-ui-tests.cjs` | 11 | the Check for Updates link and dialogs (no automatic calls, notes, busy blocking, messages) |
 | `video-editor-tests.cjs` | 30 + todo | video editor bugs from `VIDEO-EDITOR-REVIEW-10.1.6.md`. Checks marked todo (for example `[10.1.8]`) cover bugs planned for a later version; they print TODO-FAIL/TODO-PASS and don't fail the run. Promote a todo check to required in the version that fixes it. The editor exposes `__T.vid._ctl._dbg` (selection, In/Out, engine, actions) for these tests. |
 | `audio-pitch-tests.cjs` | 7 + the 82-check regression | pitch/speed checks; **the "full browser regression suite" (`ui-tests.js`, 82 checks) runs from here**: `SAVEIT_QA_URL=http://127.0.0.1:8944 node tests/audio-pitch-tests.cjs` |
+
+**Updater unit tests (no Electron):** `node tests/updater-unit.cjs` (12 checks: version rules, allowed servers, signatures, the zip reader, and the whole check + download + verify path against a local fake of the GitHub API, including tampered, unsigned, truncated and redirected downloads).
+
+**Real end-to-end update:** `node tests/native-update.cjs <scratch folder>` (15 checks, about two minutes). It copies the installed runtime into the scratch folder, builds real releases from this source tree signed with a throw-away key, serves them from a local fake GitHub (test profiles only; set by `SAVEIT_REVIEW_DATA`), and drives a real Saveit: up to date, GitHub unreachable, tampered/unsigned release refused, busy refusal, the app is never force-closed, a real update old to new with the library and settings intact, automatic rollback from a release that crashes and from one that never reports healthy, and a check that the real installed Saveit, its shortcuts and its registry entry were never touched. It never touches the installed Saveit; it needs a runtime folder (`SAVEIT_E2E_RUNTIME`, default the installed one).
 
 **Real-Electron Grab Text accuracy:** `node tests/native-ocr1112.cjs <electron.exe> app <scratch folder>` (draws known text in 22 pictures, reads it with the real bench.ocr, scores it; writes a detail file). Findings in `GRAB-TEXT-REVIEW-10.1.12.md`. Since 10.1.12 `ocr.ps1` re-reads unrecognised text-like ink (`-NoRecover` turns it off) and `main.js` applies `ocrFixLine` to every line and word. Browser suite `flatten-tools-tests.cjs` (6) covers the Flatten buttons on Erase, Fill and Magic Cut.
 
