@@ -107,7 +107,7 @@ app/                      the whole application (this folder is what gets instal
   saveit-steps.exe        native Step Capture helper (built from native/saveit-steps.cs)
 native/saveit-steps.cs    source of that helper (C#, builds with the compiler that ships with Windows)
 tests/                    all automated tests and the harness (section 7)
-tools/                    version.js (bump versions), update-installed.ps1 (back up + install), build-steps-helper.ps1, sign-release.js (sign a release zip), make-signing-key.js
+tools/                    version.js (bump versions), update-installed.ps1 (back up + install), build-steps-helper.ps1, build-setup.ps1 (builds Saveit-Setup.exe), sign-release.js (sign a release zip), make-signing-key.js
 install.ps1, Install.cmd, Reinstall.cmd, Uninstall.cmd, uninstall.ps1    the installer
 CHANGES-<version>.md      one release note per version, back to 3.6.0 (the history of every decision)
 PLAN-*.md, VALIDATION-*.md, INSPECTION-*.md   older planning and validation records
@@ -195,6 +195,7 @@ The owner sometimes receives folders from outside reviewers or other AI assistan
    - **Do not** put `tests/`, `AGENTS.md`, `CLAUDE.md`, `VERSIONING.md`, `tools/version.js` or `tools/update-installed.ps1` on `main`.
 4. Make the zip: `git -c core.autocrlf=false archive --format=zip --prefix=Saveit/ -o Saveit-X.zip HEAD -- . ":(exclude)README.md" ":(exclude).gitignore"`.
 5. **Sign it:** `node tools/sign-release.js Saveit-X.zip`. This writes `Saveit-X.zip.sig` and `Saveit-X.sha256` next to the zip and checks the signature against the public key built into the app. Without the `.sig`, installed copies of Saveit will refuse to install the release automatically (see 6a).
+5b. **Build the one-file installer:** `powershell -NoProfile -ExecutionPolicy Bypass -File tools\build-setup.ps1 -Zip Saveit-X.zip` writes `Saveit-Setup.exe` next to the zip (the zip is embedded; Windows' own C# compiler builds it from `native/saveit-setup.cs`). Upload it as a fifth release asset named exactly `Saveit-Setup.exe`, so https://github.com/stuartraymor/Saveit/releases/latest/download/Saveit-Setup.exe always works as the link to give friends. It runs `install.ps1 -FromSetup`; test it with `tests/setup-ui-test.ps1` (installs into a scratch folder, never the real one). Check for Updates still uses the zip, not this exe.
 6. Check the release `app/` is byte-identical to the tested one (`diff -rq`), then `git push origin release-X:main` and `gh release create vX Saveit-X.zip Saveit-X.zip.sig Saveit-X.sha256 --target main --title "Saveit X" --notes-file notes.md`. The release must be a normal published release (not a draft, not a pre-release) tagged `vX.Y.Z`. Tag `vX` only for published releases.
 
 ### 6a. Releases and updates (Check for Updates)
