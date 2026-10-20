@@ -22,6 +22,9 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
  await test('GitHub unavailable: a plain message and Try again, nothing installed',async()=>{
   await reset();await ev(()=>{window.bench.updateCheck=async()=>({ok:false,code:'network',message:'Saveit could not reach GitHub. Check your internet connection and try again.'})});await page.locator('#updLink103').click();await page.waitForSelector('#updRetry103');
   assert.match(await dlg(),/could not reach GitHub/);await ev(a=>{window.bench.updateCheck=async()=>a},{ok:true,state:'current',current:'10.1.12'});await page.locator('#updRetry103').click();await page.waitForSelector('.upd-big');assert.match(await dlg(),/up to date/)});
+ await test('Inaccessible public downloads are distinct from no releases and offer the release page',async()=>{
+  await reset();await ev(()=>{window.bench.updateCheck=async()=>({ok:false,code:'access',message:'GitHub is not allowing public access to the Saveit downloads right now. Releases may exist, but this computer cannot see them.'});window.open=url=>{window.__openedRelease=url}});await page.locator('#updLink103').click();await page.waitForSelector('#updRelease103');assert.match(await dlg(),/not allowing public access/);await page.locator('#updRelease103').click();assert.equal(await ev(()=>window.__openedRelease),'https://github.com/stuartraymor/Saveit/releases/latest');assert.equal((await calls()).download||0,0);
+ });
  await test('Install Update downloads, then asks to save work and confirm; Cancel leaves everything alone',async()=>{
   await reset();await ev(a=>{window.bench.updateCheck=async()=>a;window.bench.updateDownload=async()=>{window.__updCalls.download=(window.__updCalls.download||0)+1;return{ok:true,version:'10.1.13'}}},AVAILABLE);
   await page.locator('#updLink103').click();await page.locator('#updInstall103').click();await page.waitForSelector('#updGo103');

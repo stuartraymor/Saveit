@@ -72,7 +72,15 @@ async function request(url, { maxBytes, timeoutMs = 30000, accept, onProgress } 
 // ---------- check ----------
 async function check(currentVersion) {
   if (!parseVersion(currentVersion)) throw new UpdateError('state', 'Saveit could not read its own version number.');
-  const body = await request(`${API_ORIGIN}/repos/${REPO}/releases/latest`, { maxBytes: MAX_JSON, accept: 'application/vnd.github+json' });
+  let body;
+  try { body = await request(`${API_ORIGIN}/repos/${REPO}/releases/latest`, { maxBytes: MAX_JSON, accept: 'application/vnd.github+json' }); }
+  catch (err) {
+    if (err.code !== 'notfound') throw err;
+    // A hidden/inaccessible repository also returns 404; that does not mean there are no releases.
+    try { await request(`${API_ORIGIN}/repos/${REPO}`, { maxBytes: MAX_JSON, accept: 'application/vnd.github+json' }); }
+    catch (repoErr) { if (repoErr.code === 'notfound') throw new UpdateError('access', 'GitHub is not allowing public access to the Saveit downloads right now. Releases may exist, but this computer cannot see them. Open the release page while signed in to GitHub, or try again after public access is restored.'); throw repoErr; }
+    throw err;
+  }
   let rel; try { rel = JSON.parse(body.toString('utf8')); } catch (_) { throw new UpdateError('server', 'GitHub sent an answer Saveit could not read. Please try again later.'); }
   const version = parseVersion(rel && rel.tag_name);
   // only a published, stable release (the "latest" endpoint already leaves out drafts and pre-releases; this is a second check)

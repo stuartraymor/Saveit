@@ -65,7 +65,8 @@ const server = http.createServer((req, res) => { hits.push(req.url); const r = r
     serve(rel({ assets: [{ name: 'Saveit-10.1.13.zip', size: 999999999 }, { name: 'Saveit-10.1.13.zip.sig', size: 90 }] })); assert.equal((await U.check('10.1.12')).state, 'unavailable', 'an absurd size');
   });
   await run('Check: GitHub problems become plain messages', async () => {
-    routes = {}; await assert.rejects(U.check('10.1.12'), /No published release/);
+    routes = {}; await assert.rejects(U.check('10.1.12'), e=>e.code==='access'&&/not allowing public access/.test(e.message));
+    routes = { ['/repos/stuartraymor/Saveit']: {body:JSON.stringify({private:false})} }; await assert.rejects(U.check('10.1.12'), e=>e.code==='notfound'&&/No published release/.test(e.message));
     routes = { [API]: { status: 500, body: 'x' } }; await assert.rejects(U.check('10.1.12'), /could not answer right now/);
     routes = { [API]: { status: 403, body: 'rate' } }; await assert.rejects(U.check('10.1.12'), /limiting requests/);
     routes = { [API]: { body: '<html>not json' } }; await assert.rejects(U.check('10.1.12'), /could not read/);
