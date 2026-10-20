@@ -50,6 +50,15 @@ await test('10.2.9 adaptive menus and live In Out fields',async()=>{
  assert.equal(await page.getByRole('menuitem',{name:'Mute video audio',exact:true}).count(),0);await page.keyboard.press('Escape');
  const overlay=page.locator('.vprev'),ob=await overlay.boundingBox();await overlay.click({button:'right',position:{x:75/640*ob.width,y:75/360*ob.height}});assert.equal(await ev(()=>D().sel?.type),'ov');assert.equal(await page.getByRole('menuitem',{name:'Mute audio',exact:true}).count(),0);await page.screenshot({path:path.join(out,'on-screen-context-menu.png')});await page.keyboard.press('Escape');return live;
 });
+// Trim actions must follow the numeric range even with a different playhead/selection.
+for(const action of ['trimstart','trimend','cut','trim'])await test('10.2.12 '+action+' uses In Out and supports Undo',async()=>{
+ const before=await ev(async()=>{await openV();const e=P();const a=JSON.parse(JSON.stringify(e.clips[0]));a.id='trim-audio';e.aud.push(a);e.caps.push({id:'trim-caption',t0:0,t1:2.8,text:'Test',pos:'b',fs:6,c:'#fff',bg:true});D().select('clip',e.clips[0]);await D().eng.seek(1.2);change('[data-r="in"]',.5);change('[data-r="out"]',2);return e.clips[0].b});
+ await page.locator('[data-a="'+action+'"]').click();const r=await ev(()=>({clips:P().clips.map(c=>({a:c.a,b:c.b,start:c.start})),aud:P().aud.map(c=>({a:c.a,b:c.b,start:c.start})),caps:P().caps.map(c=>({t0:c.t0,t1:c.t1}))}));
+ const want=action==='trimstart'?[{a:.5,b:before,start:0}]:action==='trimend'?[{a:0,b:2,start:0}]:action==='trim'?[{a:.5,b:2,start:0}]:[{a:0,b:.5,start:0},{a:2,b:before,start:.5}];
+ for(const key of ['clips','aud']){assert.equal(r[key].length,want.length);for(let i=0;i<want.length;i++)for(const k of ['a','b','start'])near(r[key][i][k],want[i][k],.01,key+' '+k)}
+ const cap=action==='trimstart'?{t0:0,t1:2.3}:action==='trimend'?{t0:0,t1:2}:action==='trim'?{t0:0,t1:1.5}:{t0:0,t1:1.3};near(r.caps[0].t0,cap.t0,.01);near(r.caps[0].t1,cap.t1,.01);
+ await page.locator('[data-a="undo"]').click();const undo=await ev(()=>({a:P().clips[0].a,b:P().clips[0].b,n:P().clips.length,an:P().aud.length,ct:P().caps[0].t1}));near(undo.a,0);near(undo.b,before);assert.equal(undo.n,1);assert.equal(undo.an,1);near(undo.ct,2.8);return r;
+});
 // ---------- 10.1.7 ----------
 await test('B5 clips whose media is missing are kept (offline), not deleted on the next edit',async()=>{const r=await ev(async()=>{
   const it=await openV(it=>{it.edit={v:2,srcs:[{id:'s0',self:true,name:'Video',kind:'video'},{id:'s9',name:'Lost music',kind:'audio'}],clips:[{id:'c1',src:'s0',a:0,b:2.8,start:0,speed:1,vol:1}],aud:[{id:'a1',src:'s9',a:0,b:2,start:.5,speed:1,vol:1}],nextId:200,W:640,H:360};it._edBlobs={}});
