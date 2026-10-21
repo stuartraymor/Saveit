@@ -218,7 +218,7 @@ function makeEngine(P){
   // 10.1.8: if the clip's picture isn't decoded yet, hold the last picture drawn instead of flashing black
   // 10.1.9: a picture is {img,w,h}: a playing element in the preview, or a decoded frame (S.xf) while saving
   const picOf=o=>{const el=o&&o.el;return el&&el.readyState>=2&&el.videoWidth?{img:el,w:el.videoWidth,h:el.videoHeight}:null};
-  function clipPic(c){if(S.mode==='export'&&S.xf)return S.xf[c.id]||null;const p=picOf(S.els[c.id]);if(p){S.held=p;return p}return S.held&&S.held.img.readyState>=2?S.held:null}
+  function clipPic(c){if(S.mode==='export'&&S.xf)return S.xf[c.id]||null;const p=picOf(S.els[c.id]);if(p){const k=Math.min(1,960/Math.max(p.w,p.h)),w=Math.max(1,Math.round(p.w*k)),h=Math.max(1,Math.round(p.h*k));if(!S.held||S.held.w!==w||S.held.h!==h){const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;S.held={img:canvas,w,h}}try{S.held.img.getContext('2d').drawImage(p.img,0,0,w,h)}catch(_){}return p}return S.held||null}
   function drawClip(g,c){const p=clipPic(c);if(!p)return;const el=p.img,vw=p.w,vh=p.h,W=e.W,H=e.H,cr=(S.cropEdit===c&&S.mode!=='export'?null:c.crop)||{},l=Math.round(vw*(cr.l||0)/100),tp=Math.round(vh*(cr.t||0)/100),r=Math.round(vw*(cr.r||0)/100),b=Math.round(vh*(cr.b||0)/100),sw=Math.max(2,vw-l-r),sh=Math.max(2,vh-tp-b),k=Math.min(W/sw,H/sh),dw=sw*k,dh=sh*k;
     g.drawImage(el,l,tp,sw,sh,(W-dw)/2,(H-dh)/2,dw,dh)}
   // 9.5: Zoom & pan - the picture (video and on-screen items) eases into the chosen box and back out again
@@ -344,9 +344,10 @@ function makeEngine(P){
 
 // ---------- styles ----------
 function css(){if(document.getElementById('vedCss2'))return;const s=document.createElement('style');s.id='vedCss2';s.textContent=`
+body:has(.vwrap) #undoBtn,body:has(.vwrap) #redoBtn{display:none!important}
 .vwrap{display:flex;flex-direction:row;min-height:0;min-width:0;height:100%;width:100%}
-.vmain{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
-.vwrap.vmin .vtlwrap,.vwrap.vmin .vz{display:none!important}.vwrap.vmin .vbox canvas.vprev{max-height:calc(100vh - 330px)}
+.vmain{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow-y:auto}
+.vwrap.vmin .vtlwrap,.vwrap.vmin .vz,.vwrap.vmin .veditbar,.vwrap.vmin .vselection{display:none!important}.vwrap.vmin .vbox canvas.vprev{max-height:calc(100vh - 330px)}
 .vside{width:350px;flex:none;background:var(--panel);border-left:1px solid var(--line);padding:10px 12px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;min-height:0}
 .vside>*{flex-shrink:0}.vinfo{border-top:1px solid var(--line);padding-top:8px;margin-top:auto}.vinfo-h{font-size:11px;color:var(--muted);margin-bottom:5px}
 .vside .vrow input[type=number]{width:58px}
@@ -356,8 +357,8 @@ function css(){if(document.getElementById('vedCss2'))return;const s=document.cre
 .vbox canvas.vprev{display:block;background:#000;max-width:100%;max-height:calc(100vh - 400px);min-height:120px;width:auto;height:auto}
 .vbox canvas.vov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;touch-action:none}
 .vpanel{background:var(--panel);border-top:1px solid var(--line);padding:8px 12px 10px;display:flex;flex-direction:column;gap:7px;overflow:visible}
-.vpanel>*{flex-shrink:0}.vselection{color:var(--muted);font-size:11px;min-height:14px}.veditbar{border-top:1px solid var(--line);padding-top:6px}.vtl:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.vtlwrap{overflow-x:auto;overflow-y:hidden;border-radius:6px;background:var(--check)}
+.vpanel>*{flex-shrink:0}.vselection{color:var(--muted);font-size:11px;min-height:14px}.veditbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 12px;border-top:1px solid var(--line);padding-top:6px}.vclip-actions{grid-column:1;grid-row:1}.vtrim-actions{grid-column:1;grid-row:2}.vhistory{grid-column:2;grid-row:1 / 3;display:flex;flex-direction:column;align-items:flex-end;gap:7px}.vhistory .vrow{justify-content:flex-end}.vannotating .vclip-actions,.vannotating .vtrim-actions{display:none}.vannotating .vhistory{grid-row:1;grid-column:2}.veditbar[hidden]{display:none}@media(max-width:1100px){.veditbar{grid-template-columns:1fr}.vclip-actions,.vtrim-actions,.vhistory{grid-column:1;grid-row:auto}.vhistory{align-items:flex-start}.vhistory .vrow{justify-content:flex-start}.vannotating .vhistory{grid-column:1;grid-row:auto}}.vtl:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.vtlwrap{overflow-x:auto;overflow-y:auto;max-height:clamp(112px,26vh,240px);border-radius:6px;background:var(--check)}
 .vpanel canvas.vtl{width:100%;height:140px;display:block;cursor:pointer;touch-action:none}
 .vrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .vrow .btn{padding:4px 9px;font-size:12px}.vrow label{display:flex;gap:4px;align-items:center;color:var(--muted);font-size:12px}
@@ -388,16 +389,25 @@ function mount(host,it,api){css();HK=api;
   it._edBlobs=it._edBlobs||{};
   host.innerHTML=`<div class="vmain"><div class="vstage"><div class="vbox"><canvas class="vprev" role="img" aria-label="Video preview"></canvas><canvas class="vov" aria-hidden="true"></canvas></div></div>
   <div class="vpanel">
-   <div class="vrow"><button class="btn" data-a="tog" title="Hide or show the timeline">▾ Hide timeline</button><button class="btn pri" data-a="play" title="Play from the playhead (Space)">Play</button><button class="btn" data-a="playsel" title="Play only the selected item or the In–Out range (Shift+Space)">Play selection</button><button class="btn" data-a="playall" title="Play everything from the start">Play all</button><button class="btn" data-a="mrestart" title="Back to the start and play">⏮ Restart</button><label><input type="checkbox" data-r="loop"> Loop</label><span class="vtime" data-r="time">Loading…</span><span class="sp"></span><span class="vz" style="display:contents"><button class="btn" data-a="zout" title="Zoom timeline out">−</button><span class="vh">Timeline zoom</span><button class="btn" data-a="zin" title="Zoom timeline in">+</button><button class="btn" data-a="fit" title="Show the whole timeline">Fit</button></span><button class="btn" data-a="snapping" aria-pressed="true" title="Snap clips and markers to nearby edges. Hold Alt while dragging to bypass snapping.">Snap</button></div>
-   <div class="vrow veditbar"><button class="btn" data-a="split" title="Split at playhead (S)">Split</button><button class="btn" data-a="del" title="Delete the selected item (Del). Video clips close the gap.">Delete</button><button class="btn" data-a="delgap" title="Delete but leave a gap">Delete (keep gap)</button>
-
-     <button class="btn" data-a="addvid" title="Add other videos from your library or a file to the end of the timeline">Add videos…</button><button class="btn" data-a="dupclip" title="Copy the selected clip and put the copy right after it">Duplicate</button><span class="sp"></span><button class="btn" data-a="undo" title="Undo (Ctrl+Z)">Undo</button><button class="btn" data-a="redo" title="Redo (Ctrl+Y)">Redo</button><button class="btn" data-a="reset" title="Go back to the original recording (you can Undo this)">Reset</button></div>
+   <div class="vrow"><button class="btn" data-a="tog" title="Hide or show the timeline">▾ Hide timeline</button><button class="btn pri" data-a="play" title="Play from the playhead (Space)">Play</button><button class="btn" data-a="playsel" title="Play only the selected item or the In–Out range (Shift+Space)">Play selection</button><button class="btn" data-a="mrestart" title="Play the whole video from the beginning">Play from start</button><label><input type="checkbox" data-r="loop"> Loop</label><span class="vtime" data-r="time">Loading…</span><span class="sp"></span><span class="vz" style="display:contents"><button class="btn" data-a="zout" title="Zoom timeline out">−</button><span class="vh">Timeline zoom</span><button class="btn" data-a="zin" title="Zoom timeline in">+</button><button class="btn" data-a="fit" title="Show the whole timeline">Fit</button></span><button class="btn vz" data-a="snapping" aria-pressed="true" title="Snap clips and markers to nearby edges. Hold Alt while dragging to bypass snapping.">Snap</button></div>
+   <div class="veditbar" role="group" aria-label="Timeline editing controls">
+    <div class="vrow vclip-actions" role="group" aria-label="Clip editing">
+     <button class="btn" data-a="split" title="Split clips at the playhead (S)">Split</button><button class="btn" data-a="del" title="Delete the selected clip and close its gap (Delete)">Delete &amp; close gap</button><button class="btn" data-a="delgap" title="Delete the selected video clip without moving later clips (Shift+Delete)">Delete (keep gap)</button><button class="btn" data-a="addvid" title="Add videos from your library or files to the end of the timeline">Add videos…</button><button class="btn" data-a="dupclip" title="Put a copy of the selected clip immediately after it">Duplicate clip</button>
+    </div>
+    <div class="vrow vtrim-actions" role="group" aria-label="Edit the In–Out range">
+     <button class="btn" data-a="trimstart" title="Remove everything before In and move the remaining timeline to the start">Trim beginning</button><button class="btn" data-a="trimend" title="Remove everything after Out">Trim end</button><button class="btn" data-a="cut" title="Remove In–Out and join the remaining timeline">Remove middle</button><button class="btn" data-a="trim" title="Keep only In–Out: trim off both ends of the timeline">Keep middle</button>
+    </div>
+    <div class="vhistory">
+     <div class="vrow"><button class="btn" data-a="undo" title="Undo (Ctrl+Z)">Undo</button><button class="btn" data-a="redo" title="Redo (Ctrl+Y)">Redo</button><button class="btn" data-a="reset" title="Restore the original recording and remove edits; you can Undo this">Reset edits</button></div>
+     <div class="vrow vrange"><label>In <input type="number" step="0.01" min="0" data-r="in" aria-label="In point (seconds)" title="Start of the timeline range; drag the In marker or press I at the playhead"></label><label>Out <input type="number" step="0.01" min="0" data-r="out" aria-label="Out point (seconds)" title="End of the timeline range; drag the Out marker or press O at the playhead"></label></div>
+    </div>
+   </div>
    <div class="vselection" data-r="selection" aria-live="polite">Click a clip or item to edit its settings.</div>
-   <div class="vtlwrap"><canvas class="vtl" tabindex="0" aria-label="Timeline. Left and Right move one frame; Space plays; S splits; I and O set the range."></canvas></div>
+   <div class="vtlwrap" role="region" aria-label="Timeline tracks" title="Scroll vertically to see all tracks; Ctrl+wheel zooms the timeline"><canvas class="vtl" tabindex="0" aria-label="Timeline. Left and Right move one frame; Space plays; S splits; I and O set the range."></canvas></div>
   </div></div>
   <div class="vside">
   <div class="vpane" data-pane="video">
-   <div class="vtabs">${[['clip','Clip'],['trans','Transitions'],['zoom','Zoom & pan'],['vfx','Visual effects'],['look','Layout'],['audio','Audio'],['caps','Captions'],['export','Export']].map(([k,l])=>`<button data-tab="${k}" title="${({clip:"Trim, speed and crop the selected clip, and set the whole video size and fades",trans:"Choose how one clip changes into the next",zoom:"Zoom in on part of the picture for a while",vfx:"Colour and look effects that you can time and stack",look:"Where the screen and webcam sit, and the background",audio:"Add music or a voice-over, and change clip volume and fades",caps:"Add text captions at set times",export:"Save the edit as a new video or as a GIF"})[k]}" aria-pressed="${k==='clip'}">${l}</button>`).join('')}</div>
+   <div class="vtabs">${[['clip','Crop'],['trans','Transitions'],['zoom','Zoom & pan'],['vfx','Visual effects'],['look','Layout'],['audio','Audio'],['caps','Captions'],['export','Export']].map(([k,l])=>`<button data-tab="${k}" title="${({clip:"Crop and adjust the selected clip, and set the whole video size and fades",trans:"Choose how one clip changes into the next",zoom:"Zoom in on part of the picture for a while",vfx:"Colour and look effects that you can time and stack",look:"Where the screen and webcam sit, and the background",audio:"Add music or a voice-over, and change clip volume and fades",caps:"Add text captions at set times",export:"Save the edit as a new video or as a GIF"})[k]}" aria-pressed="${k==='clip'}">${l}</button>`).join('')}</div>
    <div class="vsec" data-sec="clip">
      <div class="vrow" data-r="offrow" hidden></div><input type="file" data-r="relinkfile" hidden>
      <p class="vnote" data-r="clipnote">Click a clip on the timeline to edit it here.</p>
@@ -408,12 +418,7 @@ function mount(host,it,api){css();HK=api;
      <p class="vnote" data-r="cropnote" hidden>Drag the box on the picture, or its handles, to choose what to keep. Stop crop keeps it.</p>
      <div class="vrow"><span class="vh">Whole video</span><label>Size <select data-r="canvas"><option value="auto">Same as first clip</option><option value="1920x1080">1920 × 1080</option><option value="1280x720">1280 × 720</option><option value="854x480">854 × 480</option><option value="1080x1080">Square 1080</option><option value="1080x1920">Vertical 1080 × 1920</option></select></label>
        <label><input type="checkbox" data-r="fi"> Fade in from black</label><label><input type="checkbox" data-r="fo"> Fade out to black</label></div>
-   <div class="vrow"><span class="vnote" data-r="hint">Drag the circles on a bar to trim it. Drag the middle of a clip to move it, and slide it over another clip to overlap them.</span><span class="sp"></span>
-     <label>In <input type="number" step="0.1" min="0" data-r="in" aria-label="In point (seconds)"></label><label>Out <input type="number" step="0.1" min="0" data-r="out" aria-label="Out point (seconds)"></label></div>
-
-
-   <div class="vrow"><span class="vh">Trim whole timeline using In / Out</span><button class="btn" data-a="trimstart" title="Remove everything before the In marker and move the rest to the start">Trim beginning</button><button class="btn" data-a="trimend" title="Remove everything after the Out marker">Trim end</button><button class="btn" data-a="cut" title="Remove the part between In and Out, then join the remaining parts">Remove middle</button><button class="btn" data-a="trim" title="Keep the part between In and Out and remove everything outside it">Keep selected part</button></div>
-   <p class="vnote">Trim beginning removes before In. Trim end removes after Out. Remove middle deletes In–Out. Keep selected part keeps In–Out. These actions apply across the timeline.</p>
+   <p class="vnote" data-r="hint">Drag clip ends to trim a clip. The In / Out controls above the timeline apply across the whole project.</p>
 
    </div>
    <div class="vsec" data-sec="audio" hidden>
@@ -448,7 +453,7 @@ function mount(host,it,api){css();HK=api;
      <div class="vrow"><button class="btn pri" data-a="exportfile" title="Choose MP4, WebM or GIF, then choose a folder and file name">Export file…</button></div>
      <div class="vrow"><span class="vh">Video</span><label>Quality <select data-r="osize"><option value="project">Full size</option><option value="720">720p</option><option value="480">480p</option></select></label><label title="Frames per second for every save of this video, including the top-bar Save">Frame rate <select data-r="ofps"><option value="">Same as recording</option><option value="24">24</option><option value="25">25</option><option value="30">30</option><option value="60">60</option></select></label><button class="btn pri" data-a="apply" title="Save the edit as a new video in your library">Save copy to Library</button></div>
      <div class="vrow"><span class="vh">GIF</span><label>frames/sec <input type="number" min="1" max="30" value="10" data-r="fps"></label><label>width <input type="number" min="64" max="1920" step="20" value="480" data-r="gw"></label><button class="btn pri" data-a="gif">Save GIF</button><button class="btn" data-a="stop" hidden>Cancel</button></div>
-     <p class="vnote">Quality sets the size of the library copy. Export file uses the whole video size set in Clip. Frame rate applies to both.</p></div>
+     <p class="vnote">Quality sets the size of the library copy. Export file uses the whole video size set in Crop. Frame rate applies to both.</p></div>
   </div>
   <div class="vpane" data-pane="effects" hidden>
    <div class="vsec">
@@ -569,7 +574,7 @@ function mount(host,it,api){css();HK=api;
     if(c){add('Settings',()=>{if(ty==='ov'){showPane('tools')}else{showPane('video');setTab(ty==='aud'?'audio':ty==='cap'?'caps':ty==='zoom'?'zoom':ty==='vfx'?'vfx':'clip')}});
       if(ty==='clip'||ty==='aud'){add(c.mute?'Unmute '+(ty==='clip'?'video audio':'audio'):'Mute '+(ty==='clip'?'video audio':'audio'),()=>{snap();c.mute=!c.mute;eng.sync();refreshProps();changed()});add('Split at playhead',()=>act.split(),eng.t>c.start+MIN&&eng.t<clipEnd(c)-MIN);add('Duplicate',()=>act.dupclip());if(ty==='clip')add('Reset crop',()=>act.cropreset());else add('Reset sound effects',()=>{snap();c.fx=defFx();eng.refreshFx();showFx();changed()})}
       else {add('Duplicate',()=>{if(ty==='ov')act.odup();else if(ty==='vfx')act.vfxdup();else{snap();const copy=clone(c);copy.id=newId(e,'i');e[SEL_LIST[ty]].push(copy);select(ty,copy);changed()}})}
-      add(ty==='clip'?'Ripple delete':'Delete',()=>act.del());if(ty==='clip')add('Delete (keep gap)',()=>act.delgap());
+      add(ty==='clip'?'Delete & close gap':'Delete',()=>act.del());if(ty==='clip')add('Delete (keep gap)',()=>act.delgap());
     }
     add('Add video…',()=>act.addvid());add('Add audio…',()=>act.addaud());add('Add caption',()=>{showPane('video');setTab('caps');act.addcap()});add('Set In at playhead',()=>act.setin());add('Set Out at playhead',()=>act.setout());add('Reset In/Out range',()=>{inT=0;outT=D();syncRange()});add('Undo',()=>act.undo(),hist.length>0);add('Redo',()=>act.redo(),fut.length>0);
     if(!c)add('Reset video edit',()=>act.reset());
@@ -598,10 +603,10 @@ function mount(host,it,api){css();HK=api;
       else if(c.t0<a&&c.t1>b){c.t1-=gap;out.push(c)}else if(c.t0<a){c.t1=a;if(c.t1-c.t0>.1)out.push(c)}else if(c.t1>b){c.t0=a;c.t1-=gap;out.push(c)}}e[key]=out}}
   const act={
     cropstart(){cropStart()},cropstop(){cropStop(true)},cropcancel(){cropStop(false)},cropreset(){cropReset()},
-    tog(){host.classList.toggle('vmin');q('[data-a="tog"]').textContent=host.classList.contains('vmin')?'▴ Show timeline':'▾ Hide timeline';requestAnimationFrame(()=>{sizePrev&&sizePrev();drawTl()})},mplay(){if(eng.playing)eng.pause();else{playRange=null;eng.unlock();eng.play()}},mrestart(){eng.pause();playRange=null;eng.seek(0);eng.unlock();eng.play()},
+    tog(){host.classList.toggle('vmin');q('[data-a="tog"]').textContent=host.classList.contains('vmin')?'▴ Show timeline':'▾ Hide timeline';requestAnimationFrame(()=>{sizePrev&&sizePrev();drawTl()})},mplay(){if(eng.playing)eng.pause();else{playRange=null;eng.unlock();eng.play()}},mrestart(){playAll()},
     fit(){zoom=1;tl.parentElement.scrollLeft=0;dirty()},snapping(){snapEnabled=!snapEnabled;q('[data-a=snapping]').setAttribute('aria-pressed',snapEnabled)},
     exportfile(){api.exportFile?.()},
-    play(){togglePlay()},playsel(){playSel()},playall(){playAll()},zin(){zoom=Math.min(16,zoom*1.6);keepHead()},zout(){zoom=Math.max(1,zoom/1.6);if(zoom<1.05)zoom=1;keepHead()},
+    play(){togglePlay()},playsel(){playSel()},zin(){zoom=Math.min(16,zoom*1.6);keepHead()},zout(){zoom=Math.max(1,zoom/1.6);if(zoom<1.05)zoom=1;keepHead()},
     setin(){select(null);inT=clamp(eng.t,0,outT-.1);syncRange()},setout(){select(null);outT=clamp(eng.t,inT+.1,D());syncRange()},
     split(){const t=eng.t,targets=selClip()?[sel]:[...e.clips.map(c=>({type:'clip',ref:c})),...e.aud.map(c=>({type:'aud',ref:c}))];let n=0;snap();
       let skipped=0;for(const tg of targets){const c=tg.ref;if(tg.type==='clip'&&e.clips.some(o=>o!==c&&o.start<t&&clipEnd(o)>t)){skipped++;continue}if(t>c.start+MIN&&t<clipEnd(c)-MIN){const sp=c.speed||1,c2=clone(c);c2.id=newId(e,tg.type==='clip'?'c':'a');c2.a=c.a+(t-c.start)*sp;c2.start=t;c2.afi=0;c2.trans={type:'none'};c.b=c2.a;c.afo=0;(tg.type==='clip'?e.clips:e.aud).push(c2);n++}}
@@ -667,12 +672,12 @@ function mount(host,it,api){css();HK=api;
   qa('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;qa('[data-tab]').forEach(x=>x.setAttribute('aria-pressed',x===b));qa('[data-sec]').forEach(s=>s.hidden=s.dataset.sec!==tab);{const hn=R('hint');if(hn)hn.hidden=!['clip','trans','zoom'].includes(tab)}if(tab==='audio')showFx();refreshProps();ovui();if(tab==='look')lookui()});
   const setTab=k=>{const b=q(`[data-tab="${k}"]`);if(b)b.click()};
   function selectionUi(){const type=sel?.type,c=sel?.ref,video=type==='clip';
-    const message=c?({clip:'Video clip',aud:'Audio clip',cap:'Caption',zoom:'Zoom',vfx:'Visual effect',ov:'On-screen item'}[type]+' selected'+(video?' · Ripple delete closes the gap; Shift+Delete keeps it.':'')):'Click a clip or item to edit its settings.';if(R('selection').textContent!==message)R('selection').textContent=message;
-    q('[data-a=del]').textContent=video?'Ripple delete':'Delete';q('[data-a=del]').disabled=!c;q('[data-a=delgap]').disabled=!video;q('[data-a=dupclip]').disabled=!selClip();q('[data-a=undo]').disabled=!hist.length;q('[data-a=redo]').disabled=!fut.length;
+    const message=c?({clip:'Video clip',aud:'Audio clip',cap:'Caption',zoom:'Zoom',vfx:'Visual effect',ov:'On-screen item'}[type]+' selected'+(video?' · Delete closes the gap; Shift+Delete keeps it.':'')):'Click a clip or item to edit its settings.';if(R('selection').textContent!==message)R('selection').textContent=message;
+    q('[data-a=del]').textContent=video?'Delete & close gap':'Delete';q('[data-a=del]').disabled=!c;q('[data-a=delgap]').disabled=!video;q('[data-a=dupclip]').disabled=!selClip();q('[data-a=undo]').disabled=!hist.length;q('[data-a=redo]').disabled=!fut.length;
   }
   function refreshProps(){const c=selClip(),isV=sel&&sel.type==='clip';
     selectionUi();
-    // 10.1.7: with nothing selected, the Clip tab edits the video clip under the playhead
+    // 10.1.7: with nothing selected, the Crop tab edits the video clip under the playhead
     const ec=c||playClip(),eV=isV||(!c&&!!ec);lastPlayClip=c?null:ec;
     R('clipnote').textContent=ec?(srcName(ec.src)+(eV?' — video clip':' — audio clip')+(c?'':' (at the playhead)')):'Click a clip on the timeline to edit it here.';
     const row=R('cprops');row.style.opacity=ec?1:.45;row.style.pointerEvents=ec?'':'none';
@@ -919,7 +924,7 @@ function mount(host,it,api){css();HK=api;
         if(url){try{const m2=await loadMeta(url,s.kind==='audio');rt.src[s.id]={url,blob,dur:m2.dur,w:m2.w,h:m2.h}}catch(_){}}}}
     if(dead)return;
     // 10.1.7: clips whose media is missing are kept in e.offline (saved with the project) instead of being deleted, and come back on Relink
-    offlineSync();{const gone=offlineSrcs().map(s=>s.name||'a clip');if(gone.length)toast('Some media could not be found: '+gone.join(', ')+'. Its clips are kept offline. Use Relink in the Clip tab to find the file.',9000)}
+    offlineSync();{const gone=offlineSrcs().map(s=>s.name||'a clip');if(gone.length)toast('Some media could not be found: '+gone.join(', ')+'. Its clips are kept offline. Use Relink in the Crop tab to find the file.',9000)}
     if(!e.clips.length){const s0=e.srcs.find(s=>s.self);e.clips.push({id:newId(e,'c'),src:s0.id,a:0,b:meta.dur,start:0,speed:1,vol:1,mute:false,crop:{l:0,t:0,r:0,b:0},trans:{type:'none'},afi:0,afo:0})}
     if(dead)return;eng=makeEngine({e,rt});eng.onTick(onTick);eng.onEnd(()=>{playRange=null;if(rec)rec.mr.stop()});sizePrev();inT=0;outT=D();ready=true;refreshAll();
     for(const s of e.srcs){const r=rt.src[s.id];if(r&&r.blob&&!r.peaks)computePeaks(r.blob).then(p=>{if(p)r.peaks=p})}
@@ -927,7 +932,7 @@ function mount(host,it,api){css();HK=api;
   }catch(err){if(!dead)toast(err.message||String(err))}})();
   raf=requestAnimationFrame(tick);
   // 8.0: the side panel shows one view at a time (video, effects or drawing tools); the editor's toolbar buttons pick it.
-  const showPane=k=>{if(crop&&k!=='video')cropStop(true);pane=k;qa('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==k);if(k==='effects'&&e)refreshProps()};
+  const showPane=k=>{if(crop&&k!=='video')cropStop(true);pane=k;host.classList.toggle('vannotating',k==='tools');qa('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==k);if(k==='effects'&&e)refreshProps()};
   return{insertClip,get time(){return eng?.t||0},pause:()=>eng?.pause(),seek:t=>eng?.seek(t),undo:()=>act.undo(),redo:()=>act.redo(),info:q('.vinfo'),video:prev,pane:k=>{if(k)showPane(k);return pane},tool:t=>{if(t!==undefined){if(crop)cropStop(true);otool=t;if(!otool&&sel&&sel.type==='ov')select(null);ovui()}return otool},destroy(){dead=true;fitObs.disconnect();cancelAnimationFrame(raf);document.removeEventListener('keydown',key,true);document.removeEventListener('pointerdown',onPtr,true);document.removeEventListener('keydown',onKey,true);document.removeEventListener('keydown',dirty,true);if(exp)exp.cancel=true;try{rec&&rec.mr.stop()}catch(_){}if(eng)eng.destroy();pasteUrls.forEach(url=>URL.revokeObjectURL(url))},saveGif:()=>run('gif'),needsRender:()=>!!(e&&eng&&(eng.hasCam()||(e.look&&(lookOf(e).layout!=='full'||lookOf(e).bg!=='black'))||isEdited())),isEdited:()=>!!(e&&eng&&isEdited()),duration:()=>D(),
     get exporting(){return !!exp}, // 10.2.0: lets the update check see that a video export is running
     renderBlob:async(fmt='mp4')=>{if(exp)throw new Error('An export is already running.');exp={cancel:false};eng.pause();const bar=R('prog'),fill=bar.firstElementChild,stopB=q('[data-a="stop"]');bar.hidden=false;stopB.hidden=false;fill.style.width='0';
