@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saveit – Free screen capture for Windows</title>
+<meta name="description" content="Saveit is a free, open-source screen capture, recording and annotation app for Windows. Capture it, mark it up, record it, and turn it into a how-to guide. No account, no subscription, no watermark.">
+<link rel="icon" type="image/png" href="images/icon.png">
+<meta property="og:title" content="Saveit – Free screen capture for Windows">
+<meta property="og:description" content="Capture it. Mark it up. Record it. Turn it into a how-to guide. Free and open source.">
+<meta property="og:image" content="images/editor.png">
+<meta property="og:type" content="website">
+<style>
+  :root {
+    --teal: #2db3a0;
+    --teal-dark: #1f8f7f;
+    --red: #e64a3c;
+    --ink: #0b2420;
+    --bg: #ffffff;
+    --bg-soft: #f2f7f6;
+    --text: #13211f;
+    --muted: #51625f;
+    --line: #dce6e4;
+    --card: #ffffff;
+    --shadow: 0 10px 30px rgba(11, 36, 32, .12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1716;
+      --bg-soft: #13201e;
+      --text: #e8f0ee;
+      --muted: #9fb3af;
+      --line: #23332f;
+      --card: #15221f;
+      --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.6 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  }
+  img { max-width: 100%; height: auto; display: block; }
+  a { color: var(--teal-dark); }
+  @media (prefers-color-scheme: dark) { a { color: var(--teal); } }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+
+  /* Header */
+  header.top {
+    position: sticky; top: 0; z-index: 10;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  header.top .wrap { display: flex; align-items: center; gap: 16px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; color: var(--text); text-decoration: none; }
+  .brand img { width: 32px; height: 32px; }
+  nav.links { margin-left: auto; display: flex; gap: 22px; align-items: center; }
+  nav.links a { color: var(--muted); text-decoration: none; font-size: 15px; }
+  nav.links a:hover { color: var(--text); }
+  nav.links a.btn { color: #fff; }
+  @media (max-width: 720px) { nav.links a.hide-sm { display: none; } }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--teal); color: #fff; text-decoration: none;
+    font-weight: 600; border-radius: 10px; padding: 10px 18px;
+    border: 0; transition: background .15s, transform .15s;
+  }
+  .btn:hover { background: var(--teal-dark); transform: translateY(-1px); }
+  .btn.big { font-size: 20px; padding: 16px 30px; border-radius: 12px; box-shadow: 0 6px 18px rgba(45, 179, 160, .35); }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  .btn.ghost:hover { background: var(--bg-soft); }
+  .btn svg { width: 22px; height: 22px; flex: none; }
+
+  /* Hero */
+  .hero { text-align: center; padding: 70px 0 40px; }
+  .hero .logo { width: 88px; height: 88px; margin: 0 auto 18px; }
+  .hero h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.1; margin: 0 0 14px; letter-spacing: -.02em; }
+  .hero h1 span { color: var(--teal); }
+  .hero p.lead { font-size: clamp(18px, 2.4vw, 22px); color: var(--muted); max-width: 720px; margin: 0 auto 30px; }
+  .cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .release-line { margin-top: 14px; font-size: 14px; color: var(--muted); min-height: 1.6em; }
+  .pills { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+  .pill { font-size: 14px; padding: 4px 12px; border-radius: 999px; background: var(--bg-soft); border: 1px solid var(--line); color: var(--muted); }
+
+  /* Screenshot frame */
+  .frame {
+    margin: 40px auto 0; max-width: 1000px;
+    border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--line); box-shadow: var(--shadow);
+    background: #111;
+  }
+  .frame .bar { height: 30px; background: #1d2a28; display: flex; align-items: center; gap: 7px; padding: 0 12px; }
+  .frame .bar i { width: 11px; height: 11px; border-radius: 50%; background: #3b4b48; display: block; }
+
+  /* Sections */
+  section { padding: 70px 0; }
+  section.soft { background: var(--bg-soft); }
+  h2 { font-size: clamp(28px, 4vw, 38px); margin: 0 0 10px; text-align: center; letter-spacing: -.01em; }
+  .sub { text-align: center; color: var(--muted); max-width: 680px; margin: 0 auto 40px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; }
+  .card .ic { width: 44px; height: 44px; border-radius: 10px; background: color-mix(in srgb, var(--teal) 16%, transparent); color: var(--teal); display: grid; place-items: center; margin-bottom: 14px; }
+  .card .ic svg { width: 24px; height: 24px; }
+  .card h3 { margin: 0 0 6px; font-size: 19px; }
+  .card p { margin: 0; color: var(--muted); font-size: 16px; }
+
+  .demo { display: grid; grid-template-columns: 1fr 1.6fr; gap: 40px; align-items: center; margin-bottom: 60px; }
+  .demo:last-child { margin-bottom: 0; }
+  .demo.flip { grid-template-columns: 1.6fr 1fr; }
+  .demo.flip .txt { order: 2; }
+  .demo h3 { font-size: 26px; margin: 0 0 10px; }
+  .demo p { color: var(--muted); margin: 0; }
+  .demo img { border-radius: 10px; border: 1px solid var(--line); box-shadow: var(--shadow); }
+  @media (max-width: 820px) {
+    .demo, .demo.flip { grid-template-columns: 1fr; gap: 18px; }
+    .demo.flip .txt { order: 0; }
+  }
+
+  .widget-shot { max-width: 900px; margin: 0 auto; }
+  .widget-shot img { border-radius: 10px; border: 1px solid var(--line); box-shadow: var(--shadow); }
+  .widget-shot p { text-align: center; color: var(--muted); font-size: 15px; margin-top: 12px; }
+
+  table.keys { width: 100%; max-width: 640px; margin: 0 auto; border-collapse: collapse; }
+  table.keys td { padding: 12px 10px; border-bottom: 1px solid var(--line); }
+  table.keys td:first-child { white-space: nowrap; width: 1%; }
+  kbd { font: 600 14px/1 "Segoe UI", system-ui, sans-serif; background: var(--card); border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 6px; padding: 4px 8px; }
+
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 0 auto; max-width: 720px; }
+  .steps li { counter-increment: s; position: relative; padding: 0 0 22px 56px; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: -2px; width: 38px; height: 38px; border-radius: 50%; background: var(--red); color: #fff; font-weight: 700; display: grid; place-items: center; }
+  .steps li b { display: block; font-size: 18px; }
+  .steps li span { color: var(--muted); }
+
+  .note { max-width: 720px; margin: 10px auto 0; background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--teal); border-radius: 10px; padding: 16px 20px; color: var(--muted); font-size: 15px; }
+
+  .final { text-align: center; }
+  .final p { color: var(--muted); margin: 0 auto 28px; max-width: 600px; }
+
+  footer { border-top: 1px solid var(--line); padding: 30px 0; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 26px; align-items: center; }
+  footer a { color: var(--muted); }
+  footer .right { margin-left: auto; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="images/icon.png" alt="">Saveit</a>
+    <nav class="links">
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#in-action">See it in action</a>
+      <a class="hide-sm" data-link="repo" href="https://github.com/stuartraymor/Saveit">GitHub</a>
+      <a class="btn" data-link="download" href="https://github.com/stuartraymor/Saveit/releases/latest/download/Saveit-Setup.exe">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="hero wrap">
+    <img class="logo" src="images/icon.png" alt="Saveit logo">
+    <h1>Capture it. Mark it up.<br><span>Record it. Share it.</span></h1>
+    <p class="lead">Saveit is a free screen capture, recording and annotation app for Windows. Grab your screen, add arrows and callouts, record videos, and turn clicks into step-by-step guides.</p>
+    <div class="cta">
+      <a class="btn big" data-link="download" href="https://github.com/stuartraymor/Saveit/releases/latest/download/Saveit-Setup.exe">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg>
+        Download for Windows
+      </a>
+      <a class="btn big ghost" data-link="repo" href="https://github.com/stuartraymor/Saveit">View on GitHub</a>
+    </div>
+    <div class="release-line" id="release-line">Always the newest version · Windows 10 and 11</div>
+    <div class="pills">
+      <span class="pill">Free forever</span>
+      <span class="pill">No account</span>
+      <span class="pill">No watermark</span>
+      <span class="pill">Open source (MIT)</span>
+    </div>
+
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <img src="images/demo.gif" width="1000" height="566" alt="Saveit demo: open a picture, add an arrow, a callout, numbered steps and a highlight">
+    </div>
+  </div>
+
+  <section id="features" class="soft">
+    <div class="wrap">
+      <h2>Everything you need to explain your screen</h2>
+      <p class="sub">Made for people who explain things to other people: work instructions, how-to guides, bug reports, training material, or a quick "click here" picture in an email.</p>
+      <div class="grid">
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5"><rect x="3.5" y="3.5" width="17" height="17" rx="2"/></svg></div>
+          <h3>Capture anything</h3>
+          <p>A region, a window, the full screen, a whole scrolling page, or one shot per click. Grab Text reads words off the screen so you can paste them.</p>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 18 6M18 6h-7M18 6v7"/></svg></div>
+          <h3>Mark it up</h3>
+          <p>Arrows, callouts, text, shapes, numbered steps, stamps, highlight, blur, spotlight, magnify, crop and Magic Cut. Most things can be rotated.</p>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h10M9 12h10M9 19h10"/><circle cx="4.5" cy="5" r="1.5"/><circle cx="4.5" cy="12" r="1.5"/><circle cx="4.5" cy="19" r="1.5"/></svg></div>
+          <h3>Step-by-step guides</h3>
+          <p>Click through a task and Saveit builds an illustrated guide, naming each step for you. Export to Word, PDF, PowerPoint or pictures.</p>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg></div>
+          <h3>Record and edit video</h3>
+          <p>Record your screen with mic, system sound and webcam. Trim on a timeline, add captions, arrows, zooms and a voice-over. Save as MP4, WebM or GIF.</p>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
+          <h3>Record audio</h3>
+          <p>Up to two microphones plus computer sound, each on its own track. Clean it up with noise reduction, EQ and voice presets. Save as WAV, MP3 or M4A.</p>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></div>
+          <h3>Copy and paste anywhere</h3>
+          <p>Copy the finished picture and paste it straight into Outlook, Gmail, Teams or any other app. It sits in the tray, so hotkeys always work.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="in-action">
+    <div class="wrap">
+      <h2>See it in action</h2>
+      <p class="sub">Real recordings of Saveit, nothing staged.</p>
+
+      <div class="demo">
+        <div class="txt">
+          <h3>Edit a recording</h3>
+          <p>Trim and cut a screen recording on the timeline, then add a caption and a zoom to point out what matters.</p>
+        </div>
+        <img src="images/edit-video.gif" width="1000" height="566" loading="lazy" alt="Saveit video editor: play a recording, split it, delete a part, add a caption and a zoom">
+      </div>
+
+      <div class="demo flip">
+        <div class="txt">
+          <h3>Hide private information</h3>
+          <p>Blur an email address and a secret key, then spotlight the button you want people to click.</p>
+        </div>
+        <img src="images/hide-private-info.gif" width="1000" height="566" loading="lazy" alt="Saveit: blur an email and an API key, then spotlight a button">
+      </div>
+
+      <div class="demo">
+        <div class="txt">
+          <h3>Grab Text</h3>
+          <p>Drag around any text in a picture and Saveit reads it for you, ready to edit and copy.</p>
+        </div>
+        <img src="images/grab-text.gif" width="1000" height="566" loading="lazy" alt="Saveit Grab Text: select text in a picture and copy the recognized words">
+      </div>
+    </div>
+  </section>
+
+  <section class="soft">
+    <div class="wrap">
+      <h2>One small bar, always ready</h2>
+      <p class="sub">Pick Image, Video or Audio, choose what to grab, and press Capture.</p>
+      <div class="widget-shot">
+        <img src="images/widget.png" width="1100" height="102" loading="lazy" alt="The small Saveit capture bar that floats above your screen">
+      </div>
+      <div class="widget-shot" style="margin-top:40px">
+        <img src="images/editor.png" width="1600" height="905" loading="lazy" alt="The Saveit editor with an annotated screenshot: arrow, callout, numbered steps and highlight">
+        <p>The editor: every tool has its own settings panel on the right.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <h2>Up and running in a minute</h2>
+      <p class="sub">No admin rights needed. It installs just for you.</p>
+      <ol class="steps">
+        <li><b>Download and install</b><span>Click <a data-link="download" href="https://github.com/stuartraymor/Saveit/releases/latest/download/Saveit-Setup.exe">Download for Windows</a>, open the file, and click Install.</span></li>
+        <li><b>Capture</b><span>Press <kbd>Print Screen</kbd>, drag over what you want, and the editor opens with your picture.</span></li>
+        <li><b>Mark it up and share</b><span>Add an arrow or a callout, then click Copy and paste it into an email or chat, or click Save.</span></li>
+      </ol>
+
+      <table class="keys" style="margin-top:20px">
+        <tr><td><kbd>Print Screen</kbd></td><td>Capture a region</td></tr>
+        <tr><td><kbd>Shift</kbd> + <kbd>Print Screen</kbd></td><td>Capture a window</td></tr>
+        <tr><td><kbd>Ctrl</kbd> + <kbd>Print Screen</kbd></td><td>Capture the full screen</td></tr>
+        <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd></td><td>Start or stop a screen recording</td></tr>
+        <tr><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>S</kbd></td><td>Start a step-by-step guide</td></tr>
+      </table>
+
+      <div class="note">
+        <b>"Windows protected your PC"?</b> Saveit isn't code-signed yet, so Windows may show this the first time. Click <b>More info</b>, then <b>Run anyway</b>. Saveit is open source, so anyone can <a data-link="repo" href="https://github.com/stuartraymor/Saveit">read every line of the code</a>.
+      </div>
+    </div>
+  </section>
+
+  <section class="soft">
+    <div class="wrap">
+      <h2>Private by design</h2>
+      <p class="sub" style="margin-bottom:0">No account, no analytics, no tracking. Saveit never uploads your captures or recordings. It only goes online to download its runtime during setup, and when you click Check for Updates.</p>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <h2>Try Saveit today</h2>
+      <p>Free for everyone, forever. Updates are one click from inside the app.</p>
+      <a class="btn big" data-link="download" href="https://github.com/stuartraymor/Saveit/releases/latest/download/Saveit-Setup.exe">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg>
+        Download for Windows
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Stuart Raymor · <a data-link="license" href="https://github.com/stuartraymor/Saveit/blob/main/LICENSE">MIT License</a></span>
+    <a data-link="releases" href="https://github.com/stuartraymor/Saveit/releases">All releases</a>
+    <a data-link="issues" href="https://github.com/stuartraymor/Saveit/issues">Report a problem</a>
+    <a data-link="repo" href="https://github.com/stuartraymor/Saveit">Source code</a>
+    <span class="right" id="footer-version"></span>
+  </div>
+</footer>
+
+<script>
+  // ---------------------------------------------------------------
+  // SITE SETTINGS: the only place links are defined.
+  // The download link uses GitHub's "latest release" address, so it
+  // always gives the newest version. Nothing here needs to change
+  // when you publish a release, as long as each release keeps an
+  // asset named exactly SETUP_FILE.
+  // ---------------------------------------------------------------
+  const SITE = {
+    REPO: "stuartraymor/Saveit",
+    SETUP_FILE: "Saveit-Setup.exe",
+  };
+
+  const base = "https://github.com/" + SITE.REPO;
+  const LINKS = {
+    repo: base,
+    releases: base + "/releases",
+    issues: base + "/issues",
+    license: base + "/blob/main/LICENSE",
+    download: base + "/releases/latest/download/" + SITE.SETUP_FILE,
+  };
+  document.querySelectorAll("[data-link]").forEach(a => {
+    const url = LINKS[a.dataset.link];
+    if (url) a.href = url;
+  });
+
+  // Show the current version number. If GitHub can't be reached,
+  // the page keeps its generic text and every link still works.
+  fetch("https://api.github.com/repos/" + SITE.REPO + "/releases/latest")
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(rel => {
+      const v = (rel.tag_name || "").replace(/^v/, "");
+      if (!v) return;
+      const date = rel.published_at
+        ? new Date(rel.published_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+        : "";
+      const line = document.getElementById("release-line");
+      line.textContent = "";
+      line.append("Version " + v + (date ? ", released " + date : "") + " · ");
+      const notes = document.createElement("a");
+      notes.href = rel.html_url || LINKS.releases;
+      notes.textContent = "What's new";
+      line.append(notes);
+      document.getElementById("footer-version").textContent = "Latest: version " + v;
+    })
+    .catch(() => {});
+</script>
+</body>
+</html>
