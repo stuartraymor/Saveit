@@ -481,7 +481,8 @@ function mount(host,it,api){css();HK=api;
 
   // ----- timeline -----
   const PAD=11,LANE=18,CL=28;
-  const xOf=t=>PAD+t/D()*(tl.clientWidth-2*PAD),tOf=x=>clamp((x-PAD)/Math.max(1,tl.clientWidth-2*PAD)*D(),0,D());
+  const timelineD=()=>tdrag?.duration||D();
+  const xOf=t=>PAD+t/timelineD()*(tl.clientWidth-2*PAD),tOf=x=>clamp((x-PAD)/Math.max(1,tl.clientWidth-2*PAD)*timelineD(),0,timelineD());
   function lanes(items,rng){const ends=[],out=[];for(const x of [...items].sort((a,b)=>rng(a)[0]-rng(b)[0])){let l=0;const [s,en]=rng(x);while(ends[l]!==undefined&&ends[l]>s+1e-6)l++;ends[l]=en;out.push([x,l])}return{out,n:Math.max(1,ends.length)}}
   const isSel=x=>sel&&sel.ref===x.ref;
   function layout(){const G=[];let y=20;L=[];
@@ -534,9 +535,9 @@ function mount(host,it,api){css();HK=api;
   function dragMove(d,t){const ref=d.it.ref,len=d.len;let na=Math.max(0,t-d.off);const s1=snapT(na,ref),s2=snapT(na+len,ref)-len;na=Math.abs(s1-na)<=Math.abs(s2-na)?s1:s2;na=Math.max(0,na);
     if(d.it.type==='clip'||d.it.type==='aud')ref.start=na;else{ref.t0=na;ref.t1=na+len}}
   tl.addEventListener('pointerdown',ev=>{if(!ready||ev.button!==0)return;tl.setPointerCapture(ev.pointerId);tsnap=ev.altKey;const x=ev.offsetX,y=ev.offsetY,h=hitTl(x,y);
-    if(h.kind==='in'||h.kind==='out'){select(null);playRange=null;tdrag={k:h.kind};return}
-    if(h.kind==='edge'){select(h.it.type,h.it.ref);tdrag={k:'edge',it:h.it,edge:h.edge,moved:false};return}
-    if(h.kind==='body'){select(h.it.type,h.it.ref);const [a,b]=tget(h.it);tdrag={k:'move',it:h.it,off:tOf(x)-a,len:b-a,moved:false};playRange=null;return}
+    if(h.kind==='in'||h.kind==='out'){select(null);playRange=null;tdrag={k:h.kind,duration:D()};return}
+    if(h.kind==='edge'){select(h.it.type,h.it.ref);tdrag={k:'edge',duration:D(),it:h.it,edge:h.edge,moved:false};return}
+    if(h.kind==='body'){select(h.it.type,h.it.ref);const [a,b]=tget(h.it);tdrag={k:'move',duration:D(),it:h.it,off:tOf(x)-a,len:b-a,moved:false};playRange=null;return}
     if(h.kind==='head'){tdrag={k:'seek'};return}
     select(null);playRange=null;tdrag={k:'seek'};eng.pause();eng.seek(tOf(x))});
   tl.addEventListener('pointermove',ev=>{if(!ready)return;const x=ev.offsetX,y=ev.offsetY;
@@ -628,7 +629,7 @@ function mount(host,it,api){css();HK=api;
     eng.sync();eng.refreshFx();sizePrev();outT=atEnd?D():Math.min(o0,D());inT=Math.min(i0,Math.max(0,outT-.1));refreshAll();changed()}
   function doDelete(keepGap){if(!sel){toast('Click something on the timeline first.');return}snap();const r=sel.ref,ty=sel.type;
     if(ty==='clip'){const s0=r.start,end=clipEnd(r);e.clips=e.clips.filter(c=>c!==r);if(!keepGap){const nx=e.clips.filter(c=>c.start>s0+1e-6).map(c=>c.start),shift=Math.max(0,Math.min(end,...nx)-s0);
-      if(shift>0){for(const c of [...e.clips,...e.aud])if(c.start>s0+1e-6)c.start=Math.max(s0,c.start-shift);for(const c of [...e.caps,...e.ovs,...e.zooms,...e.vfx])if(c.t0>s0+1e-6){const n0=Math.max(s0,c.t0-shift);c.t1=Math.max(n0+.1,c.t1-shift);c.t0=n0}}}
+      if(shift>0)removeSpan(s0,s0+shift)}
       }
     else if(ty==='aud')e.aud=e.aud.filter(c=>c!==r);else if(ty==='cap')e.caps=e.caps.filter(c=>c!==r);else if(ty==='zoom')e.zooms=e.zooms.filter(c=>c!==r);else if(ty==='vfx')e.vfx=e.vfx.filter(c=>c!==r);else e.ovs=e.ovs.filter(c=>c!==r);
     sel=null;eng.sync();eng.t=Math.min(eng.t,D());refreshAll();redraw();changed()}
@@ -817,7 +818,7 @@ function mount(host,it,api){css();HK=api;
     const hs=hitOv(x,y,k);
     if(otool==='select'||(hs&&hs===cur)){if(hs)select('ov',hs);else select(null);if(hs){snap();odrag={mode:'move',lx:x,ly:y}}return}
     snap();const s=HK.newShape(otool,x,y);s.t0=t;s.t1=t+3;const sc=Math.max(1,e.H/720);s.w=Math.round((+R('owid').value||6)*sc);s.fs=Math.round((s.fs||24)*sc*1.3);if(otool!=='highlight')s.c=R('ocol').value;
-    if(otool==='step'||otool==='stamp'){if(otool==='step')s.n=e.ovs.filter(z=>z.t==='step').length+1;e.ovs.push(s);select('ov',s);return}
+    if(otool==='step'||otool==='stamp'){if(otool==='step')s.n=e.ovs.filter(z=>z.t==='step').length+1;e.ovs.push(s);select('ov',s);changed();return}
     if(otool==='text'){HK.askText('Text on the video','','Add').then(txt=>{if(txt){s.txt=txt;s._w=null;s.x2=s.x1+10;s.y2=s.y1+10;e.ovs.push(s);select('ov',s);changed()}else hist.pop()});return}
     select(null);odrag={mode:'draw',s}});
   ov.addEventListener('pointermove',ev=>{if(crop){cropMove(ev);return}
@@ -856,7 +857,7 @@ function mount(host,it,api){css();HK=api;
     else if(k==='home'){ev.preventDefault();eng.pause();eng.seek(0)}else if(k==='end'){ev.preventDefault();eng.pause();eng.seek(D())}
     else if(k==='delete'||k==='backspace'){if(sel){ev.preventDefault();doDelete(ev.shiftKey)}else return}
     else if(k==='escape'){select(null);playRange=null}else if(k===' '){ev.preventDefault();if(ev.shiftKey)playSel();else togglePlay()}else if(k==='i')act.setin();else if(k==='o')act.setout();else if(k==='s'&&!ev.ctrlKey&&!ev.metaKey)act.split();
-    else if(k==='arrowleft'){ev.preventDefault();eng.pause();eng.seek(eng.t-(ev.shiftKey?1:.1))}else if(k==='arrowright'){ev.preventDefault();eng.pause();eng.seek(eng.t+(ev.shiftKey?1:.1))}else return;ev.stopPropagation()};
+    else if(k==='arrowleft'){ev.preventDefault();eng.pause();eng.seek(eng.t-(ev.shiftKey?1:1/(e.fps||30)))}else if(k==='arrowright'){ev.preventDefault();eng.pause();eng.seek(eng.t+(ev.shiftKey?1:1/(e.fps||30)))}else return;ev.stopPropagation()};
   document.addEventListener('keydown',key,true);
   function refreshAll(){refreshProps();caplist();ovui();offlineUi();R('canvas').value=['1920x1080','1280x720','854x480','1080x1080','1080x1920'].includes(e.W+'x'+e.H)?e.W+'x'+e.H:'auto';R('fi').checked=!!e.fadeIn;R('fo').checked=!!e.fadeOut;R('muteall').checked=!!e.muteVideo;R('ofps').value=e.fps?String(e.fps):'';showFx()}
   // 9.8: true when the timeline is anything other than the untouched recording, so Save renders the edit.

@@ -39,7 +39,8 @@ await test('10.2.9 adaptive menus and live In Out fields',async()=>{
  near(+(await page.locator('[data-r="in"]').inputValue()),.7,.03,'Set In field');
  await ev(async()=>{await D().eng.seek(2.2);D().act.setout()});await QAnoop();near(+(await page.locator('[data-r="out"]').inputValue()),2.2,.03,'Set Out field');
  const tl=page.locator('.vtl'),box=await tl.boundingBox();
- const xx=t=>11+t/3*(box.width-22);
+ const markerDuration=await ev(()=>__T.vid._ctl.duration());
+ const xx=t=>11+t/markerDuration*(box.width-22);
  await page.mouse.move(box.x+xx(.7),box.y+9);await page.mouse.down();await page.mouse.move(box.x+xx(1),box.y+9,{steps:8});await page.mouse.up();await QAnoop();
  const live=await ev(()=>({v:D().inT,field:+document.querySelector('[data-r="in"]').value}));near(live.v,live.field,.01,'drag sync');assert.ok(live.v>.85,'marker did not move');
  await tl.click({button:'right',position:{x:box.width/2,y:45}});await page.getByRole('menuitem',{name:'Mute video audio',exact:true}).click();assert.equal(await ev(()=>P().clips[0].mute),true);
@@ -87,6 +88,23 @@ await test('B19 Undo keeps the selected clip and the In/Out range',async()=>{con
   const c2=P().clips.find(c=>c.start>1);D().select('clip',c2);change('[data-r="fi"]',true);D().act.undo();
   return{sel:D().sel?.ref?.id,want:c2.id,inT:D().inT,outT:D().outT,fi:P().fadeIn}});
   assert.equal(r.fi,false,'undo did not undo');assert.equal(r.sel,r.want,'selection lost');near(r.inT,.5,.02,'In');near(r.outT,2.5,.02,'Out');return r});
+
+for(const [i,tool] of ['step','stamp'].entries())await test('New '+tool+' is saved immediately without another edit',async()=>{
+ await ev(async()=>{await openV();await QA.sleep(1200)});
+ await ev(tool=>__T.vid._ctl.tool(tool),tool);
+ await page.locator('.vprev').locator('..').locator('canvas').last().click({position:{x:80+i*170,y:70}});
+ await page.waitForTimeout(1300);
+ const r=await ev(async()=>({live:P().ovs.map(s=>s.t),saved:(await __T.dbRead(cur.id))?.edit?.ovs?.map(s=>s.t)||[]}));
+ assert.ok(r.live.includes(tool),'annotation not placed');assert.ok(r.saved.includes(tool),'annotation not saved');return r;
+});
+
+for(const fmt of ['mp4','webm'])await test('Timed annotation appears only inside its range in '+fmt+' export',async()=>{
+ const base64=await ev(async fmt=>{await openV(null,vwebm);const o=__T.newShape('rect',40,40);Object.assign(o,{x2:180,y2:150,c:'#ff0000',fill:'#ff0000',w:10,t0:.5,t1:1.5});P().ovs.push(o);const blob=(await __T.vid._ctl.renderBlob(fmt))[fmt];return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result.split(',')[1]);r.onerror=reject;r.readAsDataURL(blob)})},fmt);
+ const file=path.join(out,'timed-annotation.'+fmt);fs.writeFileSync(file,Buffer.from(base64,'base64'));
+ const ffmpeg=FFPROBE&&path.join(path.dirname(FFPROBE),'ffmpeg.exe');assert.ok(ffmpeg&&fs.existsSync(ffmpeg),'ffmpeg is required for independent annotation checks');
+ const colors=[.2,1,1.8].map(t=>{const rgb=execFileSync(ffmpeg,['-v','error','-ss',String(t),'-i',file,'-frames:v','1','-f','rawvideo','-pix_fmt','rgb24','pipe:1'],{maxBuffer:2e6});return [...rgb.subarray((80*640+40)*3,(80*640+40)*3+3)]});
+ const red=p=>p[0]>220&&p[1]<20&&p[2]<20;assert.equal(red(colors[0]),false,'annotation shown early '+JSON.stringify(colors));assert.equal(red(colors[1]),true,'annotation missing '+JSON.stringify(colors));assert.equal(red(colors[2]),false,'annotation shown late '+JSON.stringify(colors));return colors;
+});
 
 await test('B21 duplicated on-screen items always get unique ids',async()=>{const r=await ev(async()=>{await openV();const e=P();const a=__T.newShape('rect',50,50),b=__T.newShape('rect',150,50);Object.assign(a,{id:5,x2:100,y2:100,t0:0,t1:3});Object.assign(b,{id:6,x2:200,y2:100,t0:0,t1:3});e.ovs.push(a,b);
   D().select('ov',b);D().act.odup();D().select('ov',a);D().act.odup();D().select('ov',a);D().act.odup();const ids=P().ovs.map(o=>o.id);return{ids,unique:new Set(ids).size===ids.length}});assert.ok(r.unique,'duplicate ids '+r.ids);return r});
@@ -152,9 +170,9 @@ await test('B14 the editor does not redraw the timeline while idle',async()=>{co
 await test('B7 the timeline scale stays fixed while dragging the last clip',async()=>{await ev(async()=>{await openV();await splitAt(1.5);await D().eng.seek(0)});
   const box=await page.locator('.vtl').boundingBox(),m=await ev(()=>({D:__T.vid._ctl.duration(),start:P().clips.find(c=>c.start>1).start}));
   const xOf=t=>box.x+11+t/m.D*(box.width-22),y=box.y+46,x0=xOf(2.25);await page.mouse.move(x0,y);await page.mouse.down();for(let i=1;i<=10;i++){await page.mouse.move(x0+i*10,y);await page.waitForTimeout(16)}await page.mouse.up();
-  const now=await ev(()=>P().clips.find(c=>c.start>1).start),want=m.start+100/(box.width-22)*m.D;near(now,want,want*.03+.02,'clip start after a 100 px drag');return{start:m.start,now,want}},{todo:'10.1.10'});
+  const now=await ev(()=>P().clips.find(c=>c.start>1).start),want=m.start+100/(box.width-22)*m.D;near(now,want,want*.03+.02,'clip start after a 100 px drag');return{start:m.start,now,want}});
 
-await test('B17 Right arrow steps one frame',async()=>{const r=await ev(async()=>{await openV();await D().eng.seek(1);document.body.focus();QA.key('ArrowRight');await QA.sleep(300);return{t:D().eng.t}});near(r.t,1+1/30,.005,'after one step');return r},{todo:'10.1.10'});
+await test('B17 Right arrow steps one frame',async()=>{const r=await ev(async()=>{await openV();await D().eng.seek(1);document.body.focus();QA.key('ArrowRight');await QA.sleep(300);return{t:D().eng.t}});near(r.t,1+1/30,.005,'after one step');return r});
 
 await test('B9 ripple delete keeps spanning audio in sync with the picture',async()=>{
   const wav=await ev(async()=>[...new Uint8Array(await (await QA.toneWav([300,500,700],1)).arrayBuffer())]);
@@ -163,7 +181,7 @@ await test('B9 ripple delete keeps spanning audio in sync with the picture',asyn
   const r=await ev(async()=>{await QA.until(()=>P().aud.length===1);const a=P().aud[0];a.start=0;const c1=P().clips.find(c=>c.start<1);D().select('clip',c1);D().act.del();
     // the audio that was under the deleted 1.5 s must be gone too: what plays at t=0 should be source time 1.5
     const at0=P().aud.filter(x=>x.start<=1e-3).map(x=>x.a);return{aud:P().aud.map(x=>({a:+x.a.toFixed(2),b:+x.b.toFixed(2),start:+x.start.toFixed(2)})),at0}});
-  assert.ok(r.at0.some(a=>Math.abs(a-1.5)<.05),'audio at 0 s starts at source '+r.at0);return r},{todo:'10.1.10'});
+  assert.ok(r.at0.some(a=>Math.abs(a-1.5)<.05),'audio at 0 s starts at source '+r.at0);return r});
 
 await test('B22 Space on a focused button presses that button and does not start playback',async()=>{const r=await ev(async()=>{await openV();await D().eng.seek(1);const before=P().clips.length;return{before}});
   await page.keyboard.press('Shift');await page.locator('[data-a="split"]').focus();await page.keyboard.press('Space');await page.waitForTimeout(400);
