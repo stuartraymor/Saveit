@@ -459,7 +459,7 @@ function layoutStage(){
   $('#inner').hidden=!it||it.kind!=='image';
   $('#guide').hidden=!it||it.kind!=='guide'; if(it&&it.kind==='guide')renderGuide();
   if(it&&it.kind==='video'){const w=document.createElement('div');w.className='vwrap';stage.appendChild(w);
-    const m=VEdit.mount(w,it,{toast,saveBlob,baseName,addVideo,persist,changed:()=>persist(it),newShape,drawShape,bbox,handles,selBox,resizeByHandle,handleCursor:HANDLE_CURSOR,moveShape,norm,askText,setStyle:(k,v)=>{S.p[k]=v},itemById:id=>S.items.find(x=>x.id===id),hydrate:x=>hydrate(x),videos:()=>S.items.filter(x=>x.kind==='video'&&x!==it),mediaMenu:e=>mediaTimelineMenu(e,'video'),pasteMedia:mode=>pasteMediaClip(mode).catch(actionError),paneChanged:()=>sync80()});vid=m.video;vid._wrap=w;vid._destroy=m.destroy;vid._ctl=m;try{renderProps()}catch(_){}}
+    const m=VEdit.mount(w,it,{toast,saveBlob,baseName,addVideo,persist,exportFile:()=>saveAs(),changed:()=>persist(it),newShape,drawShape,bbox,handles,selBox,resizeByHandle,handleCursor:HANDLE_CURSOR,moveShape,norm,askText,setStyle:(k,v)=>{S.p[k]=v},itemById:id=>S.items.find(x=>x.id===id),hydrate:x=>hydrate(x),videos:()=>S.items.filter(x=>x.kind==='video'&&x!==it),mediaMenu:e=>mediaTimelineMenu(e,'video'),pasteMedia:mode=>pasteMediaClip(mode).catch(actionError),paneChanged:()=>sync80()});vid=m.video;vid._wrap=w;vid._destroy=m.destroy;vid._ctl=m;try{renderProps()}catch(_){}}
   if(it&&it.kind==='image'){const p=padFor(S.fx)+picMargin();cvW=S.ws?S.ws.sw:it.base.width+p*2;cvH=S.ws?S.ws.sh:it.base.height+p*2;cvK=0;applyZoom();}
 }
 let cvW=300,cvH=150,cvK=1;
