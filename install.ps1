@@ -36,7 +36,7 @@ $desktop   = Join-Path $deskDir 'Saveit.lnk'
 
 if (-not $FromSetup) {
   Write-Host ''
-  Write-Host "  Saveit Setup  (version 10.3.2)" -ForegroundColor Cyan
+  Write-Host "  Saveit Setup  (version 10.3.3)" -ForegroundColor Cyan
   Write-Host ''
 }
 if (-not (Test-Path (Join-Path $PSScriptRoot 'app\main.js'))) {
@@ -142,7 +142,7 @@ Step 98 'Finishing...'
 $key = "$regBase\Saveit"
 New-Item -Path $key -Force | Out-Null
 Set-ItemProperty $key DisplayName $app
-Set-ItemProperty $key DisplayVersion '10.3.2'
+Set-ItemProperty $key DisplayVersion '10.3.3'
 Set-ItemProperty $key Publisher 'Saveit'
 Set-ItemProperty $key DisplayIcon $icon
 Set-ItemProperty $key InstallLocation $dest

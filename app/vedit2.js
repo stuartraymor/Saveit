@@ -464,6 +464,7 @@ function mount(host,it,api){css();HK=api;
      <div class="vrow"><span class="vh">Draw on video</span>${[['select','Select'],['arrow','Arrow'],['rect','Box'],['ellipse','Circle'],['line','Line'],['highlight','Highlight'],['text','Text'],['step','Step #'],['stamp','Stamp'],['blur','Blur']].map(([k,l])=>`<button class="btn" data-ot="${k}" aria-pressed="false">${l}</button>`).join('')}
        <label>Colour <input type="color" data-r="ocol" value="#e5483b"></label><label>Width <input type="number" min="1" max="40" data-r="owid" value="6"></label></div>
      <div class="vrow" data-r="osel" hidden><b data-r="olbl">Selected</b><label>shows from <input type="number" step="0.1" min="0" data-r="of" aria-label="Item shows from (seconds)"></label><label>to <input type="number" step="0.1" min="0" data-r="ot2" aria-label="Item shows until (seconds)"></label><button class="btn" data-a="ostart">Start here</button><button class="btn" data-a="oend">End here</button><button class="btn" data-a="odup">Duplicate</button><button class="btn" data-a="odel">Remove</button></div>
+     <div class="vrow" data-r="otextrow" hidden><label>Text <input type="text" data-r="otext" aria-label="Annotation text" style="width:100%;min-width:140px"></label><label>Text size <input type="number" data-r="ofs" min="8" max="400" step="1" aria-label="Annotation text size (pixels)"> px</label></div>
      <p class="vnote">Pick a tool and drag on the picture. Click once for a step number or stamp. Select a red timeline bar to change when an item appears.</p></div>
   </div>
    <div class="vprog" data-r="prog" hidden><i></i></div><div class="vinfo"></div>
@@ -473,6 +474,7 @@ function mount(host,it,api){css();HK=api;
   let eng=null,e=null,rt={src:{}},sel=null,inT=0,outT=0,hist=[],fut=[],zdrag=null,zoom=1,L=[],tdrag=null,tsnap=false,snapEnabled=true,otool=null,crop=null,pane='video',odrag=null,playRange=null,dead=false,raf=0,exp=null,tab='clip',rec=null,ready=false;
   const toast=api.toast,pasteUrls=new Set();let pasteBusy=false;
   const D=()=>Math.max(total(e||{clips:[],aud:[]}),0.1);
+  const newTimedRange=(seconds=3)=>{const t0=clamp(eng.t,0,Math.max(0,D()-.1));return{t0,t1:Math.min(D(),t0+seconds)}};
   const selVfx=()=>sel&&sel.type==='vfx'?sel.ref:null,selZoom=()=>sel&&sel.type==='zoom'?sel.ref:null,zedit=()=>!!(selZoom()&&tab==='zoom'&&!crop),selOv=()=>sel&&sel.type==='ov'?sel.ref:null,selCap=()=>sel&&sel.type==='cap'?sel.ref:null,selClip=()=>sel&&(sel.type==='clip'||sel.type==='aud')?sel.ref:null;
   const snap=()=>{hist.push(JSON.stringify(e));if(hist.length>100)hist.shift();fut=[]};
   // 8.07: a click fires pointerdown and focus; save one undo step, not two.
@@ -540,9 +542,9 @@ function mount(host,it,api){css();HK=api;
     if(x.type==='clip'||x.type==='aud'){const sp=ref.speed||1,sd=(rt.src[ref.src]&&rt.src[ref.src].dur)||ref.b;
       if(d.edge===0){const ts=snapT(t,ref);let na=ref.a+(ts-ref.start)*sp;na=clamp(na,Math.max(0,ref.a-ref.start*sp),ref.b-MIN*sp);ref.start+=(na-ref.a)/sp;ref.a=na;eng.seek(ref.start)}
       else{const te=snapT(t,ref);ref.b=clamp(ref.a+(te-ref.start)*sp,ref.a+MIN*sp,sd);eng.seek(clipEnd(ref)-.02)}}
-    else if(d.edge===0){ref.t0=clamp(snapT(t,ref),0,ref.t1-.1);eng.seek(ref.t0)}else{ref.t1=Math.max(ref.t0+.1,snapT(t,ref));eng.seek(Math.max(0,ref.t1-.02))}}
+    else if(d.edge===0){ref.t1=Math.min(D(),ref.t1);ref.t0=clamp(snapT(t,ref),0,ref.t1-.1);eng.seek(ref.t0)}else{ref.t0=Math.min(ref.t0,D()-.1);ref.t1=clamp(snapT(t,ref),ref.t0+.1,D());eng.seek(Math.max(0,ref.t1-.02))}}
   function dragMove(d,t){const ref=d.it.ref,len=d.len;let na=Math.max(0,t-d.off);const s1=snapT(na,ref),s2=snapT(na+len,ref)-len;na=Math.abs(s1-na)<=Math.abs(s2-na)?s1:s2;na=Math.max(0,na);
-    if(d.it.type==='clip'||d.it.type==='aud')ref.start=na;else{ref.t0=na;ref.t1=na+len}}
+    if(d.it.type==='clip'||d.it.type==='aud')ref.start=na;else{ref.t0=clamp(na,0,Math.max(0,D()-len));ref.t1=Math.min(D(),ref.t0+len)}}
   tl.addEventListener('pointerdown',ev=>{if(!ready||ev.button!==0)return;tl.focus({preventScroll:true});tl.setPointerCapture(ev.pointerId);tsnap=ev.altKey;const x=ev.offsetX,y=ev.offsetY,h=hitTl(x,y);
     if(h.kind==='in'||h.kind==='out'){select(null);playRange=null;tdrag={k:h.kind,duration:D()};return}
     if(h.kind==='edge'){if(h.it.type==='ov')otool='select';select(h.it.type,h.it.ref);tdrag={k:'edge',duration:D(),it:h.it,edge:h.edge,moved:false};return}
@@ -614,7 +616,7 @@ function mount(host,it,api){css();HK=api;
     dupclip(){const c=selClip();if(!c){toast('Click a clip on the timeline first.');return}snap();const ty=sel.type,len=clipLen(c),end=clipEnd(c),list=ty==='clip'?e.clips:e.aud;
       for(const x of list)if(x!==c&&x.start>=end-1e-6)x.start+=len;if(ty==='clip')for(const x of [...e.aud,...e.caps,...e.ovs,...e.zooms,...e.vfx]){if(x.start!=null){if(x.start>=end-1e-6)x.start+=len}else if(x.t0>=end-1e-6){x.t0+=len;x.t1+=len}}
       const d=clone(c);d.id=newId(e,ty==='clip'?'c':'a');d.start=end;if(d.trans)d.trans={type:'none'};list.push(d);eng.sync();select(ty,d);redraw();changed();toast('Duplicated. The copy is right after the original.')},
-    addzoom(){if(!e.clips.length){toast('Add a video clip first.');return}snap();const t=eng.t,W=e.W,H=e.H,w=W/2,z={id:newId(e,'z'),t0:t,t1:Math.min(Math.max(t+4,t+.5),Math.max(D(),t+.5)),x:(W-w)/2,y:(H-w*H/W)/2,w,ease:.6};e.zooms.push(z);select('zoom',z);redraw();changed();toast('Zoom added. Drag a box on the picture to choose where it zooms.',5000)},
+    addzoom(){if(!e.clips.length){toast('Add a video clip first.');return}snap();const W=e.W,H=e.H,w=W/2,z={id:newId(e,'z'),...newTimedRange(4),x:(W-w)/2,y:(H-w*H/W)/2,w,ease:.6};e.zooms.push(z);select('zoom',z);redraw();changed();toast('Zoom added. Drag a box on the picture to choose where it zooms.',5000)},
     vfxall(){const v=selVfx();if(!v)return;snap();v.t0=0;v.t1=D();vfxui();redraw();changed()},
     vfxhere(){const v=selVfx();if(!v)return;snap();v.t0=Math.min(eng.t,v.t1-.1);vfxui();redraw();changed()},
     vfxend(){const v=selVfx();if(!v)return;snap();v.t1=Math.max(eng.t,v.t0+.1);vfxui();redraw();changed()},
@@ -630,7 +632,7 @@ function mount(host,it,api){css();HK=api;
     ostart(){const o=selOv();if(o){snap();o.t0=Math.min(eng.t,o.t1-.1);ovui();changed()}},oend(){const o=selOv();if(o){snap();o.t1=Math.max(eng.t,o.t0+.1);ovui();changed()}},
     odup(){const o=selOv();if(!o)return;snap();const c=clone(o),used=new Set(e.ovs.map(x=>x.id));let nid=HK.newShape?HK.newShape(c.t,0,0).id:0;if(nid==null||used.has(nid))nid=Math.max(0,...e.ovs.map(x=>+x.id||0))+1;c.id=nid;HK.moveShape(c,30,30);e.ovs.push(c);select('ov',c);changed()},
     odel(){const o=selOv();if(!o)return;snap();e.ovs=e.ovs.filter(z=>z!==o);select(null);changed()},
-    addcap(){snap();const t=eng.t,nc={t0:t,t1:t+3,text:'New caption',pos:'b',fs:6,c:'#ffffff',bg:true};e.caps.push(nc);select('cap',nc);caplist();changed();{const rows=qa('.vcaps .vrow'),inp=rows[e.caps.indexOf(nc)]&&rows[e.caps.indexOf(nc)].querySelector('input[type=text]');if(inp){inp.focus();inp.select();inp.scrollIntoView({block:'nearest'})}}},
+    addcap(){snap();const nc={...newTimedRange(),text:'New caption',pos:'b',fs:6,c:'#ffffff',bg:true};e.caps.push(nc);select('cap',nc);caplist();changed();{const rows=qa('.vcaps .vrow'),inp=rows[e.caps.indexOf(nc)]&&rows[e.caps.indexOf(nc)].querySelector('input[type=text]');if(inp){inp.focus();inp.select();inp.scrollIntoView({block:'nearest'})}}},
     apply(){run('video')},gif(){run('gif')},stop(){if(exp)exp.cancel=true}};
   // 10.1.7: Undo/Redo keep the selection (found again by id) and the In–Out range
   const SEL_LIST={clip:'clips',aud:'aud',cap:'caps',zoom:'zooms',vfx:'vfx',ov:'ovs'};
@@ -687,7 +689,7 @@ function mount(host,it,api){css();HK=api;
   function playClip(){if(!e||!eng)return null;const at=e.clips.filter(c=>eng.t>=c.start&&eng.t<clipEnd(c)).sort((a,b)=>a.start-b.start);return at[at.length-1]||(e.clips.length===1?e.clips[0]:null)}
   const editClip=()=>selClip()||playClip(),editIsV=()=>sel?sel.type==='clip':!!playClip();
   const vfxLabel=v=>{const d=VFX_BY[v.kind]||['','Effect',0,0,0,''];return d[1]+(v.kind==='bw'||v.kind==='invert'?(+v.amt===100?'':' '+Math.round(v.amt)+'%'):' '+(v.amt>0&&d[2]<0?'+':'')+Math.round(v.amt)+d[5])+(v.off?' (off)':'')};
-  function addVfx(kind){if(!e.clips.length){toast('Add a video clip first.');return}const d=VFX_BY[kind];snap();const t=Math.min(eng.t,Math.max(0,D()-.5)),v={id:newId(e,'f'),kind,amt:d[4],t0:t,t1:Math.min(D(),t+5),fi:0,fo:0};if(v.t1-v.t0<.5)v.t1=v.t0+.5;e.vfx.push(v);select('vfx',v);redraw();changed();toast(d[1]+' added. Drag its ends on the timeline, or click Whole video.',4500)}
+  function addVfx(kind){if(!e.clips.length){toast('Add a video clip first.');return}const d=VFX_BY[kind];snap();const v={id:newId(e,'f'),kind,amt:d[4],...newTimedRange(5),fi:0,fo:0};e.vfx.push(v);select('vfx',v);redraw();changed();toast(d[1]+' added. Drag its ends on the timeline, or click Whole video.',4500)}
   function vfxui(){if(!e)return;const v=selVfx(),box=R('vfxsel');box.hidden=!v;
     if(v){const d=VFX_BY[v.kind],a=R('vfxamt');R('vfxlbl').textContent=d[1];a.min=d[2];a.max=d[3];a.value=v.amt;R('vfxval').textContent=Math.round(v.amt)+d[5];R('vfxf').value=v.t0.toFixed(1);R('vfxt').value=v.t1.toFixed(1);R('vfxfi').value=(+v.fi||0).toFixed(1);R('vfxfo').value=(+v.fo||0).toFixed(1);R('vfxoff').checked=!!v.off}
     const L2=R('vfxlist');L2.innerHTML=e.vfx.length?'<span class="vh">Effects in this video</span>':'';e.vfx.slice().sort((a,b)=>a.t0-b.t0).forEach(x=>{const r=document.createElement('div');r.className='vrow'+(x===v?' vsel':'')+(x.off?' voff':'');r.innerHTML=`${vfxIcon(x.kind,1)}<b>${esc(vfxLabel(x))}</b><span class="sp"></span><span class="vh">${fmt(x.t0)} – ${fmt(x.t1)}</span>`;r.onclick=()=>{select('vfx',x);eng.pause();eng.seek(x.t0+.01)};L2.appendChild(r)})}
@@ -778,8 +780,8 @@ function mount(host,it,api){css();HK=api;
   function caplist(){const box=R('caps');box.innerHTML='';e.caps.forEach((c,i)=>{const r=document.createElement('div');r.className='vrow';
     r.innerHTML=`<input type="text" placeholder="Caption text" aria-label="Caption text"><label>from <input type="number" step="0.1" min="0" aria-label="Caption from (seconds)"></label><label>to <input type="number" step="0.1" min="0" aria-label="Caption to (seconds)"></label><select aria-label="Caption position"><option value="b">Bottom</option><option value="c">Middle</option><option value="t">Top</option></select><label>size <input type="number" min="2" max="20" step="0.5"></label><input type="color" aria-label="Caption colour"><label><input type="checkbox"> box</label><button class="btn" title="Delete this caption" aria-label="Delete this caption">✕</button>`;
     const ins=r.querySelectorAll('input,select'),[iT,iF,iTo,sP,iS,iC,iB]=ins;iT.value=c.text;iF.value=c.t0.toFixed(1);iTo.value=c.t1.toFixed(1);sP.value=c.pos||'b';iS.value=c.fs||6;iC.value=c.c||'#ffffff';iB.checked=c.bg!==false;
-    const chg=()=>{snap();c.text=iT.value;c.t0=Math.max(0,+iF.value||0);c.t1=Math.max(c.t0+.1,+iTo.value||0);c.pos=sP.value;c.fs=+iS.value||6;c.c=iC.value;c.bg=iB.checked;redraw();changed()};
-    const chg0=chg;ins.forEach(x=>x.addEventListener('change',()=>{if(x===iT){c.text=iT.value;redraw();changed();return}chg0()}));iT.addEventListener('focus',snapOnce);iT.addEventListener('input',()=>{c.text=iT.value;redraw()});
+    const chg=()=>{snap();c.text=iT.value;c.t0=clamp(+iF.value||0,0,Math.max(0,D()-.1));c.t1=clamp(+iTo.value||0,c.t0+.1,D());iF.value=c.t0.toFixed(2);iTo.value=c.t1.toFixed(2);c.pos=sP.value;c.fs=+iS.value||6;c.c=iC.value;c.bg=iB.checked;redraw();changed()};
+    const chg0=chg;ins.forEach(x=>x.addEventListener('change',()=>{if(x===iT){c.text=iT.value;redraw();changed();return}chg0()}));iT.addEventListener('focus',snapOnce);iT.addEventListener('input',()=>{c.text=iT.value;redraw();changed()});
     r.querySelector('button').onclick=()=>{snap();e.caps.splice(i,1);if(selCap()===c)sel=null;caplist();redraw();changed()};r.addEventListener('focusin',()=>{if(selCap()!==c){sel={type:'cap',ref:c};qa('.vcaps .vrow').forEach((x,j)=>x.classList.toggle('vsel',e.caps[j]===c))}});r.classList.toggle('vsel',c===selCap());box.appendChild(r)})}
   // ----- crop (8.04) -----
   // Start crop shows the clip's whole frame with a box over it; dragging the box or its handles sets the
@@ -823,7 +825,8 @@ function mount(host,it,api){css();HK=api;
     if(odrag&&odrag.mode==='draw')HK.drawShape(g,odrag.s,{width:ov.width,height:ov.height});
     const o=selOv();if(o&&otool&&eng.t>=o.t0&&eng.t<=o.t1){const k=ov.width/Math.max(1,ov.getBoundingClientRect().width),line=o.t==='arrow'||o.t==='line',b=line||!HK.selBox?HK.bbox(o):HK.selBox(o),pd=line?4*k:0;g.save();g.strokeStyle='#5aa2ff';g.lineWidth=1.5*k;g.setLineDash([5*k,4*k]);g.strokeRect(b.x-pd,b.y-pd,b.w+pd*2,b.h+pd*2);g.setLineDash([]);const hs=4.5*k;for(const [,hx,hy] of HK.handles(o)){g.fillStyle='#fff';g.fillRect(hx-hs,hy-hs,hs*2,hs*2);g.strokeRect(hx-hs,hy-hs,hs*2,hs*2)}g.restore()}}
   function ovui(){qa('[data-ot]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.ot===otool));ov.style.pointerEvents=otool||crop||zedit()?'auto':'none';ov.style.cursor=crop||zedit()?'default':otool==='select'?'default':'crosshair';if(eng)zui();
-    const o=selOv(),row=R('osel');row.hidden=!o;if(o){R('olbl').textContent=ovName(o);R('of').value=o.t0.toFixed(1);R('ot2').value=o.t1.toFixed(1)}}
+    const o=selOv(),row=R('osel');row.hidden=!o;R('otextrow').hidden=!o||!['text','callout'].includes(o.t);if(o){R('olbl').textContent=ovName(o);R('of').value=o.t0.toFixed(2);R('ot2').value=o.t1.toFixed(2);R('of').max=Math.max(0,D()-.1);R('ot2').max=D();
+      for(const [key,value] of [['ocol',o.c],['owid',Math.round((o.w||6)/Math.max(1,e.H/720))],['otext',o.txt||''],['ofs',o.fs||24]])if(document.activeElement!==R(key))R(key).value=value} }
   const hitOv=(x,y,k)=>{const tol=10*k;for(const s of activeOvs().reverse()){const b=HK.bbox(s);if(x>=b.x-tol&&x<=b.x+b.w+tol&&y>=b.y-tol&&y<=b.y+b.h+tol)return s}return null};
   const hitHandle=(s,x,y,k)=>{for(const [h,hx,hy] of HK.handles(s))if(Math.abs(x-hx)<9*k&&Math.abs(y-hy)<9*k)return h;return null};
   ov.addEventListener('pointerdown',ev=>{if(ev.button!==0)return;if(crop&&ready){cropDown(ev);return}
@@ -833,7 +836,7 @@ function mount(host,it,api){css();HK=api;
     const cur=selOv();if(cur&&t>=cur.t0&&t<=cur.t1){const h=hitHandle(cur,x,y,k);if(h){snap();odrag={mode:'handle',k:h,b0:HK.selBox?HK.selBox(cur):HK.norm(cur),s0:JSON.parse(JSON.stringify(cur))};return}}
     const hs=hitOv(x,y,k);
     if(otool==='select'||(hs&&hs===cur)){if(hs)select('ov',hs);else select(null);if(hs){snap();odrag={mode:'move',lx:x,ly:y}}return}
-    snap();const s=HK.newShape(otool,x,y);s.t0=t;s.t1=t+3;const sc=Math.max(1,e.H/720);s.w=Math.round((+R('owid').value||6)*sc);s.fs=Math.round((s.fs||24)*sc*1.3);if(otool!=='highlight')s.c=R('ocol').value;
+    snap();const s=HK.newShape(otool,x,y);Object.assign(s,newTimedRange());if(t>=D())eng.seek(s.t0);const sc=Math.max(1,e.H/720);s.w=Math.round((+R('owid').value||6)*sc);s.fs=Math.round((s.fs||24)*sc*1.3);if(otool!=='highlight')s.c=R('ocol').value;
     if(otool==='step'||otool==='stamp'){if(otool==='step')s.n=e.ovs.filter(z=>z.t==='step').length+1;e.ovs.push(s);select('ov',s);changed();return}
     if(otool==='text'){HK.askText('Text on the video','','Add').then(txt=>{if(txt){s.txt=txt;s._w=null;s.x2=s.x1+10;s.y2=s.y1+10;e.ovs.push(s);select('ov',s);changed()}else hist.pop()});return}
     select(null);odrag={mode:'draw',s}});
@@ -844,9 +847,15 @@ function mount(host,it,api){css();HK=api;
     else if(odrag.mode==='handle'&&o){const k=odrag.k;if(k==='p1'){o.x1=x;o.y1=y}else if(k==='p2'){o.x2=x;o.y2=y}else if(k==='c'){o.cx=x;o.cy=y}else if(k==='tail'){o.tx=x;o.ty=y}else if(HK.resizeByHandle)HK.resizeByHandle(o,odrag,x,y,ev.shiftKey);o._w=null;eng.render()}});
   ov.addEventListener('pointerup',()=>{if(crop){crop.drag=null;return}if(zdrag){const m=zdrag.moved;zdrag=null;if(m){changed();refreshProps()}else hist.pop();return}if(!odrag)return;const d=odrag;odrag=null;if(d.mode==='draw'){const s=d.s;if(Math.abs(s.x2-s.x1)<4&&Math.abs(s.y2-s.y1)<4){hist.pop();return}e.ovs.push(s);select('ov',s)}changed();eng.render()});
   qa('[data-ot]').forEach(b=>b.onclick=()=>{otool=otool===b.dataset.ot?null:b.dataset.ot;if(!otool&&sel&&sel.type==='ov')select(null);ovui()});
-  R('ocol').addEventListener('pointerdown',()=>{if(selOv())snapOnce()});R('ocol').oninput=()=>{HK.setStyle&&HK.setStyle('stroke',R('ocol').value);const o=selOv();if(o){o.c=R('ocol').value;eng.render()}};
-  R('owid').onchange=()=>{const w=Math.max(1,+R('owid').value||6);HK.setStyle&&HK.setStyle('width',w);const o=selOv();if(o){snap();o.w=w*Math.max(1,e.H/720);o._w=null;eng.render()}};
-  R('of').onchange=()=>{const o=selOv();if(o){snap();o.t0=clamp(+R('of').value||0,0,o.t1-.1);changed()}};R('ot2').onchange=()=>{const o=selOv();if(o){snap();o.t1=Math.max(o.t0+.1,+R('ot2').value||0);changed()}};
+  // Coalesce one colour/text editing session into one Undo, including keyboard changes.
+  let colourEdit=null,textEdit=null;
+  R('ocol').oninput=()=>{HK.setStyle?.('stroke',R('ocol').value);const o=selOv();if(o&&o.c!==R('ocol').value){if(colourEdit!==o){snap();colourEdit=o}o.c=R('ocol').value;eng.render();changed()}};
+  R('ocol').onchange=R('ocol').onblur=()=>{colourEdit=null};
+  R('owid').onchange=()=>{const w=clamp(+R('owid').value||6,1,40);HK.setStyle?.('width',w);const o=selOv();if(o){snap();o.w=w*Math.max(1,e.H/720);o._w=null;eng.render();changed()}};
+  R('otext').oninput=()=>{const o=selOv();if(o&&o.txt!==R('otext').value){if(textEdit!==o){snap();textEdit=o}o.txt=R('otext').value;o._w=null;eng.render();changed()}};
+  R('otext').onblur=()=>{textEdit=null};R('otext').onkeydown=ev=>{if(ev.key==='Enter'){ev.preventDefault();R('otext').blur()}};
+  R('ofs').onchange=()=>{const o=selOv();if(o){snap();o.fs=clamp(+R('ofs').value||24,8,400);o._w=null;eng.render();changed()}};
+  R('of').onchange=()=>{const o=selOv();if(o){snap();o.t1=Math.min(D(),o.t1);o.t0=clamp(+R('of').value||0,0,o.t1-.1);ovui();changed()}};R('ot2').onchange=()=>{const o=selOv();if(o){snap();o.t0=Math.min(o.t0,D()-.1);o.t1=clamp(+R('ot2').value||0,o.t0+.1,D());ovui();changed()}};
   function syncRange(){for(const [key,value] of [['in',inT],['out',outT]]){const input=R(key);if(input&&document.activeElement!==input)input.value=value.toFixed(2)}}
   R('in').onchange=()=>{inT=clamp(+R('in').value||0,0,outT-.1)};R('out').onchange=()=>{outT=clamp(+R('out').value||0,inT+.1,D())};
   host.addEventListener('keydown',x=>{if(x.target.matches('input,select,textarea'))x.stopPropagation()});
