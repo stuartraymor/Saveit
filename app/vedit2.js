@@ -556,12 +556,12 @@ function mount(host,it,api){css();HK=api;
   tl.addEventListener('pointerdown',ev=>{if(!ready||ev.button!==0)return;tl.focus({preventScroll:true});tl.setPointerCapture(ev.pointerId);tsnap=ev.altKey;const x=ev.offsetX,y=ev.offsetY,h=hitTl(x,y);
     snapGuide=null;
     if(h.kind==='in'||h.kind==='out'){select(null);playRange=null;tdrag={k:h.kind,duration:D(),targets:snapTargets(null,h.kind)};return}
-    if(h.kind==='edge'){if(h.it.type==='ov')otool='select';select(h.it.type,h.it.ref);eng.pause();tdrag={k:'edge',duration:D(),targets:snapTargets(h.it.ref),it:h.it,edge:h.edge,moved:false};return}
-    if(h.kind==='body'){if(h.it.type==='ov')otool='select';select(h.it.type,h.it.ref);const [a,b]=tget(h.it);tdrag={k:'move',duration:D(),targets:snapTargets(h.it.ref),it:h.it,off:tOf(x)-a,len:b-a,moved:false};playRange=null;return}
+    if(h.kind==='edge'){if(h.it.type==='ov')otool='select';select(h.it.type,h.it.ref);eng.pause();tdrag={k:'edge',duration:D(),targets:snapTargets(h.it.ref),origin:{x:ev.clientX,y:ev.clientY},it:h.it,edge:h.edge,moved:false};return}
+    if(h.kind==='body'){if(h.it.type==='ov')otool='select';select(h.it.type,h.it.ref);const [a,b]=tget(h.it);tdrag={k:'move',duration:D(),targets:snapTargets(h.it.ref),origin:{x:ev.clientX,y:ev.clientY},it:h.it,off:tOf(x)-a,len:b-a,moved:false};playRange=null;return}
     if(h.kind==='head'){tdrag={k:'seek'};return}
     if(y>=20)select(null);playRange=null;tdrag={k:'seek'};eng.pause();eng.seek(tOf(x))});
   function moveTimelineDrag(x,y,alt){
-    tsnap=alt;snapGuide=null;const t=tOf(x),d=tdrag;
+    tsnap=alt;snapGuide=null;const d=tdrag,mediaMove=d.k==='move'&&(d.it.type==='clip'||d.it.type==='aud'),t=mediaMove?Math.max(0,(x-PAD)/Math.max(1,tl.clientWidth-2*PAD)*timelineD()):tOf(x);
     if(d.k==='seek'){eng.seek(t);return}
     if(d.k==='in'){inT=clamp(snapT(t),0,outT-.1);eng.seek(inT);return}
     if(d.k==='out'){outT=clamp(snapT(t),inT+.1,D());eng.seek(outT);return}
@@ -570,6 +570,7 @@ function mount(host,it,api){css();HK=api;
   }
   tl.addEventListener('pointermove',ev=>{if(!ready)return;const x=ev.offsetX,y=ev.offsetY;
     if(!tdrag){const h=hitTl(x,y);tl.style.cursor=h.kind==='edge'||h.kind==='in'||h.kind==='out'||h.kind==='head'?'ew-resize':h.kind==='body'?'grab':'pointer';return}
+    if(!tdrag.moved&&tdrag.origin&&Math.hypot(ev.clientX-tdrag.origin.x,ev.clientY-tdrag.origin.y)<2)return;
     tdrag.pointer={x:ev.clientX,y:ev.clientY,alt:ev.altKey};moveTimelineDrag(x,y,ev.altKey)});
   function scrollTimelineDrag(){const d=tdrag,p=d?.pointer;if(!p||d.k==='seek'||zoom<=1)return;const w=tl.parentElement,r=w.getBoundingClientRect();if(p.y<r.top||p.y>r.bottom)return;
     const dx=p.x<r.left+24?-Math.min(24,(r.left+24-p.x)*.7):p.x>r.right-24?Math.min(24,(p.x-r.right+24)*.7):0;if(!dx)return;const before=w.scrollLeft;w.scrollLeft+=dx;if(w.scrollLeft===before)return;
@@ -640,7 +641,7 @@ function mount(host,it,api){css();HK=api;
     vfxdel(){const v=selVfx();if(!v)return;snap();e.vfx=e.vfx.filter(x=>x!==v);select(null);redraw();changed()},
     lkreset(){snap();e.look=null;redraw();changed();lookui(true)},lkcam(){R('camfile').click()},
     zdel(){const z=selZoom();if(!z)return;snap();e.zooms=e.zooms.filter(x=>x!==z);select(null);redraw();changed()},
-    reset(){const s0=e.srcs.find(s=>s.self),dur=s0&&rt.src[s0.id]&&rt.src[s0.id].dur;if(!(dur>0)){toast('The original recording could not be read, so Reset is not available.');return}snap();e.clips=[{id:newId(e,'c'),src:s0.id,a:0,b:dur,start:0,speed:1,vol:1,mute:false,crop:{l:0,t:0,r:0,b:0},trans:{type:'none'},afi:0,afo:0}];e.aud=[];e.caps=[];e.ovs=[];e.zooms=[];e.vfx=[];e.master=defFx();e.muteVideo=false;e.fadeIn=e.fadeOut=false;sel=null;eng.sync();eng.refreshFx();inT=0;outT=D();eng.t=0;redraw();refreshAll();changed()},
+    reset(){const s0=e.srcs.find(s=>s.self),dur=s0&&rt.src[s0.id]&&rt.src[s0.id].dur;if(!(dur>0)){toast('The original recording could not be read, so Reset is not available.');return}snap();e.clips=[{id:newId(e,'c'),src:s0.id,a:0,b:dur,start:0,speed:1,vol:1,mute:false,crop:{l:0,t:0,r:0,b:0},trans:{type:'none'},afi:0,afo:0}];e.aud=[];e.caps=[];e.ovs=[];e.zooms=[];e.vfx=[];e.master=defFx();e.muteVideo=false;e.fadeIn=e.fadeOut=false;e.look=null;e.W=rt.src[s0.id].w||e.W;e.H=rt.src[s0.id].h||e.H;delete e.fps;e.offline=[];sel=null;eng.sync();eng.refreshFx();inT=0;outT=D();eng.t=0;sizePrev();redraw();refreshAll();lookui(true);changed()},
     addvid(){addVideosDialog()},addaud(){R('audfile').click()},rec(){toggleRec()},
     fxreset(){snap();const c=fxTarget();if(c)c.fx=defFx();else e.master=defFx();eng.refreshFx();showFx();changed()},
     trlen(){const c=selClip();if(!c||sel.type!=='clip'){toast('Click a video clip first.');return}snap();if(setOverlap(c,+R('trlen').value||1)){redraw();refreshProps();changed()}else hist.pop()},
@@ -938,7 +939,6 @@ function mount(host,it,api){css();HK=api;
     if(dead)return;
     // 10.1.7: clips whose media is missing are kept in e.offline (saved with the project) instead of being deleted, and come back on Relink
     offlineSync();{const gone=offlineSrcs().map(s=>s.name||'a clip');if(gone.length)toast('Some media could not be found: '+gone.join(', ')+'. Its clips are kept offline. Use Relink in the Crop tab to find the file.',9000)}
-    if(!e.clips.length){const s0=e.srcs.find(s=>s.self);e.clips.push({id:newId(e,'c'),src:s0.id,a:0,b:meta.dur,start:0,speed:1,vol:1,mute:false,crop:{l:0,t:0,r:0,b:0},trans:{type:'none'},afi:0,afo:0})}
     if(dead)return;eng=makeEngine({e,rt});eng.onTick(onTick);eng.onEnd(()=>{playRange=null;if(rec)rec.mr.stop()});sizePrev();inT=0;outT=D();ready=true;refreshAll();
     for(const s of e.srcs){const r=rt.src[s.id];if(r&&r.blob&&!r.peaks)computePeaks(r.blob).then(p=>{if(p)r.peaks=p})}
     if(dead){eng.destroy();return}await eng.seek(0);
