@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learn Save It — Step-by-step help for screenshots, video, audio and guides</title>
+<meta name="description" content="Step-by-step Save It help with large videos and GIFs. Learn screenshots, annotation, video, audio, guides, saving and updates.">
+<link rel="canonical" href="https://stuartraymor.github.io/Saveit/learn.html">
+<link rel="icon" type="image/png" href="images/icon.png">
+<meta property="og:title" content="Save It — Capture. Explain. Share.">
+<meta property="og:description" content="Screenshots, annotations, screen recording and step-by-step guides. Free and open source, no account, no watermark.">
+<meta property="og:url" content="https://stuartraymor.github.io/Saveit/learn.html">
+<meta property="og:image" content="https://stuartraymor.github.io/Saveit/images/editor.png">
+<meta property="og:image:width" content="1600">
+<meta property="og:image:height" content="905">
+<meta property="og:image:alt" content="The Saveit editor with an annotated screenshot">
+<meta property="og:site_name" content="Saveit">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Save It — Capture. Explain. Share.">
+<meta name="twitter:description" content="Screenshots, annotations, screen recording and step-by-step guides. Free and open source.">
+<meta name="twitter:image" content="https://stuartraymor.github.io/Saveit/images/editor.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Saveit",
+  "description": "Free, open-source screen capture, annotation, screen and audio recording, and step-by-step guide maker for Windows. A free alternative to Snagit.",
+  "url": "https://stuartraymor.github.io/Saveit/",
+  "downloadUrl": "https://github.com/stuartraymor/Saveit/releases/latest/download/Saveit-Setup.exe",
+  "image": "https://stuartraymor.github.io/Saveit/images/editor.png",
+  "screenshot": "https://stuartraymor.github.io/Saveit/images/editor.png",
+  "applicationCategory": "MultimediaApplication",
+  "operatingSystem": "Windows 10, Windows 11",
+  "isAccessibleForFree": true,
+  "license": "https://opensource.org/licenses/MIT",
+  "author": { "@type": "Person", "name": "Stuart Raymor" },
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
+<link rel="stylesheet" href="site.css?v=20261025-learn">
+<link rel="stylesheet" href="theme-dark.css?v=20261025-learn">
+<link rel="stylesheet" href="learn.css?v=20261025-learn">
+<meta name="theme-color" content="#16181a">
+<script src="learn.js?v=20261025-learn" defer>
+</script>
+<script src="gif-previews.js?v=20261025-learn" defer>
+</script>
+</head>
+<body id="top">
+<a class="skip" href="#learning-content">Skip to guides</a>
+<header class="site-header">
+<div class="wrap nav">
+<a class="brand" href="index.html">
+<img src="images/icon.png" width="35" height="35" alt="">Save It</a>
+<button class="mobile-menu-button" id="menu-toggle" aria-expanded="false" aria-controls="mobile-menu">Menu</button>
+<nav class="nav-links" aria-label="Main navigation">
+<a href="index.html">Website</a>
+<a href="learn.html" aria-current="page">Learn Save It</a>
+<a class="button secondary github-header" href="https://github.com/stuartraymor/Saveit" target="_blank" rel="noopener">GitHub ↗</a>
+<a class="button" href="https://github.com/stuartraymor/Saveit/releases/latest/download/Saveit-Setup.exe">Download</a>
+</nav>
+</div>
+<nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation" hidden>
+<a href="index.html">Save It website</a>
+<a href="#learning-content">How-to guides</a>
+<a href="https://github.com/stuartraymor/Saveit" target="_blank" rel="noopener">GitHub ↗</a>
+</nav>
+</header>
+<main>
+<section class="learn-intro">
+<div class="wrap">
+<p class="eyebrow">Keep this page handy after you install</p>
+<h1>Learn Save It.</h1>
+<p class="lead">Pick a task. Follow the steps. Watch the large video or GIF to see what happens in the app.</p>
+<p class="learn-count">16 practical guides · 11 videos · 6 GIF walkthroughs</p>
+</div>
+</section>
+<div class="wrap learning-layout">
+<aside class="learning-sidebar" aria-label="Guide navigation">
+<div class="learn-search">
+<label for="lesson-search">Find a task</label>
+<input id="lesson-search" type="search" placeholder="Search crop, audio, export…">
+</div>
+<nav class="lesson-index" aria-label="Topics">
+<a href="#first-capture" data-lesson-link="first-capture">Take your first screenshot</a>
+<a href="#markup" data-lesson-link="markup">Explain a screenshot with markup</a>
+<a href="#magnify" data-lesson-link="magnify">Magnify a small detail</a>
+<a href="#number-actions" data-lesson-link="number-actions">Number the actions in order</a>
+<a href="#private-details" data-lesson-link="private-details">Blur details and focus attention</a>
+<a href="#crop" data-lesson-link="crop">Crop to exact dimensions</a>
+<a href="#grab-text" data-lesson-link="grab-text">Copy words from an image</a>
+<a href="#record-screen" data-lesson-link="record-screen">Record your screen with audio</a>
+<a href="#edit-video" data-lesson-link="edit-video">Edit and export a recording</a>
+<a href="#record-audio" data-lesson-link="record-audio">Record audio on its own</a>
+<a href="#edit-audio" data-lesson-link="edit-audio">Split, normalize and save audio</a>
+<a href="#audio-effects" data-lesson-link="audio-effects">Use audio presets and effects</a>
+<a href="#step-guide" data-lesson-link="step-guide">Create and export a step guide</a>
+<a href="#library" data-lesson-link="library">Find, rename and reopen your work</a>
+<a href="#save-export" data-lesson-link="save-export">Choose the right save or export</a>
+<a href="#updates" data-lesson-link="updates">Keep Save It up to date</a>
+</nav>
+<p class="sidebar-note">New to the app? Start with your first screenshot.</p>
+</aside>
+<div id="learning-content">
+<div class="learn-filters" role="group" aria-label="Filter guides">
+<button type="button" data-category="All" aria-pressed="true">All</button>
+<button type="button" data-category="Capture &amp; images" aria-pressed="false">Capture &amp; images</button>
+<button type="button" data-category="Video" aria-pressed="false">Video</button>
+<button type="button" data-category="Audio" aria-pressed="false">Audio</button>
+<button type="button" data-category="Guides" aria-pressed="false">Guides</button>
+<button type="button" data-category="Library &amp; sharing" aria-pressed="false">Library &amp; sharing</button>
+</div>
+<p id="lesson-results" role="status" aria-live="polite">16 guides</p>
+<p id="lesson-empty" hidden>No matching guides. Try a different word or choose All.</p>
+<article class="learn-lesson" id="first-capture" data-category="Capture &amp; images">
+<p class="eyebrow">01 / Capture &amp; images</p>
+<h2>Take your first screenshot</h2>
+<p class="lesson-summary" id="summary-first-capture">Capture the area you need, then open it in the editor.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Choose Image</strong>
+<p>Select Image in the capture bar. Choose Region, Window or Full screen in Selection.</p>
+</li>
+<li>
+<strong>Start the capture</strong>
+<p>Click Capture. For a region, drag around the area to keep. For a window, choose it in the window picker.</p>
+</li>
+<li>
+<strong>Confirm when prompted</strong>
+<p>Adjust the selection if needed and click Capture. The image opens in the editor.</p>
+</li>
+<li>
+<strong>Use a shortcut next time</strong>
+<p>Print Screen starts a region capture. Shift + Print Screen captures a window; Ctrl + Print Screen captures the full screen.</p>
+</li>
+</ol>
+<p class="written-guide">Written reference · follow these steps in the installed application.</p>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="markup" data-category="Capture &amp; images">
+<p class="eyebrow">02 / Capture &amp; images</p>
+<h2>Explain a screenshot with markup</h2>
+<p class="lesson-summary" id="summary-markup">Use an arrow, callout, highlight or shape to make your point.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Open a capture</strong>
+<p>Capture a new image, click Open to import one, or select an image from Recent or Library.</p>
+</li>
+<li>
+<strong>Choose a tool</strong>
+<p>Select Arrow, Callout, Text, Highlight or another tool in the ribbon, then click or drag on the picture.</p>
+</li>
+<li>
+<strong>Adjust its appearance</strong>
+<p>Use the right-hand inspector and quick styles to change the selected object. Move / Select lets you reposition it.</p>
+</li>
+<li>
+<strong>Review and share</strong>
+<p>Use Undo and Redo to compare changes. Click Copy to share the finished picture, or Save as… to export a file.</p>
+</li>
+</ol>
+<div class="lesson-media">
+<div data-lesson-view="video">
+<video controls muted playsinline preload="none" width="1280" height="800" poster="images/demo-poster.jpg" aria-label="Explain a screenshot with markup demonstration" aria-describedby="summary-markup">
+<source src="images/demo.mp4" type="video/mp4">
+</video>
+</div>
+<p class="lesson-media-links">
+<a href="images/demo.mp4" target="_blank" rel="noopener">Open full-size video ↗</a>
+</p>
+<p class="lesson-media-note">Silent recording with sample files. Use the controls to pause, seek or enter full screen.</p>
+</div>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="magnify" data-category="Capture &amp; images">
+<p class="eyebrow">03 / Capture &amp; images</p>
+<h2>Magnify a small detail</h2>
+<p class="lesson-summary" id="summary-magnify">Enlarge the part someone needs to read.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Pick Magnify</strong>
+<p>Open an image and select Magnify in the tool ribbon.</p>
+</li>
+<li>
+<strong>Draw over the detail</strong>
+<p>Drag around the text or control that needs a closer look. A magnifier shows the enlarged area.</p>
+</li>
+<li>
+<strong>Refine the result</strong>
+<p>Use the inspector to adjust Zoom, line width and appearance. Move or resize the object with its handles.</p>
+</li>
+<li>
+<strong>Compare the change</strong>
+<p>Undo removes the last edit; Redo restores it. Your underlying image remains available for editing.</p>
+</li>
+</ol>
+<div class="lesson-media">
+<div class="lesson-views" role="group" aria-label="Demonstration format">
+<button type="button" data-view-mode="video" aria-pressed="false">Full video</button>
+<button type="button" data-view-mode="gif" aria-pressed="true">Quick GIF</button>
+</div>
+<div data-lesson-view="video" hidden>
+<video controls muted playsinline preload="none" width="1280" height="800" poster="images/magnify-detail-poster.png" aria-label="Magnify a small detail demonstration" aria-describedby="summary-magnify">
+<source src="images/magnify-detail.mp4" type="video/mp4">
+</video>
+</div>
+<figure class="lesson-gif gif-card" data-lesson-view="gif">
+<div class="gif-image">
+<img src="images/magnify-detail-poster.png" data-poster="images/magnify-detail-poster.png" width="1120" height="700" alt="Magnify a small detail GIF walkthrough">
+</div>
+<figcaption>
+<h3>Quick walkthrough</h3>
+<p>Scroll this preview into view to play it. Use the steps above as your reference.</p>
+<button type="button" class="gif-toggle" data-gif="images/magnify-detail-preview.gif?v=20261025-large" aria-pressed="false">Play GIF ▷</button>
+</figcaption>
+</figure>
+<p class="lesson-media-links">
+<a href="images/magnify-detail.mp4" target="_blank" rel="noopener">Open full-size video ↗</a>
+<a href="images/magnify-detail-preview.gif?v=20261025-large" target="_blank" rel="noopener">Open full-size GIF ↗</a>
+</p>
+<p class="lesson-media-note">Silent recording with sample files. Use the controls to pause, seek or enter full screen.</p>
+</div>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="number-actions" data-category="Capture &amp; images">
+<p class="eyebrow">04 / Capture &amp; images</p>
+<h2>Number the actions in order</h2>
+<p class="lesson-summary" id="summary-number-actions">A 1, 2, 3 sequence can explain several actions in one picture.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Choose Step</strong>
+<p>Open an image and select the Step tool.</p>
+</li>
+<li>
+<strong>Place the markers</strong>
+<p>Click each place where an action happens. Save It advances the number automatically.</p>
+</li>
+<li>
+<strong>Adjust the markers</strong>
+<p>Use Move / Select to position a marker. The inspector offers color, size, sequence and shape options.</p>
+</li>
+<li>
+<strong>Correct a mistake</strong>
+<p>Use Undo and Redo to revise the last marker before copying or exporting the image.</p>
+</li>
+</ol>
+<div class="lesson-media">
+<div class="lesson-views" role="group" aria-label="Demonstration format">
+<button type="button" data-view-mode="video" aria-pressed="false">Full video</button>
+<button type="button" data-view-mode="gif" aria-pressed="true">Quick GIF</button>
+</div>
+<div data-lesson-view="video" hidden>
+<video controls muted playsinline preload="none" width="1280" height="800" poster="images/number-steps-poster.png" aria-label="Number the actions in order demonstration" aria-describedby="summary-number-actions">
+<source src="images/number-steps.mp4" type="video/mp4">
+</video>
+</div>
+<figure class="lesson-gif gif-card" data-lesson-view="gif">
+<div class="gif-image">
+<img src="images/number-steps-poster.png" data-poster="images/number-steps-poster.png" width="1120" height="700" alt="Number the actions in order GIF walkthrough">
+</div>
+<figcaption>
+<h3>Quick walkthrough</h3>
+<p>Scroll this preview into view to play it. Use the steps above as your reference.</p>
+<button type="button" class="gif-toggle" data-gif="images/number-steps-preview.gif?v=20261025-large" aria-pressed="false">Play GIF ▷</button>
+</figcaption>
+</figure>
+<p class="lesson-media-links">
+<a href="images/number-steps.mp4" target="_blank" rel="noopener">Open full-size video ↗</a>
+<a href="images/number-steps-preview.gif?v=20261025-large" target="_blank" rel="noopener">Open full-size GIF ↗</a>
+</p>
+<p class="lesson-media-note">Silent recording with sample files. Use the controls to pause, seek or enter full screen.</p>
+</div>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="private-details" data-category="Capture &amp; images">
+<p class="eyebrow">05 / Capture &amp; images</p>
+<h2>Blur details and focus attention</h2>
+<p class="lesson-summary" id="summary-private-details">Prepare a screenshot before sharing it.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Review the image</strong>
+<p>Look for private text, addresses or other details you do not want to include.</p>
+</li>
+<li>
+<strong>Draw a blur</strong>
+<p>Select Blur and drag across the area. Inspect the result at a readable zoom before sharing.</p>
+</li>
+<li>
+<strong>Spotlight the next action</strong>
+<p>Select Spotlight and drag over the important control. The surrounding picture dims.</p>
+</li>
+<li>
+<strong>Export the reviewed result</strong>
+<p>Copy the finished image or export it. Check the final output before sending it to someone.</p>
+</li>
+</ol>
+<div class="lesson-media">
+<div class="lesson-views" role="group" aria-label="Demonstration format">
+<button type="button" data-view-mode="video" aria-pressed="false">Full video</button>
+<button type="button" data-view-mode="gif" aria-pressed="true">Quick GIF</button>
+</div>
+<div data-lesson-view="video" hidden>
+<video controls muted playsinline preload="none" width="1280" height="800" poster="images/hide-private-info-poster.jpg" aria-label="Blur details and focus attention demonstration" aria-describedby="summary-private-details">
+<source src="images/hide-private-info.mp4" type="video/mp4">
+</video>
+</div>
+<figure class="lesson-gif gif-card" data-lesson-view="gif">
+<div class="gif-image">
+<img src="images/hide-private-info-poster.jpg" data-poster="images/hide-private-info-poster.jpg" width="1120" height="700" alt="Blur details and focus attention GIF walkthrough">
+</div>
+<figcaption>
+<h3>Quick walkthrough</h3>
+<p>Scroll this preview into view to play it. Use the steps above as your reference.</p>
+<button type="button" class="gif-toggle" data-gif="images/hide-private-info-preview.gif?v=20261025-large" aria-pressed="false">Play GIF ▷</button>
+</figcaption>
+</figure>
+<p class="lesson-media-links">
+<a href="images/hide-private-info.mp4" target="_blank" rel="noopener">Open full-size video ↗</a>
+<a href="images/hide-private-info-preview.gif?v=20261025-large" target="_blank" rel="noopener">Open full-size GIF ↗</a>
+</p>
+<p class="lesson-media-note">Silent recording with sample files. Use the controls to pause, seek or enter full screen.</p>
+</div>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="crop" data-category="Capture &amp; images">
+<p class="eyebrow">06 / Capture &amp; images</p>
+<h2>Crop to exact dimensions</h2>
+<p class="lesson-summary" id="summary-crop">Keep the useful part and remove unrelated detail.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Start a crop</strong>
+<p>Open an image, select Crop and drag around the area to keep.</p>
+</li>
+<li>
+<strong>Set exact values</strong>
+<p>In the inspector, enter X, Y, Width and Height. Click Set region to update the selection.</p>
+</li>
+<li>
+<strong>Apply the crop</strong>
+<p>Click Apply crop or press Enter. Escape cancels; Undo restores the previous image.</p>
+</li>
+<li>
+<strong>Save an image</strong>
+<p>Choose Save as… and PNG or another supported image format. Pick the destination and filename.</p>
+</li>
+</ol>
+<div class="lesson-media">
+<div class="lesson-views" role="group" aria-label="Demonstration format">
+<button type="button" data-view-mode="video" aria-pressed="false">Full video</button>
+<button type="button" data-view-mode="gif" aria-pressed="true">Quick GIF</button>
+</div>
+<div data-lesson-view="video" hidden>
+<video controls muted playsinline preload="none" width="1280" height="800" poster="images/crop-editor.png" aria-label="Crop to exact dimensions demonstration" aria-describedby="summary-crop">
+<source src="images/crop-image.mp4" type="video/mp4">
+</video>
+</div>
+<figure class="lesson-gif gif-card" data-lesson-view="gif">
+<div class="gif-image">
+<img src="images/crop-editor.png" data-poster="images/crop-editor.png" width="1120" height="700" alt="Crop to exact dimensions GIF walkthrough">
+</div>
+<figcaption>
+<h3>Quick walkthrough</h3>
+<p>Scroll this preview into view to play it. Use the steps above as your reference.</p>
+<button type="button" class="gif-toggle" data-gif="images/crop-image-preview.gif?v=20261025-large" aria-pressed="false">Play GIF ▷</button>
+</figcaption>
+</figure>
+<p class="lesson-media-links">
+<a href="images/crop-image.mp4" target="_blank" rel="noopener">Open full-size video ↗</a>
+<a href="images/crop-image-preview.gif?v=20261025-large" target="_blank" rel="noopener">Open full-size GIF ↗</a>
+</p>
+<p class="lesson-media-note">Silent recording with sample files. Use the controls to pause, seek or enter full screen.</p>
+</div>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="grab-text" data-category="Capture &amp; images">
+<p class="eyebrow">07 / Capture &amp; images</p>
+<h2>Copy words from an image</h2>
+<p class="lesson-summary" id="summary-grab-text">Use Windows OCR to recognize text in a screenshot.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Open the picture</strong>
+<p>Select a capture or import an image that contains readable text.</p>
+</li>
+<li>
+<strong>Select Grab Text</strong>
+<p>Choose Grab Text in the ribbon and drag around the words you need.</p>
+</li>
+<li>
+<strong>Review recognition</strong>
+<p>Check the recognized text, especially names, numbers and punctuation. OCR results depend on the source image.</p>
+</li>
+<li>
+<strong>Copy the result</strong>
+<p>Copy the text and paste it into your document or message.</p>
+</li>
+</ol>
+<div class="lesson-media">
+<div data-lesson-view="video">
+<video controls muted playsinline preload="none" width="1280" height="800" poster="images/grab-text-poster.jpg" aria-label="Copy words from an image demonstration" aria-describedby="summary-grab-text">
+<source src="images/grab-text.mp4" type="video/mp4">
+</video>
+</div>
+<p class="lesson-media-links">
+<a href="images/grab-text.mp4" target="_blank" rel="noopener">Open full-size video ↗</a>
+</p>
+<p class="lesson-media-note">Silent recording with sample files. Use the controls to pause, seek or enter full screen.</p>
+</div>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="record-screen" data-category="Video">
+<p class="eyebrow">08 / Video</p>
+<h2>Record your screen with audio</h2>
+<p class="lesson-summary" id="summary-record-screen">Choose the target and sound sources before starting.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Switch to Video</strong>
+<p>Select Video and choose Region, Window or Full screen.</p>
+</li>
+<li>
+<strong>Choose sound sources</strong>
+<p>Turn on System audio to include computer sound. Enable Microphone and select the intended device if you want narration. Webcam is optional.</p>
+</li>
+<li>
+<strong>Start recording</strong>
+<p>Click Record and select the requested region or window. A recording bar provides Pause and Stop controls.</p>
+</li>
+<li>
+<strong>Stop and review</strong>
+<p>Click Stop. The recording opens in the video editor, where you can preview, trim and export it.</p>
+</li>
+</ol>
+<p class="written-guide">Written reference · follow these steps in the installed application.</p>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="edit-video" data-category="Video">
+<p class="eyebrow">09 / Video</p>
+<h2>Edit and export a recording</h2>
+<p class="lesson-summary" id="summary-edit-video">Remove the parts you do not need and add visual context.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Open the recording</strong>
+<p>Select a recorded or imported video from Recent or Library.</p>
+</li>
+<li>
+<strong>Choose the moment</strong>
+<p>Use the timeline to move the playhead. Split divides a clip at that position; trim controls change what is included.</p>
+</li>
+<li>
+<strong>Add an explanation</strong>
+<p>Use captions, timed annotations or Zoom &amp; pan to guide attention. Preview the result and use Undo when needed.</p>
+</li>
+<li>
+<strong>Export the edited result</strong>
+<p>Use Save as… or the Export panel. Choose MP4, WebM or GIF and wait for the export to finish before closing the application.</p>
+</li>
+</ol>
+<div class="lesson-media">
+<div data-lesson-view="video">
+<video controls muted playsinline preload="none" width="1280" height="800" poster="images/edit-video-poster.jpg" aria-label="Edit and export a recording demonstration" aria-describedby="summary-edit-video">
+<source src="images/edit-video.mp4" type="video/mp4">
+</video>
+</div>
+<p class="lesson-media-links">
+<a href="images/edit-video.mp4" target="_blank" rel="noopener">Open full-size video ↗</a>
+</p>
+<p class="lesson-media-note">Silent recording with sample files. Use the controls to pause, seek or enter full screen.</p>
+</div>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="record-audio" data-category="Audio">
+<p class="eyebrow">10 / Audio</p>
+<h2>Record audio on its own</h2>
+<p class="lesson-summary" id="summary-record-audio">Capture a microphone, computer sound or separate sources.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Switch to Audio</strong>
+<p>Choose Audio in the capture bar and select the intended microphone.</p>
+</li>
+<li>
+<strong>Choose additional sources</strong>
+<p>Enable computer sound if needed. The Audio capture controls also support a second microphone.</p>
+</li>
+<li>
+<strong>Start and stop</strong>
+<p>Click Record audio. With Delay set to None, recording starts immediately. Stop when you are finished.</p>
+</li>
+<li>
+<strong>Review the waveform</strong>
+<p>The recording opens in Audio studio. Play it back and check the sound before editing or exporting.</p>
+</li>
+</ol>
+<p class="written-guide">Written reference · follow these steps in the installed application.</p>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="edit-audio" data-category="Audio">
+<p class="eyebrow">11 / Audio</p>
+<h2>Split, normalize and save audio</h2>
+<p class="lesson-summary" id="summary-edit-audio">Work on the waveform and export the edited mix.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Open an audio item</strong>
+<p>Select a recording from the library or import an audio file.</p>
+</li>
+<li>
+<strong>Preview and split</strong>
+<p>Play the clip, stop at the intended point, select the clip and use Split at the playhead.</p>
+</li>
+<li>
+<strong>Adjust the mix</strong>
+<p>Use track controls for level, pan, mute and solo. Normalize peaks and Match loudness are available for level adjustments.</p>
+</li>
+<li>
+<strong>Save the result</strong>
+<p>Click Save audio… or choose an audio format through Save as…. Export WAV, MP3 or M4A as appropriate.</p>
+</li>
+</ol>
+<div class="lesson-media">
+<div data-lesson-view="video">
+<video controls muted playsinline preload="none" width="1280" height="800" poster="images/audio-studio-poster.jpg" aria-label="Split, normalize and save audio demonstration" aria-describedby="summary-edit-audio">
+<source src="images/audio-studio.mp4" type="video/mp4">
+</video>
+</div>
+<p class="lesson-media-links">
+<a href="images/audio-studio.mp4" target="_blank" rel="noopener">Open full-size video ↗</a>
+</p>
+<p class="lesson-media-note">Silent recording with sample files. Use the controls to pause, seek or enter full screen.</p>
+</div>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="audio-effects" data-category="Audio">
+<p class="eyebrow">12 / Audio</p>
+<h2>Use audio presets and effects</h2>
+<p class="lesson-summary" id="summary-audio-effects">Explore a preset, then inspect the controls it applies.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Choose the effect target</strong>
+<p>Open an audio project. Select a clip for clip effects, or open Master effects for the combined output.</p>
+</li>
+<li>
+<strong>Apply a preset</strong>
+<p>Choose a voice preset and apply it. The effect rack shows the processing stages.</p>
+</li>
+<li>
+<strong>Open the controls</strong>
+<p>Select an effect and open its controls. The compressor offers threshold, ratio, attack, release and output gain.</p>
+</li>
+<li>
+<strong>Listen before exporting</strong>
+<p>Preview the result. Compare with bypass or Undo as appropriate, then save the edited audio.</p>
+</li>
+</ol>
+<div class="lesson-media">
+<div class="lesson-views" role="group" aria-label="Demonstration format">
+<button type="button" data-view-mode="video" aria-pressed="false">Full video</button>
+<button type="button" data-view-mode="gif" aria-pressed="true">Quick GIF</button>
+</div>
+<div data-lesson-view="video" hidden>
+<video controls muted playsinline preload="none" width="1280" height="800" poster="images/audio-effects-poster.png" aria-label="Use audio presets and effects demonstration" aria-describedby="summary-audio-effects">
+<source src="images/audio-effects.mp4" type="video/mp4">
+</video>
+</div>
+<figure class="lesson-gif gif-card" data-lesson-view="gif">
+<div class="gif-image">
+<img src="images/audio-effects-poster.png" data-poster="images/audio-effects-poster.png" width="1120" height="700" alt="Use audio presets and effects GIF walkthrough">
+</div>
+<figcaption>
+<h3>Quick walkthrough</h3>
+<p>Scroll this preview into view to play it. Use the steps above as your reference.</p>
+<button type="button" class="gif-toggle" data-gif="images/audio-effects-preview.gif?v=20261025-large" aria-pressed="false">Play GIF ▷</button>
+</figcaption>
+</figure>
+<p class="lesson-media-links">
+<a href="images/audio-effects.mp4" target="_blank" rel="noopener">Open full-size video ↗</a>
+<a href="images/audio-effects-preview.gif?v=20261025-large" target="_blank" rel="noopener">Open full-size GIF ↗</a>
+</p>
+<p class="lesson-media-note">Silent recording with sample files. Use the controls to pause, seek or enter full screen.</p>
+</div>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="step-guide" data-category="Guides">
+<p class="eyebrow">13 / Guides</p>
+<h2>Create and export a step guide</h2>
+<p class="lesson-summary" id="summary-step-guide">Give every screenshot a title and an instruction.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Start a guide</strong>
+<p>Use New → Blank step guide to assemble one, or start Step Capture to collect screenshots as you click through a task.</p>
+</li>
+<li>
+<strong>Add and arrange steps</strong>
+<p>Use Add step or Capture more steps. Move steps up or down to put them in the intended order.</p>
+</li>
+<li>
+<strong>Write the instructions</strong>
+<p>Edit the guide title, each step title and the text below it. Edit image opens that screenshot for markup or cropping.</p>
+</li>
+<li>
+<strong>Choose the output</strong>
+<p>The guide inspector offers Word, PDF, PowerPoint, PNG and JPG. Choose a .saveit file when you want to reopen the editable guide later.</p>
+</li>
+</ol>
+<div class="lesson-media">
+<div class="lesson-views" role="group" aria-label="Demonstration format">
+<button type="button" data-view-mode="video" aria-pressed="false">Full video</button>
+<button type="button" data-view-mode="gif" aria-pressed="true">Quick GIF</button>
+</div>
+<div data-lesson-view="video" hidden>
+<video controls muted playsinline preload="none" width="1280" height="800" poster="images/guide-editor.png" aria-label="Create and export a step guide demonstration" aria-describedby="summary-step-guide">
+<source src="images/step-guides.mp4" type="video/mp4">
+</video>
+</div>
+<figure class="lesson-gif gif-card" data-lesson-view="gif">
+<div class="gif-image">
+<img src="images/guide-editor.png" data-poster="images/guide-editor.png" width="1120" height="700" alt="Create and export a step guide GIF walkthrough">
+</div>
+<figcaption>
+<h3>Quick walkthrough</h3>
+<p>Scroll this preview into view to play it. Use the steps above as your reference.</p>
+<button type="button" class="gif-toggle" data-gif="images/step-guides-preview.gif?v=20261025-large" aria-pressed="false">Play GIF ▷</button>
+</figcaption>
+</figure>
+<p class="lesson-media-links">
+<a href="images/step-guides.mp4" target="_blank" rel="noopener">Open full-size video ↗</a>
+<a href="images/step-guides-preview.gif?v=20261025-large" target="_blank" rel="noopener">Open full-size GIF ↗</a>
+</p>
+<p class="lesson-media-note">Silent recording with sample files. Use the controls to pause, seek or enter full screen.</p>
+</div>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="library" data-category="Library &amp; sharing">
+<p class="eyebrow">14 / Library &amp; sharing</p>
+<h2>Find, rename and reopen your work</h2>
+<p class="lesson-summary" id="summary-library">Use names and folders to make projects easier to find.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Open Library</strong>
+<p>Click Library to browse images, video, audio and guides.</p>
+</li>
+<li>
+<strong>Find an item</strong>
+<p>Use the media-type filters, search by name, or open a folder.</p>
+</li>
+<li>
+<strong>Give it a useful name</strong>
+<p>Select the item and choose Rename. You can also rename a capture with F2.</p>
+</li>
+<li>
+<strong>Reopen or organize it</strong>
+<p>Open the item for more editing. Use the folder controls to organize it. Undo delete can restore an item deleted during the current session.</p>
+</li>
+</ol>
+<div class="lesson-media">
+<div data-lesson-view="video">
+<video controls muted playsinline preload="none" width="1280" height="800" poster="images/library-editor.png" aria-label="Find, rename and reopen your work demonstration" aria-describedby="summary-library">
+<source src="images/library.mp4" type="video/mp4">
+</video>
+</div>
+<p class="lesson-media-links">
+<a href="images/library.mp4" target="_blank" rel="noopener">Open full-size video ↗</a>
+</p>
+<p class="lesson-media-note">Silent recording with sample files. Use the controls to pause, seek or enter full screen.</p>
+</div>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="save-export" data-category="Library &amp; sharing">
+<p class="eyebrow">15 / Library &amp; sharing</p>
+<h2>Choose the right save or export</h2>
+<p class="lesson-summary" id="summary-save-export">Keep an editable project or write a file someone else can open.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Choose the outcome</strong>
+<p>For an image or guide you want to edit later, choose Saveit file (.saveit). Audio and video edits remain in the local library.</p>
+</li>
+<li>
+<strong>Export a shareable file</strong>
+<p>Save as… opens the available formats for the current project. Images include PNG, JPG, PDF, Word and PowerPoint; video offers MP4, WebM and GIF; audio offers WAV, MP3 and M4A.</p>
+</li>
+<li>
+<strong>Pick the name and folder</strong>
+<p>New exports start in Documents/Saveit Exports. Save It remembers your chosen folder for each format.</p>
+</li>
+<li>
+<strong>Understand repeat saves</strong>
+<p>The Save button identifies its format. After a file is saved in a session, another Save can overwrite that file. Use Save as… when you want a separate copy.</p>
+</li>
+</ol>
+<p class="written-guide">Written reference · follow these steps in the installed application.</p>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+<article class="learn-lesson" id="updates" data-category="Library &amp; sharing">
+<p class="eyebrow">16 / Library &amp; sharing</p>
+<h2>Keep Save It up to date</h2>
+<p class="lesson-summary" id="summary-updates">Check for a newer signed release when you are ready.</p>
+<ol class="lesson-steps">
+<li>
+<strong>Save any work in progress</strong>
+<p>Finish an active recording or export before starting an update.</p>
+</li>
+<li>
+<strong>Open Check for Updates</strong>
+<p>Use Check for Updates at the bottom of the application. The check runs when you request it.</p>
+</li>
+<li>
+<strong>Download and confirm</strong>
+<p>If a newer version is available, choose Install Update. After verification, confirm Install and restart.</p>
+</li>
+<li>
+<strong>Review the new version</strong>
+<p>Save It reopens after the update. Your library and settings are preserved. If no update is available, the dialog reports that the app is up to date.</p>
+</li>
+</ol>
+<p class="written-guide">Written reference · follow these steps in the installed application.</p>
+<a class="back-to-top" href="#top">Back to guide topics ↑</a>
+</article>
+</div>
+</div>
+</main>
+<footer class="site-footer">
+<div class="wrap footer-row">
+<a class="brand" href="index.html">Save It</a>
+<div class="footer-links">
+<a href="index.html">Website</a>
+<a href="https://github.com/stuartraymor/Saveit" target="_blank" rel="noopener">GitHub</a>
+<a href="https://github.com/stuartraymor/Saveit/releases/latest/download/Saveit-Setup.exe">Download latest</a>
+<a href="https://github.com/stuartraymor/Saveit/issues">Report a problem</a>
+</div>
+</div>
+</footer>
+</body>
+</html>

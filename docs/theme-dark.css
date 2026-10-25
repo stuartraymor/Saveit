@@ -61,3 +61,16 @@ kbd{background:var(--app-raised);border-color:#526067;color:var(--ink)}
 @media(max-width:1100px){.gif-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.gif-grid{grid-template-columns:1fr;gap:22px}.gif-card figcaption{padding:20px}.gif-card p{min-height:0}.gif-card h3{font-size:22px}}
 .gif-toggle{display:none}.has-js .gif-toggle{display:inline-block}
+/* Large reference media and obvious destinations. */
+.learn-return{margin-top:25px;padding:19px 22px;border:1px solid var(--line);border-radius:10px;background:var(--app-panel);font-size:15px}
+.gif-grid{grid-template-columns:1fr;gap:35px}
+.gif-card{display:grid;grid-template-columns:minmax(0,2.6fr) minmax(240px,1fr);align-items:stretch}
+.gif-image{aspect-ratio:16/10}
+.gif-card figcaption{padding:30px;display:flex;flex-direction:column;justify-content:center}
+.gif-card h3{font-size:28px}
+.gif-card p{font-size:16px;min-height:0;line-height:1.75;margin:20px 0 25px}
+.gif-actions{align-items:center;gap:14px;flex-wrap:wrap}
+.gif-actions a{font-size:12px}.gif-large{flex-basis:100%}
+.tour-layout{display:block}.demo-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:25px}.demo-tab{flex:1 0 180px;min-height:66px}.demo-tab .number{display:none}.demo-tab b{font-size:14px}.demo-video-wrap video{max-height:80vh;object-fit:contain}
+@media(max-width:1100px){.gif-grid{grid-template-columns:1fr}.gif-card{grid-template-columns:minmax(0,2fr) minmax(220px,1fr)}.gif-card figcaption{padding:24px}.gif-card h3{font-size:24px}.gif-card p{font-size:14px}}
+@media(max-width:800px){.github-header{display:none!important}.gif-card{display:block}.gif-card figcaption{padding:24px}.gif-card h3{font-size:26px}.gif-card p{font-size:15px}.demo-tabs{flex-wrap:nowrap}.demo-tab{flex:0 0 180px}.demo-video-wrap video{max-height:none}.gif-actions{gap:17px}.gif-large{flex-basis:auto}}
