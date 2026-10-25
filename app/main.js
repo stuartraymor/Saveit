@@ -194,6 +194,18 @@ async function listWindowSources(size) {
   const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: size, fetchWindowIcons: true });
   return sources.filter(s => !own.has(s.id) && s.name && !/^Saveit/.test(s.name) && !s.thumbnail.isEmpty());
 }
+// Capture an actual frame: desktopCapturer thumbnails are scaled previews, even
+// when requested at screen dimensions. The video element reports native pixels.
+async function grabWindow(id) {
+  const capture = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+  try {
+    await capture.loadFile(asset('window-frame.html'));
+    const frame = capture.webContents.executeJavaScript(`window.captureFrame(${JSON.stringify(id)})`);
+    let timer;
+    try { return nativeImage.createFromDataURL(await Promise.race([frame, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Window capture timed out. Please try again.')), 15000); })])); }
+    finally { clearTimeout(timer); }
+  } finally { if (!capture.isDestroyed()) capture.destroy(); }
+}
 async function pickWindow(d) {
   const sources = await listWindowSources({ width: 720, height: 450 });
   if (!sources.length) throw new Error('No open windows were found to capture');
@@ -266,11 +278,7 @@ async function doCapture(mode, delay = 0, opts = {}, pre = null) {
         const id = await pickWindow(d);
         if (!id) { restoreUI(wasVisible); return null; }
         await sleep(150);
-        const sf = d.scaleFactor || 1;
-        const full = await listWindowSources({ width: Math.round(d.size.width * sf), height: Math.round(d.size.height * sf) });
-        const src = full.find(s => s.id === id);
-        if (!src) throw new Error('That window closed before it could be captured');
-        out = src.thumbnail;
+        out = await grabWindow(id);
       } else if (mode === 'region' || mode === 'text' || mode === 'scroll') {
         const r = pre || await selectRegion(d, img, { ...opts, mode: 'image', area: mode === 'text' ? 'text' : mode === 'scroll' ? 'scroll' : (init ? 'screen' : 'region') }, init);
         if (!r) { restoreUI(wasVisible); return null; }
@@ -551,44 +559,66 @@ ipcMain.handle('print-pdf', async (e, html, name, asBuffer) => {
     await sleep(300);
     const pdf = await pw.webContents.printToPDF({ pageSize: 'Letter', printBackground: true, preferCSSPageSize: true });
     if (asBuffer) return pdf; // 10.0.9: Library Save builds the file itself
-    const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), name), filters: [{ name: 'PDF document', extensions: ['pdf'] }] });
-    if (r.canceled || !r.filePath) return null;
-    fs.writeFileSync(r.filePath, pdf);
-    return r.filePath;
+    const fp = await pickExport(name, ['pdf']);
+    if (!fp) return null;
+    fs.writeFileSync(fp, pdf);
+    return fp;
   } finally { pw.destroy(); try { fs.unlinkSync(tmp); } catch (_) { } }
 });
 
 const FILTERS = { pptx:'PowerPoint presentation',saveitbackup:'Saveit library backup',png: 'PNG image', jpg: 'JPEG image', webm: 'WebM video', mp4: 'MP4 video', docx: 'Word document', pdf: 'PDF document', saveit: 'Saveit file', webp: 'WebP image', bmp: 'BMP image', ico: 'Icon', svg: 'SVG picture', html: 'Web page', gif: 'Animated GIF', wav: 'WAV audio', mp3: 'MP3 audio', m4a: 'M4A audio' };
-// 9.01: pick a file path with every file type offered (first one is the default)
-ipcMain.handle('save-pick', async (e, name, exts) => {
-  const ext = (exts && exts[0]) || 'png';
-  const dir = ['wav', 'mp3', 'm4a'].includes(ext) ? app.getPath('music') : ['webm', 'mp4', 'gif'].includes(ext) ? app.getPath('videos') : ['docx', 'pdf', 'saveit','pptx','saveitbackup'].includes(ext) ? app.getPath('documents') : app.getPath('pictures');
-  // 10.0.9: name may be the full previous path (without extension) so the dialog opens where the user last saved
-  const r = await dialog.showSaveDialog(win, { defaultPath: path.isAbsolute(name) ? name + '.' + ext : path.join(dir, name + '.' + ext), filters: exts.map(x => ({ name: FILTERS[x] || x.toUpperCase(), extensions: [x] })) });
+// Export destinations are explicit and remembered separately for each format.
+async function exportPath(name, ext) {
+  if (path.isAbsolute(name)) return name;
+  let dir = workflowConfig.exportFolders && workflowConfig.exportFolders[ext];
+  if (!dir || !fs.existsSync(dir)) dir = path.join(app.getPath('documents'), 'Saveit Exports');
+  await fs.promises.mkdir(dir, { recursive: true });
+  return path.join(dir, path.basename(name));
+}
+async function rememberExport(fp, ext) {
+  workflowConfig.exportFolders = { ...workflowConfig.exportFolders, [ext]: path.dirname(fp) };
+  await saveWorkflowConfig();
+}
+async function pickExport(name, exts) {
+  const ext = exts[0], r = await dialog.showSaveDialog(win, {
+    defaultPath: await exportPath(name, ext),
+    filters: exts.map(x => ({ name: FILTERS[x] || x.toUpperCase(), extensions: [x] }))
+  });
   if (r.canceled || !r.filePath) return null;
-  let fp = r.filePath; const got = path.extname(fp).slice(1).toLowerCase();
-  if (!exts.includes(got)) fp += '.' + ext;
+  let fp = r.filePath, got = path.extname(fp).slice(1).toLowerCase();
+  if (!exts.includes(got)) {
+    fp = (got ? fp.slice(0, -path.extname(fp).length) : fp) + '.' + ext;
+    // The native dialog confirmed the original name, so confirm any corrected target separately.
+    if (fs.existsSync(fp)) {
+      const answer = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Cancel', 'Replace'], defaultId: 0, cancelId: 0,
+        message: 'Replace the existing file?', detail: fp + '\nThe extension was corrected to match the exported file type.' });
+      if (answer.response !== 1) return null;
+    }
+  }
+  await rememberExport(fp, path.extname(fp).slice(1).toLowerCase());
   return fp;
+}
+ipcMain.handle('save-pick', async (e, name, exts) => {
+  exts = exts && exts.length ? exts : ['png'];
+  return pickExport(name + '.' + exts[0], exts);
 });
 ipcMain.handle('save', async (e, name, buf, target) => {
-  if (target) { await fs.promises.writeFile(target, Buffer.from(buf)); return target; }
   const ext = (name.split('.').pop() || 'png').toLowerCase();
-  const dir = ['wav', 'mp3', 'm4a'].includes(ext) ? app.getPath('music') : ['webm', 'mp4'].includes(ext) ? app.getPath('videos') : ['docx', 'pdf', 'saveit','pptx','saveitbackup'].includes(ext) ? app.getPath('documents') : app.getPath('pictures');
-  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(dir, name), filters: [{ name: FILTERS[ext] || ext.toUpperCase(), extensions: [ext] }] });
-  if (r.canceled || !r.filePath) return null;
-  await fs.promises.writeFile(r.filePath, Buffer.from(buf));
-  return r.filePath;
+  const fp = target || await pickExport(name, [ext]);
+  if (!fp) return null;
+  await fs.promises.writeFile(fp, Buffer.from(buf));
+  await rememberExport(fp, ext);
+  return fp;
 });
 
 // 10.0.9: "Open folder" button on the Saved to message
 ipcMain.handle('reveal-file', (e, p) => { mainSender33(e); if (typeof p === 'string' && path.isAbsolute(p) && fs.existsSync(p)) shell.showItemInFolder(p); });
 
 ipcMain.handle('save-many', async (e, files) => {
-  // 10.0.9: guides and documents start in Documents, pictures in Pictures
-  const docsOnly = files.length && files.every(f => /\.(docx|pdf|pptx|saveit)$/i.test(f.name));
-  const r = await dialog.showOpenDialog(win, { title: 'Choose a folder', defaultPath: app.getPath(docsOnly ? 'documents' : 'pictures'), properties: ['openDirectory', 'createDirectory'] });
+  const r = await dialog.showOpenDialog(win, { title: 'Choose an export folder', defaultPath: path.dirname(await exportPath('capture', 'batch')), properties: ['openDirectory', 'createDirectory'] });
   if (r.canceled || !r.filePaths[0]) return null;
   for (const f of files) await fs.promises.writeFile(path.join(r.filePaths[0], path.basename(f.name)), Buffer.from(f.data));
+  await rememberExport(path.join(r.filePaths[0], 'capture'), 'batch');
   return r.filePaths[0];
 });
 

@@ -403,8 +403,8 @@ FORMATS.audio=[['wav','WAV audio'],['mp3','MP3 audio'],['m4a','M4A audio']];
 const FMT_NOTE={wav:'Full quality, plays everywhere',mp3:'Small file, plays everywhere, good for email',m4a:'Small file, good for phones and Apple devices',png:'Sharp, keeps transparency',jpg:'Small file, good for email',webp:'Small and sharp, modern',bmp:'Plain uncompressed bitmap',ico:'Windows icon, up to 256 px',svg:'Picture wrapper for web and docs',html:'One self-contained page',pdf:'Print-ready document',docx:'Word document; screenshots go in as pictures',saveit:'Reopen here for more editing',mp4:'Plays almost everywhere',webm:'Web video',gif:'Animated picture for docs and chat'};
 const lastFmt={};let saveQuality=.92;try{const q=+localStorage.getItem('saveit.quality');if(q>=.5&&q<=1)saveQuality=q}catch(e){}
 function syncFormats(){const it=S.cur,f=$('#fmt'),k=it?(it.kind==='image'&&it.guide?'image':it.kind):'image',list=FORMATS[k]||FORMATS.image,cur=lastFmt[k]||list[0][0];
-  f.innerHTML=list.map(([v,l])=>`<option value="${v}" ${v===cur?'selected':''}>${l}</option>`).join('');f.onchange=()=>{lastFmt[k]=f.value};
-  const sb=$('#saveBtn');if(sb)sb.title=`Save as ${(list.find(x=>x[0]===cur)||list[0])[1]} (Ctrl+S). Use Save as… for other file types.`}
+  f.innerHTML=list.map(([v,l])=>`<option value="${v}" ${v===cur?'selected':''}>${l}</option>`).join('');f.onchange=()=>{lastFmt[k]=f.value;syncFormats()};
+  const sb=$('#saveBtn');if(sb){const ext=it?.savedPath?it.savedPath.split('.').pop().toLowerCase():cur;sb.textContent=ext==='saveit'?'Save project':'Save '+ext.toUpperCase();sb.title=`Save ${ext==='saveit'?'editable project':ext.toUpperCase()+' file'} (Ctrl+S). Use Save as… for other file types.`}}
 function openItem(it){
   bumpItem(it);commitText(); if(S.cur&&S.cur.guide&&S.cur!==it)S.cur._thumb=null; S.cur=it; S.sel=null; S.grp=[]; S.drag=null; S.pixRect=null; S.cropRect=null; S.cutRect=null; S.simp=null;
   if(it&&it.kind==='image'){it.fx=Object.assign(FXBLANK(),it.fx);it.fx.adj=Object.assign(FXBLANK().adj,it.fx.adj);S.fx=it.fx; S.stepNext=1+Math.max(0,...it.shapes.filter(s=>s.t==='step').map(s=>s.n));}
@@ -919,7 +919,7 @@ function resizeImg(pct,skipSnap){const it=S.cur,k=pct/100;if(!k||k===1)return;if
 function exportCanvas(){const it=S.cur,p=padFor(it.fx),c=document.createElement('canvas');c.width=it.base.width+p*2;c.height=it.base.height+p*2;drawComposite(c.getContext('2d'),it,p,false);return c}
 let dl=null;(async()=>{try{dl=await window.claude?.use?.('downloads')}catch(e){dl=null}})();
 async function saveBlob(blob,name,label){
-  if(window.bench){const tgt=saveTarget9,owner=saveOwner9;saveTarget9=null;saveOwner9=null;try{const r=await window.bench.save(name,await blob.arrayBuffer(),tgt);if(r){toastSaved((label||'Saved to')+' '+r,r,label?7000:6000);if(owner&&r===tgt&&owner.savedPath!==r){owner.savedPath=r;persist(owner)}}else document.querySelectorAll('.toast').forEach(x=>x.remove())}catch(e){toast('Could not save the file.')}return}
+  if(window.bench){const tgt=saveTarget9,owner=saveOwner9;saveTarget9=null;saveOwner9=null;try{const r=await window.bench.save(name,await blob.arrayBuffer(),tgt);if(r){toastSaved((label||'Saved to')+' '+r,r,label?7000:6000);if(owner&&r===tgt&&owner.savedPath!==r){owner.savedPath=r;persist(owner);syncFormats()}}else document.querySelectorAll('.toast').forEach(x=>x.remove())}catch(e){toast('Could not save the file.')}return}
   if(dl){try{const r=await dl.save({filename:name,data:blob});toast('Saved '+name);return}catch(e){if(e&&e.code==='declined')return;if(e&&e.code==='rate_limited'){toast('A save prompt is already open.');return}}}
   try{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);}catch(e){toast('Saving is not available in this view.')}
 }
@@ -940,7 +940,7 @@ let saveTarget9=null,saveOwner9=null;
 const sessionSaved34=new Set();
 function saveExts9(it){const k=it.kind==='image'&&it.guide?'image':it.kind,l=(FORMATS[k]||FORMATS.image).map(x=>x[0]);if(it.kind==='video')return l.filter(x=>x==='mp4'?it.mp4:x==='webm'?it.webm:x==='gif');if(it.kind==='audio')return l;return['saveit',...l.filter(x=>x!=='saveit')]}
 async function save(fmtArg){const it=S.cur;if(!it)return;commitText();saveTarget9=null;saveOwner9=null;let fmt=typeof fmtArg==='string'?fmtArg:$('#fmt').value;
-  if(typeof fmtArg!=='string'&&window.bench?.savePick){let p=it.savedPath;if(!p||!sessionSaved34.has(it.id)){const ex=saveExts9(it),pe=p?p.split('.').pop().toLowerCase():'';if(pe&&ex.includes(pe)){ex.splice(ex.indexOf(pe),1);ex.unshift(pe)}p=await window.bench.savePick(p?p.replace(/\.[^.\\]+$/,''):baseName(it),ex);if(!p)return;sessionSaved34.add(it.id)}fmt=p.split('.').pop().toLowerCase();saveTarget9=p;saveOwner9=it}
+  if(typeof fmtArg!=='string'&&window.bench?.savePick){let p=it.savedPath;if(!p||!sessionSaved34.has(it.id)){const ex=saveExts9(it),pe=p?p.split('.').pop().toLowerCase():fmt;if(pe&&ex.includes(pe)){ex.splice(ex.indexOf(pe),1);ex.unshift(pe)}p=await window.bench.savePick(p?p.replace(/\.[^.\\]+$/,''):baseName(it),ex);if(!p)return;sessionSaved34.add(it.id)}fmt=p.split('.').pop().toLowerCase();saveTarget9=p;saveOwner9=it}
   if(it.kind==='video'){if(fmt==='gif'){saveTarget9=null;saveOwner9=null;if(vid&&vid._ctl)vid._ctl.saveGif();return}const ctl97=vid&&vid._ctl;if(ctl97&&((ctl97.needsRender&&ctl97.needsRender())||(fmt==='mp4'&&VEdit.needsMp4Render(it)))){const tgt=saveTarget9,own=saveOwner9,len=ctl97.duration?ctl97.duration():0,lenT=len?' ('+Math.floor(len/60)+':'+String((len%60).toFixed(1)).padStart(4,'0')+')':'';saveTarget9=null;saveOwner9=null;
     toast('Saving your edited video'+lenT+'… Cancel is in Export.',9000);
     (async()=>{try{const o=await ctl97.renderBlob(fmt==='mp4'?'mp4':'webm');if(!o){toast('Save cancelled. Nothing was written.',5000);return}const b2=fmt==='mp4'?o.mp4:(o.webm||o.mp4);if(!b2){toast('MP4 could not be made here. Choose WebM.',6000);return}saveTarget9=tgt;saveOwner9=own;saveBlob(b2,fileName(fmt),'Saved the edited video'+lenT+' to')}catch(e){toast('Could not save: '+(e.message||e),6000)}})();return}
@@ -961,7 +961,7 @@ async function save(fmtArg){const it=S.cur;if(!it)return;commitText();saveTarget
 function saveAs(){const it=S.cur;if(!it){toast('Open something first.');return}if($('#saveAsModal'))return;
   const k=it.kind==='image'&&it.guide?'image':it.kind,list=FORMATS[k]||FORMATS.image,m=document.createElement('div');m.className='modal';m.id='saveAsModal';
   const cur=lastFmt[k]||list[0][0];
-  m.innerHTML=`<div class="box" role="dialog" aria-label="Save as" style="width:min(640px,100%)"><div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">Save as</h2><button class="btn" data-x>Cancel</button></div><p class="hint" style="margin:0 0 10px">Choose a file type. Your Windows save dialog opens next, so you can pick the folder and name.</p><div class="saf">${list.map(([v,l])=>`<button class="btn" data-f="${v}" aria-pressed="${v===cur}"><b>${l}</b><span>${FMT_NOTE[v]||''}</span></button>`).join('')}</div>
+  m.innerHTML=`<div class="box" role="dialog" aria-label="Save as" style="width:min(640px,100%)"><div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">Save as</h2><button class="btn" data-x>Cancel</button></div><p class="hint" style="margin:0 0 10px">Choose a file type. Your Windows save dialog opens next, so you can pick the folder and name.</p><div class="saf">${list.map(([v,l])=>`<button class="btn" data-f="${v}" aria-pressed="${v===cur}"><b>${v===cur?'✓ ':''}${l}</b><span>${FMT_NOTE[v]||''}</span></button>`).join('')}</div>
     <div class="grp" style="margin-top:14px">${k==='audio'?`<div class="row"><span>MP3 and M4A quality</span><select id="saKb" aria-label="MP3 and M4A quality">${AEdit.audioKbps.list.map(v=>`<option value="${v}" ${v===AEdit.audioKbps.get()?'selected':''}>${v} kbps${v===192?' (good)':v===320?' (best)':v===96?' (smallest)':''}</option>`).join('')}</select></div>`:''}${k==='image'?`<div class="row"><span>JPG and WebP quality</span><input type="range" id="saQ" min="50" max="100" value="${Math.round(saveQuality*100)}" aria-label="JPG and WebP quality"><span class="val" id="saQv">${Math.round(saveQuality*100)}%</span></div>`:''}<label class="chk"><input type="checkbox" id="saDef" checked> Use this file type for the Save button</label></div></div>`;
   document.body.appendChild(m);const close=()=>{m.remove();document.removeEventListener('keydown',esc,true)},esc=e=>{if(e.key==='Escape'){e.stopPropagation();close()}};document.addEventListener('keydown',esc,true);
   const kb=m.querySelector('#saKb');if(kb)kb.onchange=()=>AEdit.audioKbps.set(kb.value);const q=m.querySelector('#saQ');if(q)q.oninput=()=>{saveQuality=+q.value/100;m.querySelector('#saQv').textContent=q.value+'%';try{localStorage.setItem('saveit.quality',saveQuality)}catch(e){}};
@@ -1085,11 +1085,15 @@ async function startRecDesktop(pre){
   if(!$('#camOn').checked)drop();else if(!cam&&!camSkip)cam=await autoCam();
   const sys=$('#sysAudio').checked;
   let stream;try{stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:30,cursor:$('#cursorOn').checked?'always':'never'},audio:sys})}catch(e){drop();window.bench.recUI(false);toast('Could not start recording: '+(e.message||e));return}
+  // Track settings can still report the display size before the first window frame.
+  const probe=document.createElement('video');probe.muted=true;probe.srcObject=stream;
+  try{await probe.play()}catch(e){stream.getTracks().forEach(t=>t.stop());drop();window.bench.recUI(false);toast('Could not read the recording frame.');return}
+  const frameSize={width:probe.videoWidth,height:probe.videoHeight};probe.srcObject=null;
   const {recStream,cleanup}=await compose(stream,prep.rect,prep.display.w,cam,prep.display.h);
   const r=prep.rect,screenRect=r?{x:prep.display.x+r.x,y:prep.display.y+r.y,w:r.w,h:r.h}:null;
   // 9.8: the recording bar names what is recorded and its real pixel size (the size the saved video will have)
-  const mode98=r?'Region':({window:'Window',screen:'Full screen',region:'Region'}[$('#area').value]||'Screen'),ts98=(recStream.getVideoTracks()[0]?.getSettings?.()||{}),src98=(stream.getVideoTracks()[0]?.getSettings?.()||{});
-  const w98=ts98.width||(r?Math.round(r.w*(window.devicePixelRatio||1)):src98.width),h98=ts98.height||(r?Math.round(r.h*(window.devicePixelRatio||1)):src98.height),size98=mode98+(w98&&h98?' · '+(w98&~1)+' × '+(h98&~1)+' px':'');
+  const mode98=r?'Region':({window:'Window',screen:'Full screen',region:'Region'}[$('#area').value]||'Screen'),ts98=(recStream.getVideoTracks()[0]?.getSettings?.()||{}),src98=frameSize;
+  const w98=(recStream===stream?frameSize.width:ts98.width)||(r?Math.round(r.w*(window.devicePixelRatio||1)):src98.width),h98=(recStream===stream?frameSize.height:ts98.height)||(r?Math.round(r.h*(window.devicePixelRatio||1)):src98.height),size98=mode98+(w98&&h98?' · '+(w98&~1)+' × '+(h98&~1)+' px':'');
   beginRecording(stream,recStream,cleanup,screenRect||{display:prep.display},{cam:cam?{o:cam.o}:null,cursor:$('#cursorOn').checked,mic:$('#mic').checked,sys,size:size98});
 }
 async function beginRecording(stream,recStream,cleanup,uiInfo,uiExtra){
@@ -1739,7 +1743,7 @@ async function blobFor(it,fmt){await hydrate(it);
   if(fmt==='jpg'){const j=document.createElement('canvas');j.width=c.width;j.height=c.height;const g=j.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,j.width,j.height);g.drawImage(c,0,0);return new Promise(r=>j.toBlob(r,'image/jpeg',.92))}
   if(fmt==='webp')return new Promise(r=>c.toBlob(r,'image/webp',.95));
   if(fmt==='bmp')return bmpBlob(c);
-  if(fmt==='pdf')return pdfBlob([c]);
+  if(fmt==='pdf')return pdfBlob([c],true);
   if(fmt==='docx'){const png=new Uint8Array(await (await new Promise(r=>c.toBlob(r,'image/png'))).arrayBuffer());return buildDocx(it.name,'',[{png,w:c.width,h:c.height}])}
   return new Promise(r=>c.toBlob(r,'image/png'))}
 async function saveMany(files){
@@ -2192,18 +2196,18 @@ async function exportDocx(g,asBlob){if(asBlob!=='sections')toast('Preparing the 
   const dx=buildDocx(g.title||'Work instruction',`${g.steps.length} steps · ${new Date().toLocaleDateString()}`,sections,g.numColor);if(asBlob)return dx;saveBlob(dx,safeName(g.title)+'.docx')}
 function safeName(t){return (t||'guide').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-')||'guide'}
 async function exportGuideJpg(g){toast('Preparing the JPG\u2026',0);const pc=renderPageCanvas(g,2);pc.canvas.toBlob(b=>saveBlob(b,safeName(g.title)+'.jpg'),'image/jpeg',.9)}
-async function pdfBlob(canvases){const enc=t=>new TextEncoder().encode(t),parts=[],offs=[];let len=0;const push=x=>{parts.push(x);len+=x.length};
+async function pdfBlob(canvases,fitImage=false){const enc=t=>new TextEncoder().encode(t),parts=[],offs=[];let len=0;const push=x=>{parts.push(x);len+=x.length};
   const jpgs=[];for(const c of canvases){const t=document.createElement('canvas');t.width=c.width;t.height=c.height;const g=t.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,t.width,t.height);g.drawImage(c,0,0);jpgs.push(new Uint8Array(await (await new Promise(r=>t.toBlob(r,'image/jpeg',.92))).arrayBuffer()))}
   const n=canvases.length;push(enc('%PDF-1.4\n%âãÏÓ\n'));
   const obj=(id,body)=>{offs[id]=len;push(enc(id+' 0 obj\n'+body+'\nendobj\n'))};
   obj(1,'<< /Type /Catalog /Pages 2 0 R >>');obj(2,`<< /Type /Pages /Count ${n} /Kids [${canvases.map((_,i)=>`${3+3*i} 0 R`).join(' ')}] >>`);
-  canvases.forEach((c,i)=>{const k=Math.min(540/c.width,720/c.height),w=c.width*k,h=c.height*k,x=(612-w)/2,y=792-36-h,cs=`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm /Im0 Do Q`;
-    obj(3+3*i,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /XObject << /Im0 ${5+3*i} 0 R >> >> /Contents ${4+3*i} 0 R >>`);
+  canvases.forEach((c,i)=>{const pw=fitImage?Math.max(1,c.width*.75):612,ph=fitImage?Math.max(1,c.height*.75):792,k=fitImage?.75:Math.min(540/c.width,720/c.height),w=c.width*k,h=c.height*k,x=fitImage?0:(pw-w)/2,y=fitImage?0:ph-36-h,cs=`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm /Im0 Do Q`;
+    obj(3+3*i,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw.toFixed(2)} ${ph.toFixed(2)}] /Resources << /XObject << /Im0 ${5+3*i} 0 R >> >> /Contents ${4+3*i} 0 R >>`);
     obj(4+3*i,`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`);
     offs[5+3*i]=len;push(enc(`${5+3*i} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${c.width} /Height ${c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpgs[i].length} >>\nstream\n`));push(jpgs[i]);push(enc('\nendstream\nendobj\n'))});
   const xr=len,tot=3*n+3;let x='xref\n0 '+tot+'\n0000000000 65535 f \n';for(let id=1;id<tot;id++)x+=String(offs[id]).padStart(10,'0')+' 00000 n \n';
   push(enc(x+`trailer\n<< /Size ${tot} /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF`));return new Blob(parts,{type:'application/pdf'})}
-async function pdfFromImages(canvases,title,name){toast('Building the PDF…',1500);try{saveBlob(await pdfBlob(canvases),name)}catch(e){toast('Could not build the PDF: '+(e.message||e))}}
+async function pdfFromImages(canvases,title,name,fitImage=true){toast('Building the PDF…',1500);try{saveBlob(await pdfBlob(canvases,fitImage),name)}catch(e){toast('Could not build the PDF: '+(e.message||e))}}
 // 10.0.9: real, searchable text. One block per step that never splits across pages.
 function guideHtml34(g,secs){const e=escH,c=g.numColor||'#e5372a',b64=u=>{let s='';for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s)};
   return `<!doctype html><html><head><meta charset="utf-8"><title>${e(g.title||'Step guide')}</title><style>@page{size:Letter;margin:.6in}body{font-family:'Segoe UI',Arial,sans-serif;color:#1d2327}h1{font-size:24pt;margin:0 0 4pt}.sub{color:#5b6670;margin:0 0 18pt}.st{break-inside:avoid;page-break-inside:avoid;margin:0 0 18pt}.st h2{font-size:14pt;margin:0 0 6pt}.n{display:inline-block;min-width:22pt;height:22pt;border-radius:11pt;background:${c};color:#fff;text-align:center;line-height:22pt;font-size:11pt;margin-right:8pt}.st p{margin:0 0 6pt;white-space:pre-wrap}.st img{max-width:100%;max-height:7in;border:1px solid #d0d5da}</style></head><body><h1>${e(g.title||'Step guide')}</h1><p class="sub">${g.steps.length} step${g.steps.length===1?'':'s'} \u00b7 ${new Date().toLocaleDateString()}</p>${secs.map((s,i)=>`<div class="st"><h2><span class="n">${i+1}</span>${e(s.title||s.heading)}</h2>${s.text?`<p>${e(s.text)}</p>`:''}<img alt="${e(s.title||s.heading)}" src="data:image/png;base64,${b64(s.png)}"></div>`).join('')}</body></html>`}
@@ -2217,7 +2221,7 @@ async function exportPdfImages34(g,asBlob){const pc=renderPageCanvas(g,2),k=pc.k
   const cutAt=y=>{const h=Math.max(1,Math.round((y-start)*k)),c=document.createElement('canvas');c.width=pc.canvas.width;c.height=h;c.getContext('2d').drawImage(pc.canvas,0,-Math.round(start*k));out.push(c);start=y};
   for(const sec of pc.sections){if(sec.bottom-start>pageH&&sec.top>start+1)cutAt(sec.top);while(sec.bottom-start>pageH)cutAt(start+pageH)}
   if(pc.H>start+1)cutAt(pc.H);
-  if(asBlob)return pdfBlob(out);pdfFromImages(out,g.title,safeName(g.title)+'.pdf')}
+  if(asBlob)return pdfBlob(out);pdfFromImages(out,g.title,safeName(g.title)+'.pdf',false)}
 
 // ---------- Saveit files ----------
 const toDataURL=b=>new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(b)});

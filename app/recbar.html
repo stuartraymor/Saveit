@@ -21,7 +21,7 @@ button.stop{background:#e5483b;border-color:#e5483b;color:#fff}
 let secs=0,paused=false;
 const $=id=>document.getElementById(id),t=$('t'),bar=$('bar'),pauseBtn=$('pause'),stopBtn=$('stop');
 const q=new URLSearchParams(location.search);
-$('info').textContent=[q.get('size'),q.get('cursor')==='1'?'Cursor':'',q.get('sys')==='1'?'Audio':'',q.get('mic')==='1'?'Mic':'',q.get('cam')==='1'?'Cam':''].filter(Boolean).join(' · ');
+$('info').textContent=[q.get('size'),q.get('cursor')==='1'?'Cursor':'',q.get('sys')==='1'?'System audio':'',q.get('mic')==='1'?'Microphone':'',q.get('cam')==='1'?'Cam':''].filter(Boolean).join(' · ');
 // 9.9: audio recordings show a live level bar for each track (green, amber when loud, red when it would clip) and the countdown
 const audio=q.get('audio')==='1';let count=audio?Math.max(0,+q.get('countdown')||0):0;const meters=[];
 if(audio){let names=[];try{names=JSON.parse(q.get('tracks')||'[]')}catch(_){}$('info').textContent='';$('info').classList.add('meters');

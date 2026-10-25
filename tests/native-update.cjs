@@ -52,6 +52,9 @@ const server = http.createServer((req, res) => {
     if (!r.noSig) a.push({ name: `Saveit-${r.version}.zip.sig`, size: 90 }); a.push({ name: `Saveit-${r.version}.sha256`, size: 80 });
     res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ tag_name: 'v' + r.version, name: 'Saveit ' + r.version, body: `## What's new\n\n- **Test release ${r.version}**\n- A second change`, draft: false, prerelease: false, published_at: new Date().toISOString(), assets: a }));
   }
+  if (req.url.split('?')[0] === '/repos/stuartraymor/Saveit') {
+    res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ private: false }));
+  }
   const m = /^\/download\/v([\d.]+)\/(.+)$/.exec(req.url); const r = fake.latest;
   if (m && r && m[1] === r.version) {
     if (m[2] === `Saveit-${r.version}.zip`) { res.writeHead(200, { 'content-length': r.zip.length }); return res.end(r.zipServed || r.zip); }

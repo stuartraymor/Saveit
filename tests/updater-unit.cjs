@@ -112,6 +112,22 @@ const server = http.createServer((req, res) => { hits.push(req.url); const r = r
     assert.equal(U.installLayout('C:\\dev\\Saveit\\app', 'C:\\x\\Saveit\\Saveit.exe'), null);
   });
 
+  await run('Update results: Windows PowerShell UTF-8 BOM and plain UTF-8 are read exactly once', () => {
+    const dir = path.join(tmp, 'result-profile'), file = path.join(dir, 'updates', 'result.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    for (const prefix of ['', '\uFEFF']) {
+      for (const status of ['ok', 'rolled-back', 'unchanged', 'failed']) {
+        const result = { status, version: '10.1.13', message: 'Update result' };
+        fs.writeFileSync(file, prefix + JSON.stringify(result) + '\r\n', 'utf8');
+        assert.deepEqual(U.takeResult(dir), result);
+        assert.equal(fs.existsSync(file), false, 'result consumed after display');
+        assert.equal(U.takeResult(dir), null, 'no repeated result');
+      }
+    }
+    fs.writeFileSync(file, '\uFEFF{broken', 'utf8');
+    assert.equal(U.takeResult(dir), null, 'malformed result remains ignored');
+  });
+
   server.close(); fs.rmSync(tmp, { recursive: true, force: true });
   console.log(fail ? `\n${fail} FAILED` : '\nUPDATER UNIT TESTS PASSED'); process.exit(fail ? 1 : 0);
 })();
