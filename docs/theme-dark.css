@@ -1,0 +1,63 @@
+/* Save It's application palette: charcoal chrome, teal controls and soft teal selection. */
+:root{color-scheme:dark;--paper:#1e2124;--ink:#e8eaec;--muted:#aeb6bd;--green:#2db3a0;--mint:#2db3a0;--pale:#1d3d39;--line:#3a3f45;--white:#26292d;--dark:#16181a;--app-panel:#26292d;--app-raised:#30343a;--accent-ink:#06211d}
+body{background:var(--paper);color:var(--ink)}
+a{color:var(--green)}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline-color:var(--green)}
+.skip{background:var(--app-raised);color:var(--ink)}
+.site-header{background:#16181af5;border-color:var(--line)}
+.hero{background:radial-gradient(ellipse at 90% 50%,#1d3d3980 0,transparent 60%)}
+.button,.button.light{background:var(--green);border-color:var(--green);color:var(--accent-ink)}
+.button:hover,.button.light:hover{background:#45c7b3;border-color:#45c7b3;color:var(--accent-ink)}
+.button.secondary{color:var(--ink);border-color:#52615f;background:transparent}
+.button.secondary:hover{background:var(--pale)}
+.product-window{background:#16181a;border-color:var(--line);box-shadow:0 25px 65px #0005}
+.window-dot{background:#52615f}.window-bar{color:#b2c2c0}
+.capabilities{background:var(--app-panel);border-color:var(--line)}
+.tour,.privacy{background:var(--dark);color:var(--ink)}
+.tour p,.privacy p,.privacy-facts span{color:var(--muted)}
+.tour .eyebrow{color:var(--green)}
+.demo-tab{color:var(--muted)}
+.demo-tab:hover{background:#26292d}
+.demo-tab[aria-selected=true]{background:var(--pale);border-color:#38635b;color:var(--ink)}
+.demo-tab[aria-selected=true] .number{color:var(--green)}
+.demo-tab small{opacity:1;color:#a5b2b6}.demo-tab .number{opacity:1;color:#8c9d9b}
+.demo-video-wrap{background:#121416;border-color:var(--line)}
+.demo-video-wrap video{background:#121416}
+.demo-tag{color:#a8d7cc;border-color:#48635e}
+.demo-still,.tour-cta .text-link{color:#70d5c3}
+.tour-cta{border-color:var(--line)}
+.story-image{border-color:var(--line);box-shadow:0 18px 40px #0002;background:var(--app-panel)}
+.story-dark{background:var(--app-panel)}
+.mini-label{color:#73d8c7;border-color:#38635b;background:var(--pale)}
+.formats,.faq-section{background:var(--dark)}
+.format-tags span{background:var(--pale);color:#a2e4d7}
+.tool-item .tool-no{color:#9aa1a8}
+.widget-section{background:var(--app-panel)}
+.widget-preview{background:#16181a;border-color:var(--line)}
+.usecase{border-color:#4c575c}
+.privacy-facts b{color:var(--ink)}
+.start-number{color:var(--green);border-color:#38635b;background:var(--pale)}
+.shortcuts{background:var(--app-panel)}
+kbd{background:var(--app-raised);border-color:#526067;color:var(--ink)}
+.download-section{background:var(--pale)}
+.site-footer{background:var(--dark);border-color:var(--line)}
+.footer-bottom{color:#9aa1a8}
+.mobile-menu{background:var(--app-panel);border-color:var(--line);box-shadow:0 15px 25px #0004}
+/* User-controlled GIF previews load only when requested. */
+.gif-section{background:var(--paper)}
+.gif-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:26px}
+.gif-card{margin:0;background:var(--app-panel);border:1px solid var(--line);border-radius:13px;overflow:hidden}
+.gif-image{position:relative;background:#121416;aspect-ratio:16/10}
+.gif-image img{width:100%;height:100%;object-fit:contain}
+.gif-badge{position:absolute;top:12px;left:12px;font:10px ui-monospace,Consolas,monospace;background:#16181ae8;color:#a2e4d7;border:1px solid #42635c;padding:4px 7px;border-radius:4px}
+.gif-card figcaption{padding:21px}
+.gif-card h3{font-size:21px;letter-spacing:-.025em}
+.gif-card p{font-size:13px;margin:12px 0 20px;min-height:43px}
+.gif-actions{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.gif-toggle{background:var(--pale);border:1px solid #38635b;color:#a2e4d7;border-radius:7px;padding:8px 13px;font-size:12px;font-weight:650;min-width:92px}
+.gif-toggle:hover,.gif-toggle[aria-pressed=true]{background:var(--green);color:var(--accent-ink)}
+.gif-actions a{font-size:11px;color:#b4c4c2}
+.gif-explainer{font-size:12px;margin-top:25px}
+@media(max-width:1100px){.gif-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.gif-grid{grid-template-columns:1fr;gap:22px}.gif-card figcaption{padding:20px}.gif-card p{min-height:0}.gif-card h3{font-size:22px}}
+.gif-toggle{display:none}.has-js .gif-toggle{display:inline-block}
