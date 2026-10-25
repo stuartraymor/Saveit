@@ -55,13 +55,20 @@ function Saveit-Processes {
   }
   return $found
 }
+function File-SHA256([string]$file) {
+  # Use the runtime directly: a launcher can inherit PSModulePath from a different PowerShell edition.
+  $stream = [System.IO.File]::OpenRead($file)
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try { return [System.BitConverter]::ToString($sha.ComputeHash($stream)) }
+  finally { $sha.Dispose(); $stream.Dispose() }
+}
 function Tree-Differences([string]$a, [string]$b) {
   # number of files under $a that are missing from $b or different in $b
   $n = 0; $root = (Resolve-Path $a).Path.TrimEnd('\')
   foreach ($f in Get-ChildItem -LiteralPath $a -Recurse -File -Force) {
     $rel = $f.FullName.Substring($root.Length + 1); $other = Join-Path $b $rel
     if (-not (Test-Path -LiteralPath $other -PathType Leaf)) { $n++; continue }
-    if ((Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $other -Algorithm SHA256).Hash) { $n++ }
+    if ((File-SHA256 $f.FullName) -ne (File-SHA256 $other)) { $n++ }
   }
   return $n
 }

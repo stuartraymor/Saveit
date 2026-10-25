@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><title>Window capture</title>
+<script>
+window.captureFrame = async id => {
+  const stream = await navigator.mediaDevices.getUserMedia({audio:false,video:{mandatory:{chromeMediaSource:'desktop',chromeMediaSourceId:id,maxWidth:32768,maxHeight:32768}}});
+  const v = document.createElement('video');
+  try {
+    v.muted=true;v.srcObject=stream;await v.play();
+    const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;
+    if(!c.width||!c.height)throw Error('The selected window has no visible frame');
+    c.getContext('2d').drawImage(v,0,0);return c.toDataURL('image/png');
+  } finally {stream.getTracks().forEach(t=>t.stop());v.srcObject=null;}
+};
+</script>

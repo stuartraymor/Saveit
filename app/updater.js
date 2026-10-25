@@ -200,7 +200,7 @@ function startUpdater(staged, userDataDir, currentVersion) {
 // ---------- results the next start shows ----------
 function takeResult(userDataDir) {
   const f = path.join(userDataDir, 'updates', 'result.json');
-  try { const r = JSON.parse(fs.readFileSync(f, 'utf8')); fs.rmSync(f, { force: true }); return r && typeof r === 'object' ? r : null; } catch (_) { return null; }
+  try { const r = JSON.parse(fs.readFileSync(f, 'utf8').replace(/^\uFEFF/, '')); fs.rmSync(f, { force: true }); return r && typeof r === 'object' ? r : null; } catch (_) { return null; }
 }
 // When the updater starts the new version it sets SAVEIT_UPDATE_HEALTH; the new version answers once its window is up.
 function markHealthy(version) {
