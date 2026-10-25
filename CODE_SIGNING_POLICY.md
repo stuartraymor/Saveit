@@ -6,7 +6,7 @@ Saveit is free and open source (MIT License). This page describes how its Window
 Releases are currently **not code-signed**, so Windows may say "Windows protected your PC" the first time you run the installer (click **More info**, then **Run anyway**). An application to the SignPath Foundation for free code signing is being made. When it is approved, this page will be updated, and the files listed below will be signed.
 
 ## What is signed
-Once signing is enabled: `Saveit-Setup.exe` and the program files `saveit-updating.exe` and `saveit-steps.exe`. Only files built from the source in this repository are signed.
+Once signing is enabled: `Saveit-Setup.exe` and the program files `saveit-updating.exe`, `saveit-steps.exe` and `saveit-window-bounds.exe`. Only files built from the source in this repository are signed.
 
 ## Who decides
 - **Author, reviewer and approver:** Stuart Raymor, the owner of this repository, approves every signing request.

@@ -14,4 +14,6 @@ for(const f of ['main.js','preload.js']){const s=fs.readFileSync(path.join(APP,f
 {const V=require('../tools/version.js');try{const c=V.check();c.bad.length?c.bad.forEach(b=>bad('version '+c.cur+' but '+b.f+' says '+b.v)):ok('version '+c.cur+' in every file');
   const want={'10.0.0':'10.0.1','10.0.11':'10.0.12','10.0.12':'10.1.0','10.12.12':'11.0.0'},wrong=Object.keys(want).filter(k=>V.next(k)!==want[k]);wrong.length?bad('version rule wrong for '+wrong):ok('version rule')}catch(e){bad('version: '+e.message)}}
 try{console.log(cp.execFileSync(process.execPath,[path.join(__dirname,'stitch.test.js')]).toString().trim());ok('stitch tests')}catch(e){bad('stitch tests\n'+(e.stdout||'')+(e.stderr||''))}
+for(const f of ['window-capture.js','saveit-window-bounds.exe'])fs.existsSync(path.join(APP,f))?ok('window capture asset: '+f):bad('missing window capture asset: '+f);
+try{console.log(cp.execFileSync(process.execPath,[path.join(__dirname,'window-capture-unit.cjs')]).toString().trim());ok('window capture regressions')}catch(e){bad('window capture regressions\n'+(e.stdout||'')+(e.stderr||''))}
 console.log(fail?`\n${fail} FAILED`:'\nALL NODE TESTS PASSED');process.exit(fail?1:0);

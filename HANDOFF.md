@@ -105,7 +105,10 @@ app/                      the whole application (this folder is what gets instal
   pptxgen.bundle.js       third-party PowerPoint writer (licence in third-party/)
   third-party/            lamejs (MP3 encoder, LGPL-3.0), jszip, pako, pptxgenjs licences
   saveit-steps.exe        native Step Capture helper (built from native/saveit-steps.cs)
+  window-capture.js       exact-size Windows still capture, with resize-race checks
+  saveit-window-bounds.exe physical DWM window bounds (native/saveit-window-bounds.cs)
 native/saveit-steps.cs    source of that helper (C#, builds with the compiler that ships with Windows)
+native/saveit-window-bounds.cs builds with tools/build-window-bounds.ps1 before packaging; the helper must accompany app/window-capture.js
 tests/                    all automated tests and the harness (section 7)
 tools/                    version.js (bump versions), update-installed.ps1 (back up + install), build-steps-helper.ps1, build-setup.ps1 (builds Saveit-Setup.exe), build-updating.ps1 (builds app\saveit-updating.exe, the update progress window), sign-release.js (sign a release zip), make-signing-key.js
 install.ps1, Install.cmd, Reinstall.cmd, Uninstall.cmd, uninstall.ps1    the installer

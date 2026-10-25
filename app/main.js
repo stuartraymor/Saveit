@@ -194,9 +194,10 @@ async function listWindowSources(size) {
   const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: size, fetchWindowIcons: true });
   return sources.filter(s => !own.has(s.id) && s.name && !/^Saveit/.test(s.name) && !s.thumbnail.isEmpty());
 }
-// Capture an actual frame: desktopCapturer thumbnails are scaled previews, even
-// when requested at screen dimensions. The video element reports native pixels.
+// On Windows, request a still image at the physical DWM frame size. Video
+// capture rounds odd dimensions down to even numbers before the canvas sees them.
 async function grabWindow(id) {
+  if (process.platform === 'win32') return require('./window-capture.js').captureWindow(desktopCapturer, id);
   const capture = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
   try {
     await capture.loadFile(asset('window-frame.html'));

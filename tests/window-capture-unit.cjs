@@ -1,0 +1,22 @@
+const assert = require('assert/strict');
+const { captureWindow, windowBounds } = require('../app/window-capture.js');
+const id = 'window:123:0';
+const thumbnail = size => ({ isEmpty: () => false, getSize: () => size });
+(async () => {
+  const odd = { width: 285, height: 171 }, requests = [];
+  const image = thumbnail(odd);
+  assert.equal(await captureWindow({ getSources: async options => { requests.push(options); return [{ id, thumbnail: image }]; } }, id, async () => odd), image);
+  assert.deepEqual(requests[0].thumbnailSize, odd);
+  console.log('PASS exact odd native dimensions requested and returned');
+  let reads = 0;
+  const larger = { width: 901, height: 521 };
+  const result = await captureWindow({ getSources: async ({ thumbnailSize }) => [{ id, thumbnail: thumbnail(thumbnailSize) }] }, id, async () => ++reads === 1 ? odd : larger);
+  assert.deepEqual(result.getSize(), larger);assert.equal(reads, 4);
+  console.log('PASS resize race retries at the new native size');
+  await assert.rejects(captureWindow({ getSources: async () => [{ id, thumbnail: thumbnail({ width: 284, height: 170 }) }] }, id, async () => odd), /changed size/);
+  await assert.rejects(captureWindow({ getSources: async () => [] }, id, async () => odd), /closed/);
+  await assert.rejects(windowBounds('screen:123:0'), /measured/);
+  await assert.rejects(windowBounds('window:1;bad:0'), /measured/);
+  await assert.rejects(windowBounds('window:0:0'), /measured/);
+  console.log('PASS wrong dimensions, closed windows and invalid handles fail safely');
+})().catch(error => { console.error(error); process.exitCode = 1; });
