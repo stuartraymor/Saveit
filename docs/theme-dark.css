@@ -85,3 +85,7 @@ kbd{background:var(--app-raised);border-color:#526067;color:var(--ink)}
   .site-header .github-header{display:inline-flex!important}
   .learn-lesson{scroll-margin-top:155px}
 }
+.learning-header{white-space:normal;text-align:center}
+@media(min-width:801px) and (max-width:1100px){.site-header .nav-links{gap:12px}.site-header .nav-links .button{padding:11px 14px;font-size:13px}}
+@media(max-width:800px){.site-header .nav-links .button{min-width:0;padding:10px 8px;font-size:12px;gap:6px}}
+@media(max-width:400px){.site-header .nav-links .button svg{display:none}}
