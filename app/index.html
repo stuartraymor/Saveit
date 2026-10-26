@@ -268,10 +268,10 @@ details.more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size
     <button class="btn" id="libBtn" title="See everything you have captured">Library</button>
     <button class="btn" id="newBtn" title="Blank canvas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Blank</button></div>
   </footer>
-  <div class="status" id="status"></div>
-<style>.updbar103{grid-area:status;justify-self:end;align-self:center;padding-right:14px;pointer-events:none;z-index:6}.updbar103 button{pointer-events:auto;background:none;border:0;padding:0;color:var(--muted);font:inherit;font-size:11px;cursor:pointer;opacity:.75}.updbar103 button:hover,.updbar103 button:focus-visible{opacity:1;text-decoration:underline}
+  <div class="support-footer109"><div class="status" id="status"></div>
+<style>.support-footer109{grid-area:status;display:flex;align-items:center;flex-wrap:wrap;background:var(--chrome);border-top:1px solid var(--line);min-width:0}.support-footer109 .status{flex:1 1 420px;min-width:0;border:0;padding:8px 16px;gap:6px 18px}.updbar103{display:flex;gap:8px;flex-wrap:wrap;padding:7px 14px;margin-left:auto}.updbar103 button{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 11px;color:var(--fg);font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;min-height:32px}.updbar103 #updLink103{border-color:var(--accent);color:var(--accent)}.updbar103 button:hover{background:var(--panel-2);border-color:var(--accent)}.updbar103 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.bug-dialog109{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:24px;width:440px;max-width:calc(100vw - 48px);line-height:1.5}.bug-dialog109::backdrop{background:#0009}.bug-dialog109 h2{margin-top:0}.bug-dialog109 .row{justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .upd103 .upd-note{white-space:pre-wrap;max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--panel-2);font-size:13px;line-height:1.5;margin:8px 0}.upd103 .upd-big{font-size:16px;margin:6px 0}.upd103 .upd-msg{margin:8px 0}.upd103 .upd-err{color:#ff8a80}.upd103 .row{margin-top:12px;gap:8px;justify-content:flex-end}.upd103 progress{width:100%;height:10px}</style>
-<div class="updbar103" id="updbar103"><button type="button" id="updLink103" title="See whether a newer version of Saveit is available">Check for Updates →</button></div>
+<nav class="updbar103" id="updbar103" aria-label="Help and updates"><button type="button" id="updLink103" title="See whether a newer version of Saveit is available">Check for Updates</button><button type="button" id="learnLink109" title="Open the Save It learning guide in your browser">Learning Guide</button><button type="button" id="bugLink109" title="Prepare a bug report on GitHub">Report a Bug</button></nav></div>
 </div>
 
 <script>(function(){const t=document.getElementById("trayEl"),b=document.getElementById("trayTog");function set(m){t.classList.toggle("min",m);b.textContent=m?"▸ Recent":"◂ Hide recent";try{localStorage.setItem("trayMin",m?"1":"")}catch(e){}}let m=false;try{m=!!localStorage.getItem("trayMin")}catch(e){}set(m);b.onclick=()=>set(!t.classList.contains("min"))})()</script>
@@ -2463,7 +2463,7 @@ async function updateApply103() {
   updShow103('<p class="upd-msg">Saveit is closing to finish the update and will open again in a moment.</p>');
 }
 { const link = $('#updLink103');
-  if (!window.bench || !window.bench.updateCheck) { $('#updbar103').hidden = true }
+  if (!window.bench || !window.bench.updateCheck) { link.hidden = true }
   else {
     link.onclick = updateCheck103;
     if (window.bench.onUpdateCancelled) window.bench.onUpdateCancelled(() => { updDialog103()?.remove(); toast('Saveit did not close, so the update was cancelled. Nothing was changed.', 9000) });
@@ -3014,4 +3014,11 @@ renderProps();
 })();
 </script>
 
+<dialog class="bug-dialog109" id="bugDialog109" aria-labelledby="bugTitle109">
+<h2 id="bugTitle109">Report a bug</h2>
+<p>Open a report draft on GitHub, where you can describe the problem and add screenshots. You will need a GitHub account.</p>
+<p><b>Reports are public.</b> Remove personal details from your description and screenshots. Save It includes only its version and Windows platform in the draft; no captures, files or logs are attached automatically.</p>
+<div class="row"><button type="button" class="btn" id="bugCancel109">Cancel</button><button type="button" class="btn pri" id="bugOpen109">Open GitHub draft</button></div>
+</dialog>
+<script src="support.js"></script>
 </body></html>

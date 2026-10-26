@@ -9,10 +9,28 @@ const {chromium}=require('playwright'),assert=require('assert/strict');
  const reset=()=>ev(()=>{document.querySelectorAll('#updateDialog103').forEach(m=>m.remove());window.__updCalls={};while(window.busyLeave103&&__T.updateBusy103().length&&document.__x===undefined){break}});
  const AVAILABLE={ok:true,state:'available',current:'10.1.12',latest:'10.1.13',canInstall:true,notes:"## What's new\n\n- **Check for Updates** link at the bottom right\n- Fixes [thing](http://x.y)\n"};
 
- await test('The link is small, at the bottom right, and nothing contacts GitHub on its own',async()=>{
+ await test('Defined footer buttons remain visible without overlapping status at desktop and minimum sizes',async()=>{
   await page.waitForTimeout(2500);assert.deepEqual(await calls(),{},'no update call before a click');
-  const r=await ev(()=>{const b=document.querySelector('#updLink103'),q=b.getBoundingClientRect(),cs=getComputedStyle(b),st=document.querySelector('#status').getBoundingClientRect();return{text:b.textContent,fs:parseFloat(cs.fontSize),right:innerWidth-q.right,bottom:innerHeight-q.bottom,inStatus:q.top>=st.top-1&&q.bottom<=st.bottom+1,visible:q.width>0&&b.offsetParent!==null}});
-  assert.equal(r.text,'Check for Updates \u2192');assert.ok(r.fs<=12,'small letters: '+r.fs);assert.ok(r.right<30&&r.bottom<30,'bottom right corner '+JSON.stringify(r));assert.ok(r.inStatus,'sits in the bar that runs across the bottom');assert.ok(r.visible)});
+  for(const [width,height] of [[1440,900],[1280,800],[960,620]]){
+   await page.setViewportSize({width,height});
+   const r=await ev(()=>{const nav=document.querySelector('#updbar103').getBoundingClientRect(),st=document.querySelector('#status').getBoundingClientRect();return{nav:{x:nav.x,right:nav.right,bottom:nav.bottom,top:nav.top},st:{right:st.right,bottom:st.bottom},buttons:[...document.querySelectorAll('#updbar103 button')].map(b=>{const q=b.getBoundingClientRect();return{text:b.textContent,h:q.height,border:parseFloat(getComputedStyle(b).borderTopWidth)}})}});
+   assert.deepEqual(r.buttons.map(b=>b.text),['Check for Updates','Learning Guide','Report a Bug']);
+   assert.ok(r.buttons.every(b=>b.h>=32&&b.border>=1));
+   assert.ok(r.nav.right<=width&&r.nav.bottom<=height);
+   assert.ok(r.st.right<=r.nav.x+1||r.st.bottom<=r.nav.top+1,'status and buttons must not overlap');
+  }
+  await page.setViewportSize({width:1440,height:900});
+ });
+ await test('Learning guide opens its website; reports require confirmation and remain versioned drafts',async()=>{
+  await ev(()=>{window.__supportOpened=[];window.open=url=>window.__supportOpened.push(url);window.bench.appVersion=async()=> '10.3.9'});
+  await page.locator('#learnLink109').click();assert.deepEqual(await ev(()=>window.__supportOpened),['https://stuartraymor.github.io/Saveit/learn.html']);
+  await page.locator('#bugLink109').click();assert.match(await page.locator('#bugDialog109').innerText(),/Reports are public/);
+  await page.keyboard.press('Escape');assert.equal(await page.locator('#bugDialog109').isVisible(),false);
+  await page.locator('#bugLink109').click();await page.locator('#bugCancel109').click();assert.equal(await ev(()=>window.__supportOpened.length),1);
+  await page.locator('#bugLink109').click();await page.locator('#bugOpen109').click();
+  const u=new URL(await ev(()=>window.__supportOpened[1]));assert.equal(u.origin+u.pathname,'https://github.com/stuartraymor/Saveit/issues/new');
+  assert.match(u.searchParams.get('body'),/Save It: 10\.3\.9/);assert.match(u.searchParams.get('body'),/Steps to reproduce/);assert.equal(await page.locator('#bugDialog109').isVisible(),false);
+ });
  await test('Up to date: one request, and the message says so',async()=>{
   await reset();await page.locator('#updLink103').click();await page.waitForSelector('#updBody103 .upd-big');assert.deepEqual(await calls(),{check:1});assert.match(await dlg(),/Saveit is up to date\./)});
  await test('Update available: shows the new version, clean release notes and an Install Update button; Not now closes without downloading',async()=>{
