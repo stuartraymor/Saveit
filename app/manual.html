@@ -1,1 +1,39 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Saveit Manual Scroll</title><style>body{background:#20262a;color:#eef2f4;font:14px 'Segoe UI';margin:14px}button{padding:8px 14px;margin:0 4px;background:#303b41;color:inherit;border:1px solid #53646e;border-radius:6px;cursor:pointer}p{margin:8px 0}</style></head><body><b>Manual scrolling capture</b><p id="state">Capturing first frame…</p><p>Scroll inside your target by less than one screen at a time.</p><button id="add">Add frame</button><button id="finish">Finish</button><button id="cancel">Cancel</button><script>for(const cmd of ['add','finish','cancel'])document.querySelector('#'+cmd).onclick=()=>window.manual.send(cmd);window.manual.onStatus(m=>document.querySelector('#state').textContent=m);</script></body></html>
+<!doctype html><html><head><meta charset="utf-8"><title>Saveit Scrolling Capture</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#16181a;user-select:none;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:#e8eaec;font-size:12px}
+.wid{box-sizing:border-box;height:100%;display:flex;align-items:center;gap:8px;border:1px solid #3a3f45;border-radius:12px;padding:7px 10px;-webkit-app-region:drag}
+.dot{width:9px;height:9px;border-radius:50%;background:#2db3a0;flex:none}
+.dot.warn{background:#e8a23b}.dot.bad{background:#e5483b}
+.txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+#state{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#hint{color:#b4bac0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tm{font-family:"Cascadia Mono",Consolas,monospace;color:#7d848b;white-space:nowrap}
+button{-webkit-app-region:no-drag;font:inherit;font-weight:700;border-radius:7px;border:1px solid #3a3f45;background:#30343a;color:#e8eaec;padding:6px 11px;cursor:pointer;white-space:nowrap}
+button:hover:not(:disabled){border-color:#9aa1a8}
+button:disabled{opacity:.4;cursor:default}
+button.go{background:#e5483b;border-color:#e5483b;color:#fff}
+</style></head><body>
+<div class="wid">
+  <span class="dot" id="dot"></span>
+  <div class="txt"><span id="state">Capturing the visible area…</span><span id="hint">Scroll down through the page. Click Capture when you reach the end.</span></div>
+  <span class="tm" id="size"></span>
+  <button class="go" id="finish" title="Finish and open the long screenshot">Capture</button><button id="cancel" title="Close without capturing">Cancel</button>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+for(const cmd of ['finish','cancel'])$(cmd).onclick=()=>{if(cmd==='finish'){$('finish').disabled=true;$('cancel').disabled=true}window.manual.send(cmd)};
+const TEXT={
+  initial:['Ready','Scroll down through the page. Click Capture when you reach the end.',''],
+  same:null,waiting:null,blank:null,
+  collecting:['Adding new content','Keep scrolling down, or click Capture to finish.',''],
+  revisiting:['Already captured here','Scrolling back up adds nothing. Scroll below the end to add more.','warn'],
+  lost:['Can’t line this up','Scroll back to a part already captured, then scroll down more slowly.','bad'],
+  full:['Maximum length reached','Click Capture to keep what was captured.','warn'],
+  finalizing:['Putting the picture together…','',''],
+  error:['Capture problem','', 'bad']};
+window.manual.onStatus(s=>{if(typeof s==='string'){$('hint').textContent=s;return}
+  const t=TEXT[s.state];if(t){$('state').textContent=t[0];$('hint').textContent=s.state==='error'?(s.message||'Saveit could not read the screen.'):t[1];$('dot').className='dot'+(t[2]?' '+t[2]:'')}
+  if(s.height)$('size').textContent=s.height.toLocaleString()+' px'});
+addEventListener('keydown',e=>{if(e.key==='Escape')$('cancel').click();if(e.key==='Enter')$('finish').click()});
+</script>
+</body></html>

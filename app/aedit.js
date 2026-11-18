@@ -62,7 +62,10 @@ async function record(o){const parts=[];
     p.an=ctx.createAnalyser();p.an.fftSize=1024;p.buf=new Float32Array(p.an.fftSize);p.src=ctx.createMediaStreamSource(p.stream);p.src.connect(p.an);p.lv=0}
   let tick=0,paused=false,t0=0,pausedAt=0,pausedFor=0,stopped=false;
   const ctl={parts:parts.map(p=>p.name),
-    start(){parts.forEach(p=>p.rec.start(1000));t0=performance.now();tick=setInterval(()=>{const lv=parts.map(p=>{p.an.getFloatTimeDomainData(p.buf);let pk=0;for(const v of p.buf)pk=Math.max(pk,Math.abs(v));p.lv=Math.max(pk,p.lv*.8);return paused?0:+p.lv.toFixed(3)});o.onLevel&&o.onLevel(lv)},100)},
+    start(){parts.forEach(p=>{p.rec.start(1000);
+      // 10.3.10: a microphone that is unplugged (or a sound source that closes) ends its track; say so at once instead of
+      // silently recording nothing for the rest of the take. What was recorded up to then is kept.
+      p.stream.getAudioTracks().forEach(t=>t.addEventListener('ended',()=>{if(!stopped&&!p.lost){p.lost=true;o.warn&&o.warn(p.name+(p.device?' ('+p.device+')':'')+' stopped sending sound. It may have been unplugged. Everything recorded before that is kept.')}}))});t0=performance.now();tick=setInterval(()=>{const lv=parts.map(p=>{p.an.getFloatTimeDomainData(p.buf);let pk=0;for(const v of p.buf)pk=Math.max(pk,Math.abs(v));p.lv=Math.max(pk,p.lv*.8);return paused?0:+p.lv.toFixed(3)});o.onLevel&&o.onLevel(lv)},100)},
     get paused(){return paused},elapsed(){return((paused?pausedAt:performance.now())-t0-pausedFor)/1000},
     pause(){if(paused||stopped)return;paused=true;pausedAt=performance.now();parts.forEach(p=>{try{p.rec.pause()}catch(_){}})},
     resume(){if(!paused||stopped)return;paused=false;pausedFor+=performance.now()-pausedAt;parts.forEach(p=>{try{p.rec.resume()}catch(_){}})},

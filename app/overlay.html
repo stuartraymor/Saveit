@@ -52,7 +52,7 @@ const HS=6;
 const K=()=>img.naturalWidth/W||1;
 function size(){W=innerWidth;H=innerHeight;dpr=devicePixelRatio||1;c.width=W*dpr;c.height=H*dpr;g.setTransform(dpr,0,0,dpr,0,0);draw()}
 addEventListener('resize',size);
-let vmode='image';
+let vmode='image',sent=false;
 const fxs={id:'none',p:{}};const fxUi=FXUI.mount($('fxSel'),$('fxGear'),fxs,()=>draw());
 function collect(){return{fx:{id:fxs.id,p:fxs.p},mode:vmode,area:$('area').value,cursor:$('oCur').checked,clip:$('oClip').checked,sys:$('oSys').checked,mic:$('oMic').checked,cam:$('oCam').checked}}
 function labels(){const v=vmode==='video',a=$('area').value;
@@ -61,7 +61,7 @@ function labels(){const v=vmode==='video',a=$('area').value;
   if(v&&['steps','text','scroll'].includes(a))$('area').value='region';
   const a2=$('area').value;$('ok').textContent=a2==='text'?'Grab text':(v?'Record':'Capture');$('ok').classList.toggle('rec',v);
   if(state==='drag')tip.innerHTML=v?'Drag the area to <b>record</b> · <b>Click</b> for the whole screen · <b>Esc</b> to cancel':(a2==='text'?'Drag around the <b>text</b> to grab · <b>Esc</b> to cancel':'Drag to select an area · <b>Click</b> for the whole screen · <b>Esc</b> to cancel')}
-window.overlay.onData(d=>{const o=d.opts||{};vmode=o.mode==='video'?'video':'image';
+window.overlay.onData(d=>{sent=false;const o=d.opts||{};vmode=o.mode==='video'?'video':'image';
   $('area').value=o.area&&o.area!=='window'&&o.area!=='steps'?o.area:'region';
   $('oCur').checked=!!o.cursor;$('oClip').checked=!!o.clip;$('oSys').checked=o.sys!==false;$('oMic').checked=!!o.mic;$('oCam').checked=!!o.cam;fxUi.set(o.fx||{id:'none',p:{}});
   if(d.init==='full'||$('area').value==='screen'){$('area').value='screen';state='adjust';tip.style.display='none'}
@@ -113,10 +113,11 @@ function draw(){if(!ready)return;g.clearRect(0,0,W,H);g.drawImage(img,0,0,W,H);g
     g.strokeStyle='#e8eaec';g.lineWidth=2;g.strokeRect(lx,ly2,L,L);g.strokeStyle='rgba(229,72,59,.9)';g.lineWidth=1;g.beginPath();g.moveTo(lx+L/2,ly2);g.lineTo(lx+L/2,ly2+L);g.moveTo(lx,ly2+L/2);g.lineTo(lx+L,ly2+L/2);g.stroke();
     g.fillStyle='rgba(22,24,26,.92)';g.fillRect(lx,ly2+L,L,22);g.fillStyle='#e8eaec';g.font='12px "Cascadia Mono",Consolas,monospace';g.fillText(`${Math.round(cur.x*k)}, ${Math.round(cur.y*k)}`,lx+7,ly2+L+15)}
   placeBar()}
-function finish(){if(!sel)return;if($('area').value==='screen'&&!(sel.w>=W-1&&sel.h>=H-1))$('area').value='region';window.overlay.done({x:sel.x,y:sel.y,w:sel.w,h:sel.h,opts:collect()})}
-function cancel(){window.overlay.done(null)}
+function finish(){if(!sel||sent)return;sent=true;if($('area').value==='screen'&&!(sel.w>=W-1&&sel.h>=H-1))$('area').value='region';window.overlay.done({x:sel.x,y:sel.y,w:sel.w,h:sel.h,opts:collect()})}
+function cancel(){if(sent)return;sent=true;window.overlay.done(null)}
 function redo(){state='drag';sel=null;start=null;act=null;tip.style.display='';if($('area').value==='screen')$('area').value='region';labels();draw()}
-c.addEventListener('mousedown',e=>{if(e.button===2){cancel();return}if(e.button!==0)return;const p={x:e.clientX,y:e.clientY};cur=p;
+// 10.3.10: right-click with a finished selection captures it (same as Capture); before a selection exists it still closes, and during a drag it is ignored.
+c.addEventListener('mousedown',e=>{if(e.button===2){if(state==='adjust'&&sel&&!act&&sel.w>=4&&sel.h>=4)finish();else if(!start&&!act)cancel();return}if(e.button!==0)return;const p={x:e.clientX,y:e.clientY};cur=p;
   if(state==='adjust'&&isFull()){state='drag';sel=null;if($('area').value==='screen')$('area').value='region';labels()}
   if(state==='adjust'){const hk=handleAt(p);if(hk){act={type:'resize',k:hk,orig:{...sel}};return}
     if(inside(p)){act={type:'move',dx:p.x-sel.x,dy:p.y-sel.y};c.style.cursor='grabbing';return}
@@ -151,6 +152,6 @@ $('area').onchange=()=>{const v=$('area').value;
 $('ok').onclick=finish;$('redo').onclick=redo;$('cancel').onclick=cancel;
 // One button: Redo while a selection is shown, then Cancel once you are drawing again.
 $('toggle').onclick=()=>{if(state==='adjust'&&sel)redo();else cancel()};
-addEventListener('contextmenu',e=>{e.preventDefault();cancel()});
+addEventListener('contextmenu',e=>e.preventDefault());
 </script>
 </body></html>

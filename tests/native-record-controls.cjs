@@ -3,7 +3,7 @@ const {_electron}=require('playwright'),assert=require('assert/strict'),path=req
 (async()=>{
  const app=await _electron.launch({executablePath:process.env.SAVEIT_TEST_EXE,env:{...process.env,SAVEIT_REVIEW_DATA:process.argv[2]},timeout:30000});
  try {
-  assert.equal(await app.evaluate(({app})=>app.getVersion()),'10.2.10');
+  assert.equal(await app.evaluate(({app})=>app.getVersion()),require('../app/package.json').version);
   assert.equal(await app.evaluate(({app})=>app.getAppPath()),path.join(path.dirname(process.env.SAVEIT_TEST_EXE),'resources','app'));
   const p=await app.firstWindow();await p.waitForFunction(()=>window.bench?.recUI);
   await app.evaluate(({ipcMain})=>{global.testRecCommands=[];ipcMain.on('rec-cmd',(_e,c)=>global.testRecCommands.push(c))});

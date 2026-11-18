@@ -40,8 +40,8 @@ function remove(p,ids,range,ripple=false,all=false){
  if(b-a<.00001)return false;const out=[];
  for(const c of p.clips){if(!tracks.has(c.track)){out.push(c);continue}if(!range&&!ids.has(c.id)){if(ripple&&c.start>=b)c.start-=b-a;out.push(c);continue}
   if(end(c)<=a||c.start>=b){if(ripple&&c.start>=b)c.start-=b-a;out.push(c);continue}
-  const old=copy(c);if(c.start<a){c.b=c.a+a-c.start;clampEffects(c);out.push(c)}
-  if(end(old)>b){const r={...old,id:old.start<a?id('clip'):old.id};trim(r,old.a+b-old.start,old.b);if(ripple)r.start-=b-a;out.push(r)}
+  const old=copy(c);if(c.start<a){c.b=c.a+a-c.start;c.fo=0;clampEffects(c);out.push(c)}
+  if(end(old)>b){const r={...old,id:old.start<a?id('clip'):old.id};trim(r,old.a+b-old.start,old.b);r.fi=0;if(ripple)r.start-=b-a;out.push(r)}
  }
  p.clips=out;if(ripple){for(const t of p.tracks)if(tracks.has(t.id)){const e={effects:t.effects};root.AudioTimeline.cutEffects(e,a,b);t.effects=e.effects}if(all){p.length=Math.max(0,p.length-(b-a));const e={effects:p.effects};root.AudioTimeline.cutEffects(e,a,b);p.effects=e.effects}}
  return true;

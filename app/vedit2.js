@@ -26,12 +26,13 @@ function buildFx(ac){
   const inp=ac.createGain(),out=ac.createGain(),hp=ac.createBiquadFilter(),lp=ac.createBiquadFilter(),comp=ac.createDynamicsCompressor(),mk=ac.createGain();
   hp.type='highpass';hp.frequency.value=10;hp.Q.value=.7;lp.type='lowpass';lp.frequency.value=22000;lp.Q.value=.7;
   const eq=EQ_F.map((f,i)=>{const b=ac.createBiquadFilter();b.type=i===0?'lowshelf':i===EQ_F.length-1?'highshelf':'peaking';b.frequency.value=f;b.Q.value=1.0;b.gain.value=0;return b});
-  inp.connect(hp);let n=hp;for(const b of eq){n.connect(b);n=b}n.connect(lp);lp.connect(comp);comp.connect(mk);
+  // 10.3.10: the voice effect comes first, so EQ, level control, reverb and echo below still shape the changed voice.
+  const vs=root.VoiceFX?root.VoiceFX.stage(ac):null;if(vs){inp.connect(vs.input);vs.output.connect(hp)}else inp.connect(hp);let n=hp;for(const b of eq){n.connect(b);n=b}n.connect(lp);lp.connect(comp);comp.connect(mk);
   const dry=ac.createGain(),rin=ac.createGain(),conv=ac.createConvolver(),rg=ac.createGain(),dl=ac.createDelay(1.5),fb=ac.createGain(),eg=ac.createGain();
   conv.buffer=impulse(ac,1.8);mk.connect(dry);dry.connect(out);mk.connect(rin);rin.connect(conv);conv.connect(rg);rg.connect(out);
   mk.connect(dl);dl.connect(fb);fb.connect(dl);dl.connect(eg);eg.connect(out);fb.gain.value=.35;rg.gain.value=0;eg.gain.value=0;
   const offline=typeof OfflineAudioContext!=='undefined'&&ac instanceof OfflineAudioContext,T=(p,v)=>{if(offline){p.value=v;return}try{p.setTargetAtTime(v,ac.currentTime,.02)}catch(_){p.value=v}};
-  return{input:inp,output:out,apply(fx){fx=Object.assign(defFx(),fx||{});eq.forEach((b,i)=>T(b.gain,+fx.eq[i]||0));
+  return{input:inp,output:out,apply(fx){fx=Object.assign(defFx(),fx||{});if(vs)vs.set(fx.voice||null);eq.forEach((b,i)=>T(b.gain,+fx.eq[i]||0));
     T(hp.frequency,fx.lc>0?fx.lc:10);T(lp.frequency,fx.hc>0?fx.hc:22000);
     const a=(+fx.comp||0)/100;comp.threshold.value=-8-a*32;comp.ratio.value=1+a*11;comp.knee.value=12;comp.attack.value=.004;comp.release.value=.2;T(mk.gain,(fx.gain||1)*(1+a*.9));
     T(rg.gain,(+fx.rev||0)/100*1.1);dl.delayTime.value=clamp(+fx.echoT||.3,.05,1.4);T(eg.gain,(+fx.echo||0)/100*.9)}}}
@@ -287,6 +288,8 @@ function makeEngine(P){
   async function readerFor(key,id,cache,readers,stats){if(readers[key])return readers[key];const tr=await trackOf(id,cache);if(!tr)stats.seek.add(id);const r=tr?VExport.frames(tr):seekReader(id);r.src=id;return readers[key]=r}
   async function mixAudio(T,rate){const oac=new OfflineAudioContext(2,Math.max(1,Math.ceil(T*rate)),rate),bufs={};
     const dec=id=>{if(!(id in bufs))bufs[id]=(async()=>{const b=await blobOf(id);if(!b)return null;try{return await oac.decodeAudioData(await b.arrayBuffer())}catch(_){return null}})();return bufs[id]};
+    // 10.3.10: load the pitch processor into the export context before any voice effect is built, so the file sounds like the preview
+    if(root.VoiceFX&&[e.master,...e.clips.map(c=>c.fx),...e.aud.map(c=>c.fx)].some(f=>f&&f.voice&&f.voice.on!==false&&root.VoiceFX.needsWorklet(f.voice.type)))await root.VoiceFX.prepare(oac);
     const master=buildFx(oac);master.apply(e.master);const mg=oac.createGain(),out=oac.createGain();master.output.connect(mg);mg.connect(out);out.connect(oac.destination);
     const curve=(node,t0,len,f)=>{const n=Math.max(2,Math.ceil(len*100)+1),cv=new Float32Array(n);for(let i=0;i<n;i++)cv[i]=f(Math.min(t0+i/100,t0+len-1e-4));node.setValueCurveAtTime(cv,t0,(n-1)/100)};
     curve(out.gain,0,T,t=>{let m=1;if(e.fadeIn&&t<.6)m=Math.min(m,t/.6);if(e.fadeOut&&T-t<.6)m=Math.min(m,Math.max(0,(T-t)/.6));return m});
@@ -340,7 +343,7 @@ function makeEngine(P){
   function snapshot(cw,ch){const c=document.createElement('canvas');c.width=cw||e.W;c.height=ch||e.H;drawFrame(c.getContext('2d'),S.t,c.width,c.height);return c}
   function destroy(){stopPlay();for(const o of poolEls())killEl(o);if(S.els.__cam)killEl(S.els.__cam);S.pool={};S.els={};try{S.ac&&S.ac.close()}catch(_){}}
   const elFor=c=>{const o=S.els[c.id]||(S.pool[c.src]||[]).find(x=>x.el.videoWidth);return o?o.el:null};
-  return{S,e,zoomAt,hasCam,unlock,play,pause,seek,render,sync,refreshFx,exportRun,renderTimes,snapshot,destroy,active,elFor,prepare,drawFrame,get t(){return S.t},set t(v){S.t=v},get playing(){return S.playing},setTargets(a){S.targets=a},onEnd(f){S.onEnd=f},onTick(f){S.onTick=f},gainFor}}
+  return{S,e,zoomAt,hasCam,unlock,play,pause,seek,render,sync,refreshFx,mixAudio,exportRun,renderTimes,snapshot,destroy,active,elFor,prepare,drawFrame,get t(){return S.t},set t(v){S.t=v},get playing(){return S.playing},setTargets(a){S.targets=a},onEnd(f){S.onEnd=f},onTick(f){S.onTick=f},gainFor}}
 
 // ---------- styles ----------
 function css(){if(document.getElementById('vedCss2'))return;const s=document.createElement('style');s.id='vedCss2';s.textContent=`
@@ -462,7 +465,9 @@ function mount(host,it,api){css();HK=api;
      <div class="veq" data-r="eq">${EQ_L.map((l,i)=>`<div><span data-r="eqv${i}">0</span><input type="range" min="-12" max="12" step="1" value="0" data-eq="${i}" aria-label="${l} Hz"><span>${l}</span></div>`).join('')}<span class="vnote" style="align-self:center;padding-left:8px">Equalizer: pull a band down to cut it, push up to boost.</span></div>
      <div class="vrow"><label>Low cut <input type="number" min="0" max="600" step="10" data-fx="lc"> Hz</label><label>High cut <input type="number" min="0" max="20000" step="500" data-fx="hc"> Hz</label>
        <label>Boost <input type="range" min="50" max="300" data-fx="gain" style="width:90px"></label><label>Level control <input type="range" min="0" max="100" data-fx="comp" style="width:90px"></label>
-       <label>Reverb <input type="range" min="0" max="100" data-fx="rev" style="width:90px"></label><label>Echo <input type="range" min="0" max="100" data-fx="echo" style="width:90px"></label><label>Echo time <input type="range" min="5" max="140" data-fx="echoT" style="width:80px"></label></div></div>
+       <label>Reverb <input type="range" min="0" max="100" data-fx="rev" style="width:90px"></label><label>Echo <input type="range" min="0" max="100" data-fx="echo" style="width:90px"></label><label>Echo time <input type="range" min="5" max="140" data-fx="echoT" style="width:80px"></label></div>
+     <div class="vrow"><span class="vh">Voice effect</span><label><select data-r="vfx" title="Change the voice in the selected clip, or in everything (master). The original recording is kept."><option value="">None (original voice)</option>${(root.VoiceFX?root.VoiceFX.list():[]).map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select></label><label class="ck" title="Turn the voice effect off to hear the original voice; its settings are kept"><input type="checkbox" data-r="vfxon"> On</label><button class="btn" data-a="vfxpreview" title="Play the selected clip (or the video from the playhead) with this voice">â–¶ Preview</button><button class="btn" data-a="vfxreset" title="Put this voice effect's settings back to their starting values">Reset voice</button></div>
+     <div class="vrow" data-r="vfxparams"></div><p class="vnote" data-r="vfxnote">To change the voice in only part of a recording, split the clip at the playhead (S), select that part and choose its voice here.</p></div>
   </div>
   <div class="vpane" data-pane="tools" hidden>
    <div class="vsec">
@@ -553,7 +558,7 @@ function mount(host,it,api){css();HK=api;
     else if(d.edge===0){ref.t1=Math.min(D(),ref.t1);ref.t0=clamp(snapT(t,ref),0,ref.t1-.1);eng.seek(ref.t0)}else{ref.t0=Math.min(ref.t0,D()-.1);ref.t1=clamp(snapT(t,ref),ref.t0+.1,D());eng.seek(Math.max(0,ref.t1-.02))}}
   function dragMove(d,t){const ref=d.it.ref,len=d.len;let na=Math.max(0,t-d.off);const s1=snapPoint(na,ref),s2=snapPoint(na+len,ref);if(s1&&(!s2||s1.distance<=s2.distance)){na=s1.time;snapGuide=s1.time}else if(s2){na=s2.time-len;snapGuide=s2.time}na=Math.max(0,na);
     if(d.it.type==='clip'||d.it.type==='aud')ref.start=na;else{ref.t0=clamp(na,0,Math.max(0,D()-len));ref.t1=Math.min(D(),ref.t0+len)}}
-  tl.addEventListener('pointerdown',ev=>{if(!ready||ev.button!==0)return;tl.focus({preventScroll:true});tl.setPointerCapture(ev.pointerId);tsnap=ev.altKey;const x=ev.offsetX,y=ev.offsetY,h=hitTl(x,y);
+  tl.addEventListener('pointerdown',ev=>{if(!ready||ev.button!==0)return;if(exp){toast('The video is being saved. Wait for it to finish, or click Cancel in Export.');return}tl.focus({preventScroll:true});tl.setPointerCapture(ev.pointerId);tsnap=ev.altKey;const x=ev.offsetX,y=ev.offsetY,h=hitTl(x,y);
     snapGuide=null;
     if(h.kind==='in'||h.kind==='out'){select(null);playRange=null;tdrag={k:h.kind,duration:D(),targets:snapTargets(null,h.kind)};return}
     if(h.kind==='edge'){if(h.it.type==='ov')otool='select';select(h.it.type,h.it.ref);eng.pause();tdrag={k:'edge',duration:D(),targets:snapTargets(h.it.ref),origin:{x:ev.clientX,y:ev.clientY},it:h.it,edge:h.edge,moved:false};return}
@@ -626,8 +631,8 @@ function mount(host,it,api){css();HK=api;
     del(){doDelete(false)},delgap(){doDelete(true)},
     trimstart(){if(inT<MIN){toast('Move the In marker past the beginning first.');return}snap();removeSpan(0,inT);inT=0;outT=D();sel=null;playRange=null;eng.pause();eng.sync();eng.t=0;redraw();refreshAll();changed()},
     trimend(){if(D()-outT<MIN){toast('Move the Out marker before the end first.');return}snap();removeSpan(outT,total(e)+1e5);inT=0;outT=D();sel=null;playRange=null;eng.pause();eng.sync();eng.t=Math.min(eng.t,D());redraw();refreshAll();changed()},
-    cut(){if(outT-inT<.1){toast('Set In and Out first.');return}snap();removeSpan(inT,outT);inT=0;outT=D();sel=null;eng.sync();eng.t=Math.min(eng.t,D());redraw();refreshAll();changed();toast('Middle removed. The remaining parts joined together.')},
-    trim(){if(outT-inT<.1){toast('Set In and Out first.');return}snap();removeSpan(outT,total(e)+1e5);removeSpan(0,inT);inT=0;outT=D();sel=null;eng.sync();eng.t=0;redraw();refreshAll();changed()},
+    cut(){if(outT-inT<.1||(inT<=MIN&&outT>=D()-MIN)){toast('Set In (I) and Out (O) around the part to remove first.');return}snap();removeSpan(inT,outT);inT=0;outT=D();sel=null;eng.sync();eng.t=Math.min(eng.t,D());redraw();refreshAll();changed();toast('Middle removed. The remaining parts joined together.')},
+    trim(){if(outT-inT<.1||(inT<=MIN&&outT>=D()-MIN)){toast('Set In (I) and Out (O) around the part to keep first.');return}snap();removeSpan(outT,total(e)+1e5);removeSpan(0,inT);inT=0;outT=D();sel=null;eng.sync();eng.t=0;redraw();refreshAll();changed()},
     undo(){const h=hist.pop();if(!h){toast('Nothing to undo.');return}fut.push(JSON.stringify(e));restore(h)},
     redo(){const h=fut.pop();if(!h){toast('Nothing to redo.');return}hist.push(JSON.stringify(e));restore(h)},
     dupclip(){const c=selClip();if(!c){toast('Click a clip on the timeline first.');return}snap();const ty=sel.type,len=clipLen(c),end=clipEnd(c),list=ty==='clip'?e.clips:e.aud;
@@ -644,6 +649,8 @@ function mount(host,it,api){css();HK=api;
     reset(){const s0=e.srcs.find(s=>s.self),dur=s0&&rt.src[s0.id]&&rt.src[s0.id].dur;if(!(dur>0)){toast('The original recording could not be read, so Reset is not available.');return}snap();e.clips=[{id:newId(e,'c'),src:s0.id,a:0,b:dur,start:0,speed:1,vol:1,mute:false,crop:{l:0,t:0,r:0,b:0},trans:{type:'none'},afi:0,afo:0}];e.aud=[];e.caps=[];e.ovs=[];e.zooms=[];e.vfx=[];e.master=defFx();e.muteVideo=false;e.fadeIn=e.fadeOut=false;e.look=null;e.W=rt.src[s0.id].w||e.W;e.H=rt.src[s0.id].h||e.H;delete e.fps;e.offline=[];sel=null;eng.sync();eng.refreshFx();inT=0;outT=D();eng.t=0;sizePrev();redraw();refreshAll();lookui(true);changed()},
     addvid(){addVideosDialog()},addaud(){R('audfile').click()},rec(){toggleRec()},
     fxreset(){snap();const c=fxTarget();if(c)c.fx=defFx();else e.master=defFx();eng.refreshFx();showFx();changed()},
+    vfxreset(){const f=fxObj(false);if(!f||!f.voice){toast('Choose a voice effect first.');return}snap();const g=fxObj(true);g.voice={type:g.voice.type,on:true,...root.VoiceFX.defaults(g.voice.type)};eng.refreshFx();showFx();changed()},
+    vfxpreview(){const f=fxObj(false);if(!f||!f.voice){toast('Choose a voice effect first.');return}previewVoice()},
     trlen(){const c=selClip();if(!c||sel.type!=='clip'){toast('Click a video clip first.');return}snap();if(setOverlap(c,+R('trlen').value||1)){redraw();refreshProps();changed()}else hist.pop()},
     trall(){const c=selClip();if(!c||sel.type!=='clip'){toast('Click a video clip first.');return}snap();const type=c.trans.type,len=+R('trlen').value||1;const list=vclips(e);for(let i=1;i<list.length;i++){list[i].trans={type};if(type!=='none')setOverlap(list[i],len)}redraw();refreshProps();changed()},
     ostart(){const o=selOv();if(o){snap();o.t0=Math.min(eng.t,o.t1-.1);ovui();changed()}},oend(){const o=selOv();if(o){snap();o.t1=Math.max(eng.t,o.t0+.1);ovui();changed()}},
@@ -658,8 +665,8 @@ function mount(host,it,api){css();HK=api;
     let ref=null;if(key){const l=e[key];ref=sid!=null?l.find(x=>x.id===sid):l[sidx]}sel=ref?{type:st,ref}:null;
     eng.sync();eng.refreshFx();sizePrev();outT=atEnd?D():Math.min(o0,D());inT=Math.min(i0,Math.max(0,outT-.1));refreshAll();changed()}
   function doDelete(keepGap){if(!sel){toast('Click something on the timeline first.');return}snap();const r=sel.ref,ty=sel.type;
-    if(ty==='clip'){const s0=r.start,end=clipEnd(r);e.clips=e.clips.filter(c=>c!==r);if(!keepGap){const nx=e.clips.filter(c=>c.start>s0+1e-6).map(c=>c.start),shift=Math.max(0,Math.min(end,...nx)-s0);
-      if(shift>0)removeSpan(s0,s0+shift)}
+    if(ty==='clip'){const s0=r.start,end=clipEnd(r);e.clips=e.clips.filter(c=>c!==r);if(!keepGap){/* 10.3.10: close only the part no other video clip still covers (B-roll over a main clip, a crossfade overlap) */let gs=s0;for(const c of e.clips)if(c.start<=gs+1e-6&&clipEnd(c)>gs)gs=clipEnd(c);const nx=e.clips.filter(c=>c.start>gs-1e-6).map(c=>c.start),ge=Math.min(end,...nx);
+      if(ge-gs>1e-6)removeSpan(gs,ge)}
       }
     else if(ty==='aud')e.aud=e.aud.filter(c=>c!==r);else if(ty==='cap')e.caps=e.caps.filter(c=>c!==r);else if(ty==='zoom')e.zooms=e.zooms.filter(c=>c!==r);else if(ty==='vfx')e.vfx=e.vfx.filter(c=>c!==r);else e.ovs=e.ovs.filter(c=>c!==r);
     sel=null;eng.sync();eng.t=Math.min(eng.t,D());refreshAll();redraw();changed()}
@@ -669,7 +676,7 @@ function mount(host,it,api){css();HK=api;
     len=clamp(len,.1,Math.max(.1,Math.min(clipLen(p),clipLen(c))));const s0=c.start,delta=(clipEnd(p)-len)-s0;for(const x of [...e.clips,...e.aud])if(x===c||x.start>=s0-1e-6)x.start=Math.max(0,x.start+delta);
     for(const x of [...e.caps,...e.ovs,...e.zooms,...e.vfx])if(x.t0>=s0-1e-6){x.t0=Math.max(0,x.t0+delta);x.t1=Math.max(x.t0+.1,x.t1+delta)}return true}
   const keepHead=()=>requestAnimationFrame(()=>{const w=tl.parentElement;w.scrollLeft=Math.max(0,xOf(eng.t)-w.clientWidth/2)});
-  host.addEventListener('click',ev=>{const b=ev.target.closest('[data-a]');if(!b||!ready)return;const a=b.dataset.a;if(crop&&!/^(crop|tog|zin|zout)/.test(a))cropStop(true);const f=act[a];if(f)f()});
+  host.addEventListener('click',ev=>{const b=ev.target.closest('[data-a]');if(!b||!ready)return;const a=b.dataset.a;if(exp&&!/^(stop|tog|zin|zout)$/.test(a)){toast('The video is being saved. Wait for it to finish, or click Cancel in Export.');return}if(crop&&!/^(crop|tog|zin|zout)/.test(a))cropStop(true);const f=act[a];if(f)f()});
 
   // ----- playback -----
   function curRange(){if(sel){if(sel.type==='clip'||sel.type==='aud')return[sel.ref.start,clipEnd(sel.ref),sel.type==='aud'?'audio':'clip'];if(sel.type==='cap')return[sel.ref.t0,sel.ref.t1,'caption'];return[sel.ref.t0,sel.ref.t1,'item']}if(inT>.05||outT<D()-.05)return[inT,outT,'In–Out'];return null}
@@ -745,7 +752,7 @@ function mount(host,it,api){css();HK=api;
   R('zf').onchange=()=>{const z=selZoom();if(!z)return;snap();z.t0=clamp(+R('zf').value||0,0,z.t1-.2);zui();redraw();changed()};
   R('zt').onchange=()=>{const z=selZoom();if(!z)return;snap();z.t1=Math.max(z.t0+.2,+R('zt').value||0);zui();redraw();changed()};
   qa('[data-c]').forEach(i=>i.addEventListener('change',()=>{const c=editClip();if(!c)return;if(i.dataset.c==='vol')snapOnce();else snap();const k=i.dataset.c,v=i.type==='checkbox'?i.checked:+i.value;const sd=(rt.src[c.src]&&rt.src[c.src].dur)||c.b;
-    if(k==='vol')c.vol=clamp(v/100,0,3);else if(k==='mute')c.mute=v;else if(k==='speed'){const oe=clipEnd(c);c.speed=clamp(v||1,.25,4);const d=clipEnd(c)-oe;if(Math.abs(d)>1e-6){for(const x of [...e.clips,...e.aud])if(x!==c&&x.start>c.start+1e-6)x.start=Math.max(0,x.start+d);for(const x of [...e.caps,...e.ovs,...e.zooms,...e.vfx])if(x.t0>=oe-1e-6){x.t0+=d;x.t1+=d}}}else if(k==='start')c.start=Math.max(0,v);else if(k==='a')c.a=clamp(v,0,c.b-MIN);else if(k==='b')c.b=clamp(v,c.a+MIN,sd);else c[k]=Math.max(0,v);
+    if(k==='vol')c.vol=clamp(v/100,0,3);else if(k==='mute')c.mute=v;else if(k==='speed'){const oe=clipEnd(c);c.speed=clamp(v||1,.25,4);const d=clipEnd(c)-oe;if(Math.abs(d)>1e-6&&e.clips.includes(c)){for(const x of [...e.clips,...e.aud])if(x!==c&&x.start>c.start+1e-6)x.start=Math.max(0,x.start+d);for(const x of [...e.caps,...e.ovs,...e.zooms,...e.vfx])if(x.t0>=oe-1e-6){x.t0+=d;x.t1+=d}}}else if(k==='start')c.start=Math.max(0,v);else if(k==='a')c.a=clamp(v,0,c.b-MIN);else if(k==='b')c.b=clamp(v,c.a+MIN,sd);else c[k]=Math.max(0,v);
     redraw();refreshProps();changed()}));
   qa('[data-c="vol"]').forEach(i=>{i.addEventListener('pointerdown',snapOnce);i.addEventListener('focus',snapOnce)});qa('[data-c="vol"]').forEach(i=>i.addEventListener('input',()=>{const c=editClip();if(c){c.vol=clamp(+i.value/100,0,3)}}));
   qa('[data-cr]').forEach(i=>i.addEventListener('change',()=>{const c=editClip();if(!c||!editIsV())return;snap();c.crop[i.dataset.cr]=clamp(+i.value||0,0,90);if(c.crop.l+c.crop.r>90)c.crop.r=90-c.crop.l;if(c.crop.t+c.crop.b>90)c.crop.b=90-c.crop.t;redraw();refreshProps();changed()}));
@@ -763,22 +770,36 @@ function mount(host,it,api){css();HK=api;
   const fxObj=create=>{const c=fxTarget();if(c){if(!c.fx&&create)c.fx=defFx();return c.fx||defFx()}return e.master};
   function showFx(){const f=Object.assign(defFx(),fxObj(false));qa('[data-eq]').forEach(i=>{const v=+f.eq[+i.dataset.eq]||0;i.value=v;R('eqv'+i.dataset.eq).textContent=v>0?'+'+v:v});
     qa('[data-fx]').forEach(i=>{const k=i.dataset.fx;i.value=k==='gain'?Math.round(f.gain*100):k==='echoT'?Math.round(f.echoT*100):f[k]});
-    R('eqpre').value=Object.keys(EQ_PRESETS).find(k=>EQ_PRESETS[k].join()===f.eq.join())||'Flat'}
+    R('eqpre').value=Object.keys(EQ_PRESETS).find(k=>EQ_PRESETS[k].join()===f.eq.join())||'Flat';showVoice()}
   R('atarget').onchange=showFx;
   // 8.07: a click fires pointerdown and focus; save one undo step, not two.
   qa('[data-eq]').forEach(i=>{i.addEventListener('pointerdown',snapOnce);i.addEventListener('focus',snapOnce);i.addEventListener('input',()=>{const f=fxObj(true);f.eq[+i.dataset.eq]=+i.value;R('eqv'+i.dataset.eq).textContent=+i.value>0?'+'+i.value:i.value;eng.refreshFx()});i.addEventListener('change',changed)});
   qa('[data-fx]').forEach(i=>{i.addEventListener('pointerdown',snapOnce);i.addEventListener('focus',snapOnce);i.addEventListener('input',()=>{const f=fxObj(true),k=i.dataset.fx,v=+i.value;f[k]=k==='gain'||k==='echoT'?v/100:v;eng.refreshFx()});i.addEventListener('change',changed)});
   R('eqpre').onchange=()=>{snap();const f=fxObj(true);f.eq=[...EQ_PRESETS[R('eqpre').value]];eng.refreshFx();showFx();changed()};
+  // 10.3.10: voice effects (see voice-effects.js). Stored as fx.voice on the clip or master; the recording itself never changes.
+  const vfmt=v=>Number.isInteger(v)?String(v):v.toFixed(1);
+  function showVoice(){const VF=root.VoiceFX,box=R('vfxparams');if(!box)return;const f=fxObj(false),v=f&&f.voice,ok=!!(v&&VF&&VF.has(v.type));R('vfx').value=ok?v.type:'';R('vfxon').checked=ok&&v.on!==false;R('vfxon').disabled=!ok;
+    if(!ok){box.innerHTML='';box.hidden=true;return}box.hidden=false;const d=VF.list().find(x=>x.id===v.type),s=VF.settings(v);
+    box.innerHTML=d.params.map(([k,l,mn,mx,st,,u])=>`<label title="${d.hint}">${l} <input type="range" min="${mn}" max="${mx}" step="${st}" value="${s[k]}" data-vp="${k}" style="width:90px" aria-label="${l}"> <output data-vpo="${k}">${vfmt(s[k])}</output> ${u}</label>`).join('');
+    box.querySelectorAll('[data-vp]').forEach(i=>{i.addEventListener('pointerdown',snapOnce);i.addEventListener('focus',snapOnce);i.addEventListener('input',()=>{const g=fxObj(true);if(!g.voice)return;g.voice[i.dataset.vp]=+i.value;box.querySelector(`[data-vpo="${i.dataset.vp}"]`).textContent=vfmt(+i.value);eng.refreshFx()});i.addEventListener('change',changed)})}
+  async function previewVoice(){const c=fxTarget();if(eng.playing)eng.pause();if(c){playRange={a:c.start,b:clipEnd(c)};await eng.seek(c.start)}else playRange=null;eng.unlock();await eng.play()}
+  R('vfx').onchange=()=>{snap();const g=fxObj(true),t=R('vfx').value;if(!t||!root.VoiceFX)delete g.voice;else g.voice={type:t,on:true,...root.VoiceFX.defaults(t)};eng.refreshFx();showFx();changed();if(t)previewVoice()};
+  R('vfxon').onchange=()=>{const g=fxObj(true);if(!g.voice)return;snap();g.voice.on=R('vfxon').checked;eng.refreshFx();changed()};
   R('audfile').onchange=async()=>{const f=R('audfile').files[0];R('audfile').value='';if(!f)return;try{snap();const c=await addAudioSrc(f,f.name.replace(/\.[^.]+$/,''),eng.t);select('aud',c);toast('Added. Drag it on the timeline, or use the Audio tab to change the volume and sound.');changed()}catch(err){hist.pop();toast(err.message)}};
   async function addAudioSrc(blob,name,start){const url=URL.createObjectURL(blob),meta=await loadMeta(url,true),id=newId(e,'s');e.srcs.push({id,name,kind:'audio'});it._edBlobs[id]=blob;rt.src[id]={url,blob,dur:meta.dur};
     const c={id:newId(e,'a'),src:id,a:0,b:meta.dur,start:Math.max(0,start||0),speed:1,vol:1,afi:0,afo:0};e.aud.push(c);computePeaks(blob).then(p=>{if(p)rt.src[id].peaks=p});return c}
   async function addVideoSrc(item){const id=newId(e,'s'),meta=await loadMeta(item.url);e.srcs.push({id,name:item.name,itemId:item.itemId||null,kind:'video'});if(!item.itemId&&item.blob)it._edBlobs[id]=item.blob;rt.src[id]={url:item.url,blob:item.blob,dur:meta.dur,w:meta.w,h:meta.h};
     const c={id:newId(e,'c'),src:id,a:0,b:meta.dur,start:total(e),speed:1,vol:1,mute:false,crop:{l:0,t:0,r:0,b:0},trans:{type:'none'},afi:0,afo:0};e.clips.push(c);if(item.blob)computePeaks(item.blob).then(p=>{if(p)rt.src[id].peaks=p});return c}
   function updateRecBtn(){const b=q('[data-a="rec"]');b.textContent=rec?'■ Stop recording':'● Record voice-over';b.classList.toggle('pri',!!rec)}
-  async function toggleRec(){if(rec){rec.mr.stop();return}let stream;try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}})}catch(_){toast('No microphone found, or microphone access is off. Check Windows Settings > Privacy & security > Microphone.',6000);return}
+  async function toggleRec(){if(rec){try{rec.mr.stop()}catch(_){rec.stream.getTracks().forEach(t=>t.stop());rec=null;updateRecBtn()}return}if(rec===false)return;rec=false;let stream;
+    // 10.3.10: use the microphone chosen in the capture bar (falls back to the default one)
+    try{let id='';try{id=JSON.parse(localStorage.getItem('saveit.devices')||'{}').mic||''}catch(_){}const ex={echoCancellation:true,noiseSuppression:true};if(root.DEVICES){const r=await DEVICES.open('mic',id,ex);stream=r.stream;if(r.fellBack)toast('The chosen microphone was not found, so the default microphone is used.',5000)}else stream=await navigator.mediaDevices.getUserMedia({audio:ex})}catch(_){rec=null;toast('No microphone found, or microphone access is off. Check Windows Settings > Privacy & security > Microphone.',6000);return}
+    if(eng.playing)eng.pause();if(eng.t>=D()-.02)eng.t=0;
     const mr=new MediaRecorder(stream),ch=[],t0=eng.t;rec={mr,stream};mr.ondataavailable=ev=>ev.data.size&&ch.push(ev.data);
-    mr.onstop=async()=>{stream.getTracks().forEach(t=>t.stop());if(dead){rec=null;return}eng.pause();rec=null;updateRecBtn();const blob=new Blob(ch,{type:mr.mimeType||'audio/webm'});if(blob.size>800){try{snap();const c=await addAudioSrc(blob,'Voice-over',t0);select('aud',c);changed();toast('Voice-over added on the audio track.')}catch(err){toast(err.message)}}};
-    mr.start();updateRecBtn();playRange=null;eng.unlock();eng.play()}
+    mr.onstop=async()=>{stream.getTracks().forEach(t=>t.stop());if(dead){rec=null;return}eng.pause();rec=null;updateRecBtn();const blob=new Blob(ch,{type:mr.mimeType||'audio/webm'});if(blob.size>800){try{snap();const c=await addAudioSrc(blob,'Voice-over',t0);select('aud',c);changed();toast('Voice-over added on the audio track.')}catch(err){hist.pop();toast(err.message)}}};
+    updateRecBtn();playRange=null;eng.unlock();await eng.play();if(dead||!rec||rec.mr!==mr){stream.getTracks().forEach(t=>t.stop());return}mr.start();
+    // stopping or pausing playback ends the voice-over, so the voice never drifts from the picture
+    const watch=setInterval(()=>{if(!rec||rec.mr!==mr){clearInterval(watch);return}if(!eng.playing&&mr.state==='recording'){clearInterval(watch);mr.stop()}},150)}
   function addVideosDialog(){const lib=api.videos?api.videos():[],rows=[];
     const m=document.createElement('div');m.className='modal vjoin';m.style.zIndex=90;document.body.appendChild(m);
     const draw=()=>{const free=lib.filter(x=>!rows.some(r=>r.id&&r.id===x.id));
@@ -892,7 +913,7 @@ function mount(host,it,api){css();HK=api;
   // which buttons were reached with the keyboard (Chrome's :focus-visible turns on for any focused button once a key is pressed, so it can't tell)
   let lastInput='key';const kbdFocused=new WeakSet(),onPtr=()=>{lastInput='mouse'},onKey=()=>{lastInput='key'},onFocus=ev=>{if(ev.target&&ev.target.matches&&ev.target.matches('button,summary,[role=button],a')){if(lastInput==='key')kbdFocused.add(ev.target);else kbdFocused.delete(ev.target)}};
   document.addEventListener('pointerdown',onPtr,true);document.addEventListener('keydown',onKey,true);host.addEventListener('focusin',onFocus);
-  const key=ev=>{if(dead||!ready||!host.isConnected||!host.offsetParent||document.querySelector('.modal'))return;if(ev.target.matches&&ev.target.matches('input,select,textarea,[contenteditable],[contenteditable] *'))return;const k=ev.key.toLowerCase();
+  const key=ev=>{if(dead||!ready||!host.isConnected||!host.offsetParent||document.querySelector('.modal'))return;if(exp)return;if(ev.target.matches&&ev.target.matches('input,select,textarea,[contenteditable],[contenteditable] *'))return;const k=ev.key.toLowerCase();
     // 10.1.8: Space or Enter on a button reached with the keyboard presses that button (after a mouse click, Space still plays)
     if((k===' '||k==='enter')&&kbdFocused.has(ev.target))return;if(crop&&(k==='enter'||k==='escape')){cropStop(k==='enter');ev.preventDefault();ev.stopPropagation();return}
     if((ev.ctrlKey||ev.metaKey)&&!ev.altKey&&k==='v'){ev.preventDefault();ev.stopPropagation();api.pasteMedia?.(ev.shiftKey?'insert':'stack');return}

@@ -285,7 +285,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size
 <script src="audiobar.js"></script>
 <script src="audio-timeline.js"></script>
 <script src="aedit.js"></script>
-<script src="audio-effects.js"></script>
+<script src="audio-effects.js"></script><script src="voice-effects.js"></script>
 <script src="audio-cleanup.js"></script>
 <script src="audio-project.js"></script>
 <script src="audio-engine.js"></script>
@@ -406,6 +406,8 @@ function syncFormats(){const it=S.cur,f=$('#fmt'),k=it?(it.kind==='image'&&it.gu
   f.innerHTML=list.map(([v,l])=>`<option value="${v}" ${v===cur?'selected':''}>${l}</option>`).join('');f.onchange=()=>{lastFmt[k]=f.value;syncFormats()};
   const sb=$('#saveBtn');if(sb){const ext=it?.savedPath?it.savedPath.split('.').pop().toLowerCase():cur;sb.textContent=ext==='saveit'?'Save project':'Save '+ext.toUpperCase();sb.title=`Save ${ext==='saveit'?'editable project':ext.toUpperCase()+' file'} (Ctrl+S). Use Save as… for other file types.`}}
 function openItem(it){
+  // 10.3.10: switching away would stop a running video export; keep the video open until it finishes
+  if(it!==S.cur&&vid&&vid._ctl&&vid._ctl.exporting){bumpItem(it);renderTray();toast('Saved in the library. Saveit stays on the video until the export finishes, then you can open it.',6000);return}
   bumpItem(it);commitText(); if(S.cur&&S.cur.guide&&S.cur!==it)S.cur._thumb=null; S.cur=it; S.sel=null; S.grp=[]; S.drag=null; S.pixRect=null; S.cropRect=null; S.cutRect=null; S.simp=null;
   if(it&&it.kind==='image'){it.fx=Object.assign(FXBLANK(),it.fx);it.fx.adj=Object.assign(FXBLANK().adj,it.fx.adj);S.fx=it.fx; S.stepNext=1+Math.max(0,...it.shapes.filter(s=>s.t==='step').map(s=>s.n));}
   layoutStage(); renderTray(); renderProps(); render(); syncFormats();
@@ -1074,7 +1076,9 @@ async function startRec(pre){
   beginRecording(stream,recStream,cleanup,null);
 }
 let fromWidget=false;
-async function startRecDesktop(pre){
+let recStarting=false;
+async function startRecDesktop(pre){if(recStarting)return;recStarting=true;try{return await startRecDesktop0(pre)}finally{recStarting=false}}
+async function startRecDesktop0(pre){
   let cam=null,camSkip=false;const viaWidget=fromWidget;fromWidget=false;if($('#camOn').checked&&!pre&&!viaWidget){const r=await camSetup();if(!r)return;cam=r.cam;camSkip=!r.cam}
   const drop=()=>{if(cam)cam.stream.getTracks().forEach(t=>t.stop());cam=null};
   let prep;try{prep=await window.bench.prepareRecord(pre?'region':$('#area').value,+$('#delay').value,curOpts(),pre||null)}catch(e){drop();toast('Could not start recording: '+(e.message||e));return}
@@ -1100,7 +1104,8 @@ async function beginRecording(stream,recStream,cleanup,uiInfo,uiExtra){
   if($('#mic')?.checked){try{const {stream:m,fellBack}=await DEVICES.open('mic',devPick.mic);if(fellBack)toast('The chosen microphone was not found, so the default microphone is used.',5000);m.getAudioTracks().forEach(t=>recStream.addTrack(t))}catch(e){toast(e.message+' Recording without the microphone.',7000)}}
   // one audio track mixes best; if several, mix them
   const aud=recStream.getAudioTracks();
-  if(aud.length>1){try{const ac=new AudioContext(),dst=ac.createMediaStreamDestination();aud.forEach(t=>{ac.createMediaStreamSource(new MediaStream([t])).connect(dst);recStream.removeTrack(t)});recStream.addTrack(dst.stream.getAudioTracks()[0])}catch(e){}}
+  let mixAc=null,mixedIn=[];
+  if(aud.length>1){try{const ac=new AudioContext(),dst=ac.createMediaStreamDestination();aud.forEach(t=>{ac.createMediaStreamSource(new MediaStream([t])).connect(dst);recStream.removeTrack(t)});recStream.addTrack(dst.stream.getAudioTracks()[0]);mixAc=ac;mixedIn=aud}catch(e){}}
   const pick=l=>l.find(m=>window.MediaRecorder&&MediaRecorder.isTypeSupported(m));
   const types=[pick(['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']),pick(['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1,opus','video/mp4;codecs=avc1','video/mp4'])].filter(Boolean);
   const recs=types.map(t=>{const r=new MediaRecorder(recStream,{mimeType:t}),ch=[];r.ondataavailable=e=>e.data.size&&ch.push(e.data);return{r,ch,type:t}});
@@ -1111,7 +1116,7 @@ async function beginRecording(stream,recStream,cleanup,uiInfo,uiExtra){
     tm=setInterval(()=>{if(!paused){secs++;bar.querySelector('.t').textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0')}},1000);
     bar.addEventListener('click',e=>{const a=e.target.dataset.a;if(a==='stop')stop();if(a==='pause'){togglePause();e.target.textContent=paused?'Resume':'Pause'}});}
   let finished=false,recT0=0,recEnd=0,recPaused=0,recPauseAt=0;
-  const finalize=async()=>{if(finished)return;finished=true;if(tm)clearInterval(tm);if(bar)bar.remove();const camBlob=camRec?await Promise.race([camRec.done,new Promise(r=>setTimeout(()=>r(null),4000))]):null;try{if(cleanup)cleanup()}catch(e){}stream.getTracks().forEach(t=>t.stop());recStream.getTracks().forEach(t=>t.stop());
+  const finalize=async()=>{if(finished)return;finished=true;if(tm)clearInterval(tm);if(bar)bar.remove();const camBlob=camRec?await Promise.race([camRec.done,new Promise(r=>setTimeout(()=>r(null),4000))]):null;try{if(cleanup)cleanup()}catch(e){}stream.getTracks().forEach(t=>t.stop());recStream.getTracks().forEach(t=>t.stop());mixedIn.forEach(t=>{try{t.stop()}catch(_){}});if(mixAc)mixAc.close().catch(()=>{});
     if(window.bench){window.bench.setRecording(false);window.bench.recUI(false)}rec=null;setCapLabel();
     const blobs={};for(const x of recs)if(x.ch.length)blobs[/mp4/.test(x.type)?'mp4':'webm']=new Blob(x.ch,{type:x.type.split(';')[0]});
     // 10.1.1: write the length into the WebM so players can show it and seek
@@ -1138,9 +1143,12 @@ function setCapLabel(){const b=$('#capBtn'),a=S.mode==='audio';b.classList.toggl
   const svg=b.querySelector('svg'),want=a&&!rec?AUDIOBAR.MIC_SVG:CAP_SVG98;if(svg&&svg.outerHTML!==want)svg.outerHTML=want;b.title=a?'Record audio with the microphones chosen beside it (Ctrl+Shift+X)':'Capture (Ctrl+Shift+X)'}
 $('#capBtn').onclick=()=>{if(rec){rec.stop();return}S.mode==='audio'?startAudioRec():S.mode==='video'?startRec():captureImage()};
 // 9.9: quick audio recording from the capture bar. Each microphone and the computer sound become their own track.
-async function startAudioRec(){if(rec)return;const o=audioBar98.get(),delay=+$('#delay').value||0;audioBar98.stop();let ctl;
+// 10.3.10: a second click or hotkey while the microphone or screen picker is still opening must not start a second recorder
+let audioRecStarting=false;
+async function startAudioRec(){if(rec||audioRecStarting)return;const o=audioBar98.get(),delay=+$('#delay').value||0;audioBar98.stop();let ctl;audioRecStarting=true;
   try{ctl=await AEdit.record({mics:o.mics,sys:o.sys,warn:m=>toast(m,7000),onLevel:lv=>{try{window.bench?.recLevel?.(lv)}catch(_){}}})}
-  catch(e){toast('Could not start recording: '+(e.message||e),7000);audioBar98.setActive(false);audioBar98.setActive(S.mode==='audio');return}
+  catch(e){audioRecStarting=false;toast('Could not start recording: '+(e.message||e),7000);audioBar98.setActive(false);audioBar98.setActive(S.mode==='audio');return}
+  audioRecStarting=false;
   let started=false,cancelled=false;
   const finish=tracks=>{rec=null;setCapLabel();if(window.bench){window.bench.setRecording(false);window.bench.recUI(false)}
     if(tracks&&tracks.length){S.audioHome=false;addAudio(tracks,'Audio '+stamp())}else if(tracks)toast('Nothing was recorded.');audioBar98.setActive(false);audioBar98.setActive(S.mode==='audio')};
