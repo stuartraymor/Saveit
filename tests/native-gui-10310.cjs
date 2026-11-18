@@ -51,8 +51,8 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
     await w.click('#mImg'); await w.waitForTimeout(200); check('widget back to Image shows it again', await vis());
     await w.screenshot({ path: path.join(out, 'widget-image.png') });
     await w.click('#hide').catch(() => {});
-    // unchanged from 10.3.9: shown for screenshots and videos, hidden in Audio mode
-    for (const [m, shown] of [['#mImg', true], ['#mVid', true], ['#mAud', false]]) { await p.locator(m).click(); check('editor top bar Clipboard option as before in ' + m.slice(2), await p.locator('#clipOn').count() === 1 && await p.locator('#clipOn').isVisible() === shown); }
+    // 10.3.11: the editor's bar matches the widget: Copy to clipboard is for screenshots only
+    for (const [m, shown] of [['#mImg', true], ['#mVid', false], ['#mAud', false]]) { await p.locator(m).click(); check('editor top bar Copy to clipboard matches the widget in ' + m.slice(2), await p.locator('#clipOn').count() === 1 && await p.locator('#clipOn').isVisible() === shown); }
     await p.locator('#mImg').click();
 
     // 4. taskbar identity: installed shortcuts that start Saveit carry the same AppUserModelID as the app (read only)

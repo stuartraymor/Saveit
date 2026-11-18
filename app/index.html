@@ -231,7 +231,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size
     <label class="sel" id="sysWrap" hidden title="Record the sound your computer plays"><input type="checkbox" id="sysAudio" checked> System audio</label>
     <label class="sel" id="micWrap" hidden title="Record your microphone"><input type="checkbox" id="mic"> Microphone <select id="micPick" class="devsel" aria-label="Microphone device"></select></label>
     <label class="sel" id="camWrap" hidden title="Add your webcam to the recording"><input type="checkbox" id="camOn"> Webcam <select id="camPick" class="devsel" aria-label="Webcam device"></select><button type="button" class="btn camgear" id="camGear" title="Webcam settings: shape, size, position, border" aria-label="Webcam settings">⚙</button></label>
-    <label class="sel" id="fxWrap" title="Effect applied automatically to each new screenshot">Effect <select id="fxSel"></select><button class="btn" id="fxGear" title="Settings for this effect" aria-label="Effect settings" style="padding:5px 8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></label>
+    <label class="sel" id="fxWrap" title="Effect applied automatically to each new screenshot">Effect <select id="fxSel"></select><button class="btn" id="fxGear" title="Settings for this effect" aria-label="Effect settings" style="padding:5px 8px">⚙</button></label>
     <label class="sel">Delay
       <select id="delay"><option value="0">None</option><option value="3">3 s</option><option value="5">5 s</option><option value="10">10 s</option></select>
     </label>
@@ -404,7 +404,9 @@ const FMT_NOTE={wav:'Full quality, plays everywhere',mp3:'Small file, plays ever
 const lastFmt={};let saveQuality=.92;try{const q=+localStorage.getItem('saveit.quality');if(q>=.5&&q<=1)saveQuality=q}catch(e){}
 function syncFormats(){const it=S.cur,f=$('#fmt'),k=it?(it.kind==='image'&&it.guide?'image':it.kind):'image',list=FORMATS[k]||FORMATS.image,cur=lastFmt[k]||list[0][0];
   f.innerHTML=list.map(([v,l])=>`<option value="${v}" ${v===cur?'selected':''}>${l}</option>`).join('');f.onchange=()=>{lastFmt[k]=f.value;syncFormats()};
-  const sb=$('#saveBtn');if(sb){const ext=it?.savedPath?it.savedPath.split('.').pop().toLowerCase():cur;sb.textContent=ext==='saveit'?'Save project':'Save '+ext.toUpperCase();sb.title=`Save ${ext==='saveit'?'editable project':ext.toUpperCase()+' file'} (Ctrl+S). Use Save as… for other file types.`}}
+  const sb=$('#saveBtn');if(sb){const ext=it?.savedPath?it.savedPath.split('.').pop().toLowerCase():cur;sb.textContent=ext==='saveit'?'Save project':'Save '+ext.toUpperCase();sb.title=`Save ${ext==='saveit'?'editable project':ext.toUpperCase()+' file'} (Ctrl+S). Use Save as… for other file types.`}
+  // 10.3.11: Copy and Print say what they do for the open item
+  const kd=it?.kind||'image',cb=document.getElementById('copyBtn'),pb=document.getElementById('print33');if(cb)cb.title=kd==='video'?'Copy this video clip, to paste into another video':kd==='audio'?'Copy the selected audio (or the whole clip), to paste into another audio project':'Copy image (Ctrl+Shift+C)';if(pb){pb.disabled=kd!=='image';pb.title=kd==='image'?'Print (Ctrl+P)':'Printing is for pictures. Open a screenshot to print it.'}}
 function openItem(it){
   // 10.3.10: switching away would stop a running video export; keep the video open until it finishes
   if(it!==S.cur&&vid&&vid._ctl&&vid._ctl.exporting){bumpItem(it);renderTray();toast('Saved in the library. Saveit stays on the video until the export finishes, then you can open it.',6000);return}
@@ -1053,12 +1055,17 @@ function camSetup(){return new Promise(async res=>{let o=camSettings(),cam=null,
     if(b.hasAttribute('data-go')){if(!cam){toast('The camera is not ready yet.');return}close(true);res({cam:{stream:cam,video:vEl,o:{...o}}})}};
 })}
 // Screen (optionally cropped) + webcam drawn onto one canvas that gets recorded
-async function compose(stream,rect,displayW,cam,displayH){if(!rect&&!cam)return{recStream:stream,cleanup:null};
-  const v=document.createElement('video');v.srcObject=stream;v.muted=true;await v.play();
+async function compose(stream,rect,displayW,cam,displayH,playing){if(!rect&&!cam)return{recStream:stream,cleanup:null};
+  // 10.3.11: reuse the player that already shows the stream. Windows sends a new screen frame only when something on screen changes,
+  // so a second player could wait seconds (or until the mouse moved) before the recording started.
+  const v=playing&&playing.srcObject===stream&&playing.videoWidth?playing:document.createElement('video');if(v!==playing){v.srcObject=stream;v.muted=true;await v.play()}
   // Video pixels per screen point, across and down (8.06: one factor for both put the crop too high or low when they differ).
   const kx=v.videoWidth/(displayW||v.videoWidth),ky=displayH?v.videoHeight/displayH:kx,r=rect||{x:0,y:0,w:v.videoWidth/kx,h:v.videoHeight/ky};
   const sx=Math.min(Math.max(0,r.x*kx),v.videoWidth-2),sy=Math.min(Math.max(0,r.y*ky),v.videoHeight-2),sw=Math.min(r.w*kx,v.videoWidth-sx),sh=Math.min(r.h*ky,v.videoHeight-sy);
-  const c=document.createElement('canvas');c.width=Math.max(2,Math.round(sw)&~1);c.height=Math.max(2,Math.round(sh)&~1);const g=c.getContext('2d');
+  // 10.3.11: Windows can report a 200% screen as 801 points tall while the stream is 1600 pixels (2 x 800), so the factor comes
+  // out as 1.9975 and a 720 px selection recorded as 718. The output size uses the standard factor when it is within 1%.
+  const snap=k=>{const q=Math.round(k*4)/4;return q>0&&Math.abs(k-q)<=q*0.01?q:k},ow=sw*snap(kx)/kx,oh=sh*snap(ky)/ky;
+  const c=document.createElement('canvas');c.width=Math.max(2,Math.round(ow)&~1);c.height=Math.max(2,Math.round(oh)&~1);const g=c.getContext('2d');
   const draw=()=>{g.drawImage(v,sx,sy,sw,sh,0,0,c.width,c.height)};draw();const iv=setInterval(draw,1000/30);
   const out=c.captureStream(30);stream.getAudioTracks().forEach(t=>out.addTrack(t));
   // 9.7: the webcam is recorded as its own track; the video editor places it (Layout tab)
@@ -1092,8 +1099,8 @@ async function startRecDesktop0(pre){
   // Track settings can still report the display size before the first window frame.
   const probe=document.createElement('video');probe.muted=true;probe.srcObject=stream;
   try{await probe.play()}catch(e){stream.getTracks().forEach(t=>t.stop());drop();window.bench.recUI(false);toast('Could not read the recording frame.');return}
-  const frameSize={width:probe.videoWidth,height:probe.videoHeight};probe.srcObject=null;
-  const {recStream,cleanup}=await compose(stream,prep.rect,prep.display.w,cam,prep.display.h);
+  const frameSize={width:probe.videoWidth,height:probe.videoHeight};
+  const {recStream,cleanup}=await compose(stream,prep.rect,prep.display.w,cam,prep.display.h,probe);if(!cleanup)probe.srcObject=null;
   const r=prep.rect,screenRect=r?{x:prep.display.x+r.x,y:prep.display.y+r.y,w:r.w,h:r.h}:null;
   // 9.8: the recording bar names what is recorded and its real pixel size (the size the saved video will have)
   const mode98=r?'Region':({window:'Window',screen:'Full screen',region:'Region'}[$('#area').value]||'Screen'),ts98=(recStream.getVideoTracks()[0]?.getSettings?.()||{}),src98=frameSize;
@@ -1158,7 +1165,7 @@ async function startAudioRec(){if(rec||audioRecStarting)return;const o=audioBar9
   if(window.bench){window.bench.setRecording(true);window.bench.recUI(true,null,{audio:true,tracks:ctl.parts,countdown:delay})}
   else toast('Recording audio… press Stop when you are done.',4000);
   const begin=()=>{if(cancelled)return;started=true;ctl.start()};delay?setTimeout(begin,delay*1000):begin()}
-function syncAreaOptions(){const v=S.mode==='video',a98=S.mode==='audio';$('.tleft').classList.toggle('amode',a98);$('#area').closest('label').hidden=a98;$('#clipWrap').hidden=a98;audioBar98.setActive(a98);$('#curWrap').hidden=a98;$('#cursorOn').disabled=v;$('#curWrap').title=v?'Windows always includes the mouse pointer in screen recordings. This option applies to screenshots.':'Show the mouse pointer in screenshots';$('#camWrap').hidden=!v;$('#fxWrap').hidden=v||a98;$('#sysWrap').hidden=!v;$('#micWrap').hidden=!v;
+function syncAreaOptions(){const v=S.mode==='video',a98=S.mode==='audio';$('.tleft').classList.toggle('amode',a98);$('#area').closest('label').hidden=a98;$('#clipWrap').hidden=a98||v;audioBar98.setActive(a98);$('#curWrap').hidden=a98;$('#cursorOn').disabled=v;$('#curWrap').title=v?'Windows always includes the mouse pointer in screen recordings. This option applies to screenshots.':'Show the mouse pointer in screenshots';$('#camWrap').hidden=!v;$('#fxWrap').hidden=v||a98;$('#sysWrap').hidden=!v;$('#micWrap').hidden=!v;
   for(const val of ['steps','text','scroll']){const o=$('#area').querySelector(`option[value="${val}"]`);o.hidden=o.disabled=v}if(v&&['steps','text','scroll'].includes($('#area').value))$('#area').value='region';saveOpts();if(v)refreshDevices()}
 // ---------- recording devices ----------
 const devPick={mic:'',cam:''};try{Object.assign(devPick,JSON.parse(localStorage.getItem('saveit.devices')||'{}'))}catch(e){}
@@ -1192,7 +1199,10 @@ $('#openBtn').onclick=()=>$('#file').click();
 $('#file').onchange=e=>{const gid=e.target.dataset.guide;delete e.target.dataset.guide;const g=gid&&S.items.find(x=>x.id===gid);
   if(g){[...e.target.files].filter(f=>f.type.startsWith('image/')).forEach(f=>{const img=new Image();img.onload=()=>{makeStep(g,canvasFrom(img));persist(g);if(S.cur===g){renderGuide();renderGuideProps($('#props'),g)}renderTray()};img.src=URL.createObjectURL(f)})}
   else [...e.target.files].forEach(importFile);e.target.value=''};
-document.addEventListener('paste',e=>{if(editing||textTarget(e.target))return;const fs=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean);if(fs.length){e.preventDefault();fs.forEach(importFile);toast('Pasted into library')}});
+document.addEventListener('paste',e=>{if(editing||textTarget(e.target))return;const fs=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean);if(fs.length){e.preventDefault();pasteFiles11(fs)}});
+// 10.3.11: Ctrl+V does what right-click > Paste does. With a screenshot open, pasted pictures go on top of it as layers; with
+// nothing open, in the Library window, or for video/audio files they are added to the library as before.
+async function pasteFiles11(fs){const it=S.cur;if(it?.kind==='image'&&!it.guide&&!$('#libModal')&&fs.every(f=>/^image\//.test(f.type))){try{let n=0;for(const f of fs)await pasteImageLayer(await pictureUrl88(f),n++,fs.length>1);if(fs.length>1)toast(`Added ${fs.length} pictures. Drag to move; use the handles to resize. Ctrl+Z undoes.`,5000)}catch(err){actionError(err)}return}fs.forEach(importFile);toast('Pasted into library')}
 stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('dragging')});
 stage.addEventListener('dragleave',e=>{if(e.target===stage||!stage.contains(e.relatedTarget))stage.classList.remove('dragging')});
 stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('dragging');[...e.dataTransfer.files].forEach(importFile)});
@@ -1866,7 +1876,7 @@ function addPictures88(){const it=S.cur;if(it?.kind!=='image'){toast('Open an im
     const used=it.shapes.reduce((n,x)=>n+(x.t==='img'?x.src.length:0),0)+files.reduce((n,f)=>n+f.size*1.4,0);if(used>120e6){toast('That would make this capture too large (about 90 MB of pictures). Remove or flatten some pictures first.',7000);return}
     try{let n=0;for(const f of files)await pasteImageLayer(await pictureUrl88(f),n++,true);toast(`Added ${files.length} picture${files.length>1?'s':''}. Drag to move; use the handles to resize. Ctrl+Z undoes.`,5000)}catch(e){actionError(e)}};
   inp.click()}
-async function pasteImageLayer(url,n=0,quiet=false){const it=S.cur;if(it?.kind!=='image'){toast('Open an image first.');return}const c=await dataUrlCanvas(url),k=Math.min(1,it.base.width/c.width,it.base.height/c.height),w=Math.round(c.width*k),h=Math.round(c.height*k),s={id:uid++,t:'img',x1:Math.round((it.base.width-w)/2)+n*24,y1:Math.round((it.base.height-h)/2)+n*24,x2:Math.round((it.base.width-w)/2)+w+n*24,y2:Math.round((it.base.height-h)/2)+h+n*24,src:url,op:1,sh:false,c:'#000',w:1,fs:20};await readyShapes([s]);snap();it.shapes.push(s);setTool('select');S.sel=s;render();renderProps();changed();if(!quiet)toast('Pasted image layer. Drag to move; use corner handles to resize.')}
+async function pasteImageLayer(url,n=0,quiet=false){const it=S.cur;if(it?.kind!=='image'){toast('Open an image first.');return}const c=await dataUrlCanvas(url),k=Math.min(1,it.base.width/c.width,it.base.height/c.height),w=Math.round(c.width*k),h=Math.round(c.height*k);{const x0=Math.round((it.base.width-w)/2),y0=Math.round((it.base.height-h)/2),taken=m=>it.shapes.some(o=>o.t==='img'&&Math.abs(o.x1-(x0+m*24))<4&&Math.abs(o.y1-(y0+m*24))<4);while(n<40&&taken(n))n++}const s={id:uid++,t:'img',x1:Math.round((it.base.width-w)/2)+n*24,y1:Math.round((it.base.height-h)/2)+n*24,x2:Math.round((it.base.width-w)/2)+w+n*24,y2:Math.round((it.base.height-h)/2)+h+n*24,src:url,op:1,sh:false,c:'#000',w:1,fs:20};await readyShapes([s]);snap();it.shapes.push(s);setTool('select');S.sel=s;render();renderProps();changed();if(!quiet)toast('Pasted image layer. Drag to move; use corner handles to resize.')}
 async function pasteClipboard(mode='auto'){
   if(!window.bench?.readClipboard){toast('Use Ctrl+V to paste an image from your clipboard.');return}const d=await window.bench.readClipboard()||{},a=await clipAnnotations(d);
   if(mode==='auto'&&a&&S.cur?.kind==='image'){await pasteAnnotations(a);return}
@@ -1877,7 +1887,7 @@ function textTarget(t){return t?.isContentEditable||/INPUT|TEXTAREA|SELECT/.test
 document.addEventListener('paste',e=>{if(editing||textTarget(e.target))return;const a=parseAnnotations(e.clipboardData?.getData('text/plain')||'');if(a&&S.cur?.kind==='image'){e.preventDefault();e.stopImmediatePropagation();pasteAnnotations(a).catch(err=>{console.error(err);toast('Could not paste annotations.')})}
   // 10.1.10: annotations copied in this session: decide after reading the clipboard; if it holds something else, import it as before
   else if(annoClip&&S.cur?.kind==='image'&&window.bench?.readClipboard){e.preventDefault();e.stopImmediatePropagation();const fs=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean);
-    (async()=>{const d=await window.bench.readClipboard()||{},m=await clipAnnotations(d);if(m){await pasteAnnotations(m);return}if(fs.length){fs.forEach(importFile);toast('Pasted into library')}})().catch(err=>{console.error(err);toast('Could not paste.')})}},true);
+    (async()=>{const d=await window.bench.readClipboard()||{},m=await clipAnnotations(d);if(m){await pasteAnnotations(m);return}if(fs.length)await pasteFiles11(fs)})().catch(err=>{console.error(err);toast('Could not paste.')})}},true);
 
 let cropRatio=0,cropDrag=null;
 function cropBounds(r){const it=S.cur;if(it?.kind!=='image'||!r)return null;const x=Math.max(0,Math.min(it.base.width-1,Math.round(r.x))),y=Math.max(0,Math.min(it.base.height-1,Math.round(r.y))),w=Math.max(1,Math.min(it.base.width-x,Math.round(r.w))),h=Math.max(1,Math.min(it.base.height-y,Math.round(r.h)));return{x,y,w,h}}
@@ -1949,7 +1959,7 @@ const originalRenderLib=renderLib;renderLib=function(){originalRenderLib();const
 const workflowBar=document.createElement('div');workflowBar.className='workflow-bar';workflowBar.setAttribute('aria-label','Quick image actions');workflowBar.innerHTML='<button class="btn" id="pasteQuick" title="Paste from the clipboard">Paste</button><button class="btn" id="cropQuick" title="Crop the current image (K)">Crop</button><button class="btn" id="imageActions" title="Image actions: resize, rotate, flip, duplicate and more">Image ▾</button><button class="btn" id="workflowHelp" title="Editing keyboard shortcuts">?</button>';$('#rail').append(workflowBar);
 $('#pasteQuick').onclick=()=>((S.cur?.kind==='audio'||S.cur?.kind==='video')?pasteMediaClip('stack'):pasteClipboard()).catch(actionError);$('#cropQuick').onclick=()=>{if(S.cur?.kind==='image')startCrop();else toast('Open an image first.')};$('#imageActions').onclick=e=>{const r=e.currentTarget.getBoundingClientRect();if(S.cur)showImageMenu({clientX:r.left,clientY:r.bottom},S.cur,false,true);else toast('Capture or open an image first.')};
 $('#workflowHelp').onclick=()=>{const m=document.createElement('div');m.className='modal';m.style.zIndex=95;m.innerHTML='<div class="box workflow-dialog" role="dialog" aria-label="Editing shortcuts"><h2>Everyday editing</h2><p class="hint">Right-click an image, an annotation, or a recent capture for actions.</p><p>Ctrl+C — copy selected annotations, or the whole image<br>Ctrl+X — cut selected annotations<br>Ctrl+V — paste annotations or a new image capture<br>Ctrl+Shift+V — paste an image as a movable layer<br>Ctrl+Shift+C — copy whole image<br>Ctrl+D — duplicate selected annotations or capture<br>Ctrl+Shift+S — Save as<br>F2 — rename capture<br>K — crop · Enter applies · Escape cancels<br>Ctrl+Z / Ctrl+Y — undo / redo<br>Shift+F10 — open context menu</p><p class="hint">Rotate, flip and exact image resizing bake annotations into pixels to preserve their appearance. Undo brings the editable objects back.</p><button class="btn" data-close>Close</button></div>';m.querySelector('[data-close]').onclick=()=>m.remove();m.onkeydown=e=>{e.stopPropagation();if(e.key==='Escape')m.remove()};document.body.append(m);m.querySelector('button').focus()};
-$('#copyBtn').onclick=()=>((S.cur?.kind==='audio'&&aud?.ctl?.copySelected)?aud.ctl.copySelected():copyWhole()).catch(actionError);$('#copyBtn').textContent='Copy image';
+$('#copyBtn').onclick=()=>((S.cur?.kind==='audio'&&aud?.ctl?.copySelected)?aud.ctl.copySelected():S.cur?.kind==='video'?copyMediaClip(S.cur):copyWhole()).catch(actionError);$('#copyBtn').textContent='Copy image';
 document.addEventListener('keydown',e=>{
   if(captureMenu){if(!captureMenu.contains(e.target)){e.stopImmediatePropagation();if(e.key==='Escape')closeCaptureMenu(true)}return}
   if(editing||textTarget(e.target)||document.querySelector('.modal'))return;const k=e.key.toLowerCase(),mod=e.ctrlKey||e.metaKey;
@@ -2366,7 +2376,7 @@ const style34=document.createElement('style');style34.textContent=`
 
 // A two-row action block: history / zoom / clipboard / Save, then Open / format / Save as / New.
 const acts34=$('.top .acts'),history34=document.createElement('div'),clip34=document.createElement('div');history34.className='compact-history34';clip34.className='clipboard34';
-const printButton34=$('#print33');printButton34.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8V3h12v5M6 17H3V8h18v9h-3M6 14h12v7H6z"/><path d="M17 11h1"/></svg>';printButton34.title='Print (Ctrl+P)';printButton34.setAttribute('aria-label','Print');
+const printButton34=$('#print33');printButton34.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8V3h12v5M6 17H3V8h18v9h-3M6 14h12v7H6z"/><path d="M17 11h1"/></svg>';printButton34.title='Print (Ctrl+P)';syncFormats();printButton34.setAttribute('aria-label','Print');
 history34.append($('#undoBtn'),$('#redoBtn'),printButton34);history34.querySelector('#undoBtn').setAttribute('aria-label','Undo');history34.querySelector('#redoBtn').setAttribute('aria-label','Redo');
 clip34.append($('#copyBtn'),$('#pasteQuick'));clip34.querySelector('#copyBtn').textContent='Copy';clip34.querySelector('#pasteQuick').textContent='Paste';
 const zoom34=$('#zoom').closest('label'),fmt34=$('#fmt').closest('label'),save34=$('#saveBtn'),open34=$('#openBtn'),saveAs34=$('#saveAsBtn');
@@ -2438,7 +2448,7 @@ async function updateCheck103() {
   let r; try { r = await window.bench.updateCheck() } catch (e) { r = { ok: false, message: 'The update check could not start.' } }
   if (!updDialog103()) return;
   if (!r || !r.ok) return updShow103('<p class="upd-msg upd-err">' + escH((r && r.message) || 'The update check failed.') + '</p><div class="row"><button class="btn pri" id="updRetry103">Try again</button><button class="btn" id="updRelease103">Open release page</button></div>', b => { b.querySelector('#updRetry103').onclick = updateCheck103; b.querySelector('#updRelease103').onclick = () => window.open('https://github.com/stuartraymor/Saveit/releases/latest') });
-  if (r.state === 'current') return updShow103('<p class="upd-big"><b>Saveit is up to date.</b></p><p class="hint">You have version ' + escH(r.current) + ', the latest published release.</p>');
+  if (r.state === 'current') return updShow103('<p class="upd-big"><b>Saveit is up to date.</b></p><p class="hint">' + (r.latest && r.latest !== r.current ? 'You have version ' + escH(r.current) + ', which is newer than the latest published release (' + escH(r.latest) + ').' : 'You have version ' + escH(r.current) + ', the latest published release.') + '</p>');
   if (r.state === 'unavailable') return updShow103('<p class="upd-big"><b>Version ' + escH(r.latest) + ' is available.</b></p><p class="upd-msg">' + escH(r.reason || '') + '</p><div class="row"><button class="btn pri" id="updPage103">Open the release page</button></div>', b => { b.querySelector('#updPage103').onclick = () => window.open('https://github.com/stuartraymor/Saveit/releases/latest') });
   updShow103('<p class="upd-big"><b>Version ' + escH(r.latest) + ' is available.</b></p><p class="hint">You have version ' + escH(r.current) + '.</p>' + (/^what.?s new/i.test(plainNotes103(r.notes)) ? '' : '<p class="hint" style="margin:6px 0 0">What\u2019s new</p>') + '<div class="upd-note" tabindex="0" aria-label="Release notes">' + escH(plainNotes103(r.notes) || 'No release notes were published.') + '</div>'
     + (r.canInstall ? '' : '<p class="upd-msg upd-err">Updates can be installed only in the installed version of Saveit.</p>')
