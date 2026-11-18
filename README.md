@@ -32,12 +32,12 @@ It is **free, with no account, no subscription and no watermark**, and the whole
 
 ## What you can do
 
-- **Capture:** a region, a window, the full screen, a whole scrolling page, step by step (one shot per click), or **Grab Text**, which reads the text off the screen so you can paste it.
+- **Capture:** a region, a window, the full screen, a whole scrolling page (scroll it yourself, then click Capture), step by step (one shot per click), or **Grab Text**, which reads the text off the screen so you can paste it.
 - **Mark up:** arrows, callouts, text, shapes, numbered steps, stamps, highlight, blur, spotlight, magnify, crop, Magic Cut, plus fill, erase, cut-out and simplify. Every tool has its own settings panel, and most shapes, text and pictures can be rotated.
-- **Copy and paste anywhere:** right-click a picture and choose Copy, then paste the finished picture into Outlook, Gmail, Teams or any other app.
+- **Copy and paste anywhere:** right-click a picture and choose Copy, then paste the finished picture into Outlook, Gmail, Teams or any other app, or onto another screenshot in Saveit as a picture you can move and resize.
 - **Step guides:** click through a task and Saveit builds an illustrated guide, naming each step from what you click ("Click Start") and what you type. Export to Word, searchable PDF, PowerPoint, PNG, JPG or a Saveit file.
 - **Record video:** your screen with optional microphone, system sound and webcam. Then edit on a multi-clip timeline: trim and move clips, add transitions, captions and arrows that appear and disappear, a voice-over, equalizer and effects. Save as MP4, WebM or GIF.
-- **Record audio:** one or two microphones and the computer's sound, each on its own track, with live level bars. Edit on a multitrack timeline and save as WAV, MP3 or M4A. The audio studio has voice presets, noise reduction, equalizer, compression, de-esser and loudness matching.
+- **Record audio:** one or two microphones and the computer's sound, each on its own track, with live level bars. Edit on a multitrack timeline and save as WAV, MP3 or M4A. The audio studio has voice presets, noise reduction, equalizer, compression, de-esser and loudness matching, plus voice effects (Deep Voice, High Pitch, Robot, Radio, Echo and Reverb) for audio and video.
 - **Stays out of the way:** it lives in the system tray, so the hotkeys work even when the window is closed.
 
 ## See it in action
@@ -88,7 +88,7 @@ It installs for your user account only, with no admin rights. Setup downloads th
 
 **Updating:** from version 10.2.0 on, click **Check for Updates →** at the bottom right of the editor. It checks only when you click it, verifies each release's digital signature before installing, keeps your library and settings, and puts the previous version back if the new one does not start. Every release zip is published with a `.sig` signature file and a `.sha256` checksum.
 
-What's new: [10.3.9](docs/changes/CHANGES-10.3.9.md) · [10.3.8](docs/changes/CHANGES-10.3.8.md) · [10.3.7](docs/changes/CHANGES-10.3.7.md) · [10.3.6](docs/changes/CHANGES-10.3.6.md) · [10.3.5](docs/changes/CHANGES-10.3.5.md) · [all versions](docs/changes)
+What's new: [10.3.11](docs/changes/CHANGES-10.3.11.md) · [10.3.10](docs/changes/CHANGES-10.3.10.md) · [10.3.9](docs/changes/CHANGES-10.3.9.md) · [10.3.8](docs/changes/CHANGES-10.3.8.md) · [10.3.7](docs/changes/CHANGES-10.3.7.md) · [all versions](docs/changes)
 
 ## Where Saveit is going
 

@@ -64,8 +64,124 @@ ipcMain.on('review-close-ready',e=>{if(!win||e.sender!==win.webContents)return;i
   }
 });
 ipcMain.handle('quick-markup',async(e,url)=>{mainSender33(e);if(typeof url!=='string'||!url.startsWith('data:image/png;base64,'))throw Error('Expected a PNG capture');const q=new BrowserWindow({width:940,height:640,minWidth:640,minHeight:440,title:'Saveit Quick Markup',backgroundColor:'#1e2124',autoHideMenuBar:true,webPreferences:{preload:asset('quick-preload.js'),contextIsolation:true,nodeIntegration:false}});q.setMenu(null);await q.loadFile(asset('quick.html'));q.webContents.send('quick-image',url);return await new Promise(resolve=>{const done=(event,result)=>{if(event.sender!==q.webContents)return;if(result&&(!['copy','edit'].includes(result.action)||typeof result.url!=='string'||!result.url.startsWith('data:image/png;base64,')))return;ipcMain.removeListener('quick-result',done);if(result?.action==='edit')showWindow();resolve(result);q.destroy()};ipcMain.on('quick-result',done);q.on('closed',()=>{ipcMain.removeListener('quick-result',done);resolve(null)})})});
-async function manualScroll33(display,rect,horizontal){const bar=new BrowserWindow({width:620,height:170,resizable:false,alwaysOnTop:true,title:'Saveit Manual Scroll',autoHideMenuBar:true,backgroundColor:'#20262a',webPreferences:{preload:asset('manual-preload.js'),contextIsolation:true,nodeIntegration:false}});bar.setMenu(null);const st=new Stitcher();let busy=false,done=false,frames=0;await bar.loadFile(asset('manual.html'));const status=message=>{if(!bar.isDestroyed())bar.webContents.send('manual-status',message)};
- return new Promise(resolve=>{const cleanup=()=>{ipcMain.removeListener('manual-command',command);if(!bar.isDestroyed())bar.destroy()};const take=async()=>{if(busy||done)return;busy=true;try{bar.hide();await sleep(160);const img=await grabDisplay(display),k=img.getSize().width/display.bounds.width,c=img.crop({x:Math.round(rect.x*k),y:Math.round(rect.y*k),width:Math.round(rect.w*k),height:Math.round(rect.h*k)}),size=c.getSize(),f={data:c.toBitmap(),w:size.width,h:size.height},r=st.add(horizontal?transposeFrame(f):f);frames++;status(r.lost?'No overlapping content found. Undo is unavailable; finish and retry with smaller scrolls.':`${frames} frame(s). Scroll a little, then add the next frame.`)}catch(e){status(e.message)}finally{busy=false;if(!bar.isDestroyed())bar.show()}};const command=async(e,cmd)=>{if(e.sender!==bar.webContents||busy||done)return;if(cmd==='add'){await take();return}if(cmd==='finish'&&frames){done=true;const result=st.result(),o=horizontal?transposeFrame(result):result;cleanup();resolve(nativeImage.createFromBitmap(o.data,{width:o.w,height:o.h}));return}if(cmd==='cancel'){done=true;cleanup();resolve(null)}};ipcMain.on('manual-command',command);bar.on('closed',()=>{if(!done){done=true;ipcMain.removeListener('manual-command',command);resolve(null)}});take()})
+// 10.3.10: scrolling capture follows the person's own scrolling. Saveit captures the visible area, keeps watching it
+// while they scroll down, adds only content below what it already has (scrolling back up or down again adds nothing),
+// and finishes only when they click Capture on the small bar. See live-stitch.js for how frames are placed.
+let liveScrollSession = null;
+// Fast exact reads of the selected area for scrolling capture. A full screenshot through desktopCapturer takes
+// 0.5-0.8 s, long enough for the page to move more than a screen between looks. saveit-region-grab.exe (GDI)
+// reads just the area in a few tens of ms, with the true pixels and without the mouse pointer. Returns null when
+// the helper is not available (then the slower screenshot path is used). Frames are BGRA like nativeImage.
+function openRegionReader104(display, rect) {
+  if (process.platform !== 'win32') return null;
+  const exe = asset('saveit-region-grab.exe');
+  if (!fs.existsSync(exe)) return null;
+  let phys;
+  try { phys = screen.dipToScreenRect(null, { x: display.bounds.x + rect.x, y: display.bounds.y + rect.y, width: rect.w, height: rect.h }); } catch (_) { return null; }
+  if (!phys || phys.width < 1 || phys.height < 1) return null;
+  let child;
+  try { child = require('child_process').spawn(exe, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] }); } catch (_) { return null; }
+  const need = phys.width * phys.height * 4; let parts = [], got = 0, waiting = null, dead = false;
+  const fail = e => { dead = true; if (waiting) { const w = waiting; waiting = null; w.reject(e); } };
+  child.on('error', () => fail(new Error('The scrolling capture helper could not start.')));
+  child.on('exit', () => fail(new Error('The scrolling capture helper stopped.')));
+  child.stdin.on('error', () => {});
+  child.stdout.on('data', d => {
+    parts.push(d); got += d.length;
+    if (got >= need && waiting) { const all = Buffer.concat(parts), w = waiting; waiting = null; parts = [all.subarray(need)]; got -= need; w.resolve({ data: Buffer.from(all.subarray(0, need)), w: phys.width, h: phys.height }); }
+  });
+  return {
+    k: phys.width / rect.w,
+    grab() {
+      if (dead) return Promise.reject(new Error('The scrolling capture helper stopped.'));
+      return new Promise((resolve, reject) => { waiting = { resolve, reject }; child.stdin.write(`${phys.x} ${phys.y} ${phys.width} ${phys.height}\n`); });
+    },
+    close() { dead = true; try { child.stdin.end('q\n'); } catch (_) {} setTimeout(() => { try { child.kill(); } catch (_) {} }, 1500); }
+  };
+}
+async function liveScroll104(display, rect, horizontal) {
+  if (liveScrollSession) liveScrollSession.cancel();
+  const { LiveStitcher } = require('./live-stitch.js');
+  const st = new LiveStitcher(), tapId = Date.now();
+  const BW = 560, BH = 62, wa = display.workArea, rx = display.bounds.x + rect.x, ry = display.bounds.y + rect.y;
+  const bx = Math.round(Math.max(wa.x + 8, Math.min(rx + rect.w - BW, wa.x + wa.width - BW - 8)));
+  let by = Math.round(ry + rect.h + 10);
+  if (by + BH > wa.y + wa.height - 4) { by = Math.round(ry - BH - 10); if (by < wa.y + 4) by = wa.y + wa.height - BH - 8; }
+  const bar = new BrowserWindow({ x: bx, y: by, width: BW, height: BH, frame: false, resizable: false, minimizable: false, maximizable: false, skipTaskbar: true, alwaysOnTop: true, show: false, transparent: false, backgroundColor: '#16181a', title: 'Saveit Scrolling Capture', webPreferences: { preload: asset('manual-preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+  bar.setAlwaysOnTop(true, 'screen-saver');
+  try { bar.setContentProtection(true); } catch (_) {}
+  const overlaps = !(bx >= rx + rect.w || bx + BW <= rx || by >= ry + rect.h || by + BH <= ry);
+  await bar.loadFile(asset('manual.html'));
+  let reader = openRegionReader104(display, rect);
+  bar.showInactive();
+  return new Promise(resolve => {
+    let done = false, busy = false, timer = null, session;
+    const status = s => { if (!bar.isDestroyed()) bar.webContents.send('manual-status', s); };
+    // Screen capture always shows the mouse pointer. Rows it covers are given to the stitcher so they can be
+    // replaced from a later look in which the pointer is elsewhere (see live-stitch.js).
+    const pointer = k => {
+      const p = screen.getCursorScreenPoint(), lx = p.x - rx, ly = p.y - ry;
+      if (lx < -40 || lx > rect.w + 4 || ly < -40 || ly > rect.h + 4) return null;
+      const v = horizontal ? lx : ly; return [Math.floor((v - 4) * k), Math.ceil((v + 40) * k)];
+    };
+    const union = (a, b) => !a ? b : !b ? a : [Math.min(a[0], b[0]), Math.max(a[1], b[1])];
+    const look = async () => {
+      if (overlaps && !bar.isDestroyed()) { bar.setOpacity(0); await sleep(40); }
+      try {
+        if (reader) try { return { f: await reader.grab(), k: reader.k, av: null }; } catch (_) { reader.close(); reader = null; } // GDI never draws the pointer
+        const img = await grabDisplay(display), k = img.getSize().width / display.bounds.width, a = pointer(k);
+        const c = img.crop({ x: Math.round(rect.x * k), y: Math.round(rect.y * k), width: Math.max(1, Math.round(rect.w * k)), height: Math.max(1, Math.round(rect.h * k)) }), size = c.getSize();
+        return { f: { data: c.toBitmap(), w: size.width, h: size.height }, k, av: a };
+      } finally { if (overlaps && !bar.isDestroyed()) bar.setOpacity(1); }
+    };
+    const grab = async () => {
+      if (done || busy) return; busy = true;
+      try {
+        const { f, av } = await look();
+        if (done) return;
+        const r = st.add(horizontal ? transposeFrame(f) : f, { avoid: av });
+        // test profiles only: keep the first frames for the native scrolling regression's diagnostics
+        if (process.env.SAVEIT_TAP_DIR && process.env.SAVEIT_REVIEW_DATA && st.frames <= 150) try { fs.mkdirSync(path.join(process.env.SAVEIT_TAP_DIR, String(tapId)), { recursive: true }), fs.writeFileSync(path.join(process.env.SAVEIT_TAP_DIR, String(tapId), 'f' + String(st.frames).padStart(3, '0') + '-' + r.state + '.bin'), Buffer.concat([Buffer.from(JSON.stringify({ w: f.w, h: f.h }).padEnd(64)), f.data])); } catch (_) {}
+        status(r);
+      } catch (e) { status({ state: 'error', message: e.message }); }
+      finally { busy = false; if (!done && !finishing) timer = setTimeout(grab, reader ? (overlaps ? 20 : 40) : 110); }
+    };
+    let finishing = false;
+    const finish = img => {
+      if (done) return; done = true; clearTimeout(timer); ipcMain.removeListener('manual-command', command);
+      if (reader) reader.close();
+      if (!bar.isDestroyed()) bar.destroy();
+      if (liveScrollSession === session) liveScrollSession = null;
+      lastScrollNote = !img ? '' : st.state === 'full' ? 'Scrolling capture reached the maximum length. The part captured so far is shown.'
+        : !st.N ? 'The page did not scroll, so only the visible part was captured. Scroll inside the selected area before clicking Capture.' : '';
+      resolve(img);
+    };
+    const command = (e, cmd) => {
+      if (e.sender !== bar.webContents || done) return;
+      if (cmd === 'cancel') { finish(null); return; }
+      if (cmd !== 'finish') return;
+      if (finishing) return; finishing = true;
+      status({ state: 'finalizing' });
+      const go = async () => {
+        if (busy) { setTimeout(go, 25); return; }
+        clearTimeout(timer);
+        // one last look now that the pointer is on the Capture button: it replaces rows the pointer covered earlier
+        if (st.dirtyRows) try { await sleep(30); const { f, av } = await look(); if (!done) st.add(horizontal ? transposeFrame(f) : f, { avoid: av }); } catch (_) {}
+        if (done) return;
+        try {
+          const o = st.result(); if (!o) { finish(null); return; }
+          const out = horizontal ? transposeFrame(o) : o;
+          finish(nativeImage.createFromBitmap(out.data, { width: out.w, height: out.h }));
+        } catch (err) { finishing = false; status({ state: 'error', message: 'The long screenshot could not be assembled: ' + err.message }); }
+      };
+      go();
+    };
+    ipcMain.on('manual-command', command);
+    bar.on('closed', () => finish(null));
+    session = { cancel: () => finish(null) };
+    liveScrollSession = session;
+    grab();
+  });
 }
 
 
@@ -294,7 +410,7 @@ async function doCapture(mode, delay = 0, opts = {}, pre = null) {
         const rect = { x: Math.round(r.x * k), y: Math.round(r.y * k), width: Math.max(1, Math.round(r.w * k)), height: Math.max(1, Math.round(r.h * k)) };
         if (mode === 'scroll') {
           if (win) win.hide(); await sleep(250);
-          out = settings.manualScroll?await manualScroll33(d,r,settings.scrollDirection==='horizontal'):await scrollCapture(d,r,settings.scrollDirection==='horizontal');if(!out){restoreUI(wasVisible);return null;} cursor = { x: -1, y: -1, k: kk };
+          out = settings.autoScroll?await scrollCapture(d,r,settings.scrollDirection==='horizontal'):await liveScroll104(d,r,settings.scrollDirection==='horizontal');if(!out){restoreUI(wasVisible);return null;} cursor = { x: -1, y: -1, k: kk };
         } else {
           out = img.crop(rect);
           cursor = { x: cursor.x - rect.x, y: cursor.y - rect.y, k: kk };
@@ -675,7 +791,7 @@ ipcMain.on('recording', (e, on) => { recording = !!on; buildTrayMenu(); });
 
 function send(mode) {
   if (!win) return;
-  if (mode === 'window' || mode === 'video') showWindow();
+  if ((mode === 'window' || mode === 'video') && !recording) showWindow();
   win.webContents.send('hotkey', mode);
 }
 
@@ -725,6 +841,7 @@ app.whenReady().then(() => {
     } catch (_) { cb({}); }
   });
   createWindow();
+  setTimeout(syncShortcutIdentity, 3000);
   tray = new Tray(nativeImage.createFromPath(asset('tray.png')));
   tray.setToolTip('Saveit');
   tray.on('click', showWindow);
@@ -735,6 +852,30 @@ app.whenReady().then(() => {
   if (failed.length) win.webContents.once('did-finish-load', () => win.webContents.send('shortcut-failed', failed));
 });
 
+// 10.3.10: taskbar grouping. The window runs as AppUserModelID com.saveit.app, but shortcuts made by older installers
+// (and pins made from them) carried no ID, so Windows treated the pinned icon and the running window as two different apps.
+// Stamp the ID on every Saveit shortcut that points at this exe: Start menu, desktop and taskbar pins. Installed copies only.
+const SAVEIT_AUMID = 'com.saveit.app';
+function syncShortcutIdentity() {
+  if (process.platform !== 'win32' || process.env.SAVEIT_REVIEW_DATA || !/\\saveit\.exe$/i.test(process.execPath)) return;
+  const roaming = process.env.APPDATA || '';
+  const dirs = [path.join(roaming, 'Microsoft', 'Windows', 'Start Menu', 'Programs'), app.getPath('desktop'),
+    path.join(roaming, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar'),
+    path.join(roaming, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'StartMenu')];
+  const exe = path.normalize(process.execPath).toLowerCase();
+  for (const dir of dirs) {
+    let names = [];
+    try { names = fs.readdirSync(dir).filter(n => /\.lnk$/i.test(n)); } catch (_) { continue; }
+    for (const n of names) {
+      const file = path.join(dir, n);
+      try {
+        const l = shell.readShortcutLink(file);
+        if (!l.target || path.normalize(l.target).toLowerCase() !== exe || l.appUserModelId === SAVEIT_AUMID) continue;
+        shell.writeShortcutLink(file, 'update', { appUserModelId: SAVEIT_AUMID });
+      } catch (_) {}
+    }
+  }
+}
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', e => { /* keep running in the tray */ });
 // The text and positioned-text paths use the same local Windows OCR service.
