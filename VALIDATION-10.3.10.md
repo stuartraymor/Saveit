@@ -124,7 +124,9 @@ These suites fail on both 10.3.9 and 10.3.10 with the same checks. The failures 
 
 ## Taskbar identity
 
-The installed shortcuts currently have an empty AppUserModelID. The installed app repairs them to `com.saveit.app` at startup (`syncShortcutIdentity`). This repair is skipped in review mode, so it is confirmed only by code and by the identity-consistency check, not on the installed shortcuts yet.
+Before 10.3.10 was installed, all three Saveit shortcuts (Start menu, desktop and pinned taskbar) had an empty AppUserModelID.
+
+The app repairs them at startup (`syncShortcutIdentity`). After 10.3.10 was installed with `tools/update-installed.ps1` and started, all three read `com.saveit.app`, the same identity the running app uses.
 
 ## Known limitations
 
