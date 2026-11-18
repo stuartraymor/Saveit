@@ -69,6 +69,15 @@ These fail on 10.3.9 too, with the same checks:
 - audio115: 5 failures
 - audio116: 1 failure
 
+## Updater (tests/native-update.cjs, a real update in a scratch folder against a local fake GitHub)
+- 15/15 PASS. Covered:
+  - offering an update, refusing an unsigned or tampered one, a real update from 10.3.11 to 10.3.12, and data kept intact;
+  - never offering an older version;
+  - rollback of a release that crashes at start, and of one that never reports that it is working.
+- The first run failed the 3 rollback checks. The updater's process scan read the path of all 537 running processes and took 27 s per scan, so the rollback took 90 s and the test timed out.
+- After the targeted fix (look only at programs named like Saveit's), one scan takes 0.16 s and all checks pass.
+- Updater unit tests: PASS.
+
 ## Tried and reverted
 - I showed the top Undo/Redo for videos so the top-right buttons would not shift.
 - video-timeline-controls showed that the video editor intentionally has exactly one Undo, beside the timeline.

@@ -30,5 +30,8 @@ This release also includes everything in 10.3.10 (see CHANGES-10.3.10.md). 10.3.
   - Example: a 1280 × 720 area on a 200% screen recorded as 1280 × 718.
 
 ## Check for Updates
+- Installing an update and recovering from a failed update are much faster on busy PCs.
+  - The updater used to check every running program to find Saveit's. On a PC running 500 or more programs, each check took about 27 seconds, so updates waited about a minute and a rollback about 90 seconds.
+  - It now checks only programs with Saveit's names (0.16 s).
 - When your version is newer than the latest published release, the message now says so.
   - Before, it said your version was "the latest published release".

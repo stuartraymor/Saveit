@@ -47,10 +47,14 @@ $support = @('uninstall.ps1', 'Uninstall.cmd', 'Reinstall.cmd')
 $regKey  = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Saveit'
 $swapped = $false
 
+# 10.3.11: reading the path of every running process took about 27 s on a PC with 500+ processes, so closing and rolling
+# back waited minutes. Only processes named like a program in the install folder are looked at; the path check is unchanged.
+$script:SaveitNames = $null
 function Saveit-Processes {
   # every running program that lives in the install folder (Saveit itself, its helper)
   $found = @()
-  foreach ($p in (Get-Process -ErrorAction SilentlyContinue)) {
+  if (-not $script:SaveitNames) { $script:SaveitNames = @(@('Saveit') + @(Get-ChildItem -LiteralPath $InstallDir -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue | ForEach-Object { $_.BaseName }) | Sort-Object -Unique) }
+  foreach ($p in (Get-Process -Name $script:SaveitNames -ErrorAction SilentlyContinue)) {
     try { if ($p.Path -and $p.Path.StartsWith($InstallDir, [System.StringComparison]::OrdinalIgnoreCase)) { $found += $p } } catch { }
   }
   return $found
