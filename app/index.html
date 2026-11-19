@@ -992,7 +992,7 @@ function curOpts(){return{audio:audioBar98.get(),mode:S.mode,area:$('#area').val
 function applySettings(s){if(!s)return;
   if(s.audio)audioBar98.set(s.audio);
   if(s.mode==='video'&&S.mode!=='video')$('#mVid').click();else if(s.mode==='audio'&&S.mode!=='audio')$('#mAud').click();else if(s.mode==='image'&&S.mode!=='image')$('#mImg').click();
-  if(s.area&&$('#area').querySelector(`option[value="${s.area}"]`)&&!$('#area').querySelector(`option[value="${s.area}"]`).disabled)$('#area').value=s.area;
+  if(s.area&&$('#area').querySelector(`option[value="${s.area}"]`)&&!$('#area').querySelector(`option[value="${s.area}"]`).disabled)$('#area').value=s.area;try{setCapLabel()}catch(e){}
   const set=(id,v)=>{if(v!==undefined&&v!==null)$('#'+id).checked=!!v};set('cursorOn',s.cursor);set('clipOn',s.clip);set('sysAudio',s.sys);set('mic',s.mic);set('camOn',s.cam);if(s.micId!=null||s.camId!=null){if(s.micId!=null)devPick.mic=s.micId;if(s.camId!=null)devPick.cam=s.camId;saveDevices();refreshDevices()}if(s.delay!=null&&$('#delay').querySelector(`option[value="${s.delay}"]`))$('#delay').value=s.delay;if(s.fx&&s.fx.id){fxUi.set(s.fx);try{localStorage.setItem('saveit.fx',JSON.stringify({id:autoFx.id,p:autoFx.p}))}catch(e){}}saveOpts()}
 async function captureDesktop(area,hot,pre){if(area==='steps')return startSteps();const delay=+$('#delay').value;let res=null;
   try{res=await window.bench.capture(area,delay,{...curOpts(),confirm:!hot},pre||null);}catch(e){toast('Capture failed: '+(e.message||e));return}
@@ -1146,8 +1146,9 @@ async function beginRecording(stream,recStream,cleanup,uiInfo,uiExtra){
 function videoThumb(blob){return new Promise(res=>{const v=document.createElement('video');v.muted=true;v.src=URL.createObjectURL(blob);v.onloadeddata=()=>{v.currentTime=Math.min(.5,(v.duration||1)/2)};v.onseeked=()=>{try{const c=canvasFrom(v,192,Math.round(192*v.videoHeight/v.videoWidth)||108);res(c.toDataURL('image/jpeg',.7))}catch(e){res('')}URL.revokeObjectURL(v.src)};v.onerror=()=>res('');setTimeout(()=>res(''),4000)})}
 function grabFrame(){if(!vid)return;try{const c=(vid._ctl&&vid._ctl.grab)?vid._ctl.grab():canvasFrom(vid);addImage(c,'Frame '+stamp())}catch(e){toast('Could not grab this frame.')}}
 const CAP_SVG98=$('#capBtn svg').outerHTML;
-function setCapLabel(){const b=$('#capBtn'),a=S.mode==='audio';b.classList.toggle('rec',S.mode==='video'||a);$('#capLbl').textContent=rec?'Stop':(a?'Record audio':S.mode==='video'?'Record':'Capture');
-  const svg=b.querySelector('svg'),want=a&&!rec?AUDIOBAR.MIC_SVG:CAP_SVG98;if(svg&&svg.outerHTML!==want)svg.outerHTML=want;b.title=a?'Record audio with the microphones chosen beside it (Ctrl+Shift+X)':'Capture (Ctrl+Shift+X)'}
+function setCapLabel(){const b=$('#capBtn'),a=S.mode==='audio';b.classList.toggle('rec',S.mode==='video'||a);const gt=!a&&S.mode!=='video'&&$('#area').value==='text';$('#capLbl').textContent=rec?'Stop':(a?'Record audio':S.mode==='video'?'Record':gt?'Grab text':'Capture'); // 10.3.12: same label as the widget's button for Selection > Grab text
+  const svg=b.querySelector('svg'),want=a&&!rec?AUDIOBAR.MIC_SVG:CAP_SVG98;if(svg&&svg.outerHTML!==want)svg.outerHTML=want;b.title=a?'Record audio with the microphones chosen beside it (Ctrl+Shift+X)':gt?'Grab text: select an area of the screen and copy the text in it (Ctrl+Shift+X)':'Capture (Ctrl+Shift+X)'}
+$('#area').addEventListener('change',setCapLabel);
 $('#capBtn').onclick=()=>{if(rec){rec.stop();return}S.mode==='audio'?startAudioRec():S.mode==='video'?startRec():captureImage()};
 // 9.9: quick audio recording from the capture bar. Each microphone and the computer sound become their own track.
 // 10.3.10: a second click or hotkey while the microphone or screen picker is still opening must not start a second recorder
@@ -1166,7 +1167,7 @@ async function startAudioRec(){if(rec||audioRecStarting)return;const o=audioBar9
   else toast('Recording audio… press Stop when you are done.',4000);
   const begin=()=>{if(cancelled)return;started=true;ctl.start()};delay?setTimeout(begin,delay*1000):begin()}
 function syncAreaOptions(){const v=S.mode==='video',a98=S.mode==='audio';$('.tleft').classList.toggle('amode',a98);$('#area').closest('label').hidden=a98;$('#clipWrap').hidden=a98||v;audioBar98.setActive(a98);$('#curWrap').hidden=a98;$('#cursorOn').disabled=v;$('#curWrap').title=v?'Windows always includes the mouse pointer in screen recordings. This option applies to screenshots.':'Show the mouse pointer in screenshots';$('#camWrap').hidden=!v;$('#fxWrap').hidden=v||a98;$('#sysWrap').hidden=!v;$('#micWrap').hidden=!v;
-  for(const val of ['steps','text','scroll']){const o=$('#area').querySelector(`option[value="${val}"]`);o.hidden=o.disabled=v}if(v&&['steps','text','scroll'].includes($('#area').value))$('#area').value='region';saveOpts();if(v)refreshDevices()}
+  for(const val of ['steps','text','scroll']){const o=$('#area').querySelector(`option[value="${val}"]`);o.hidden=o.disabled=v}if(v&&['steps','text','scroll'].includes($('#area').value))$('#area').value='region';saveOpts();try{setCapLabel()}catch(e){}if(v)refreshDevices()}
 // ---------- recording devices ----------
 const devPick={mic:'',cam:''};try{Object.assign(devPick,JSON.parse(localStorage.getItem('saveit.devices')||'{}'))}catch(e){}
 function saveDevices(){try{localStorage.setItem('saveit.devices',JSON.stringify({mic:devPick.mic||'',cam:devPick.cam||''}));localStorage.setItem('saveit.cam',JSON.stringify({...camSettings(),deviceId:devPick.cam||''}))}catch(e){}}

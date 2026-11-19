@@ -1,4 +1,4 @@
-// 10.3.12 Grab Text benchmark. Renders realistic screenshots with known text (Chromium inside Saveit's Electron, at 100% and 200% zoom), then reads
+// 10.3.12 Grab Text benchmark. Renders realistic screenshots with known text (Chromium inside Saveit's Electron, at 100%, 125%, 150% and 200% zoom; OCR_DPRS=1,2 picks some), then reads
 // them through Saveit's real Grab Text path in a real Saveit (the same scaling as runOcr, then window.bench.ocr = Windows OCR via
 // ocr.ps1 and main.js post-processing). Scores character error rate and exact lines per case.
 // node tests/ocr-bench.cjs <runtime Saveit.exe> <evidence folder> [case filter]
@@ -43,7 +43,7 @@ function lev(a, b) { const m = a.length, n = b.length; if (!m) return n; if (!n)
   const p = await app.firstWindow(); await p.waitForFunction(() => document.body.dataset.catalogCount);
   // screenshots are rendered by Chromium inside Saveit's own Electron, at 100% and 200% zoom (like 100% and 200% display scaling)
   const imgs = [];
-  for (const dpr of [1, 2]) for (const [name, body, want] of CASES) { if (filter && !name.includes(filter)) continue;
+  for (const dpr of (process.env.OCR_DPRS || '1,1.25,1.5,2').split(',').map(Number)) for (const [name, body, want] of CASES) { if (filter && !name.includes(filter)) continue;
     const html = `<html><body style="margin:0;padding:18px;background:#fff;display:inline-block">${body}</body></html>`;
     const png = await app.evaluate(async ({ BrowserWindow }, [html, dpr]) => { const w = new BrowserWindow({ show: false, width: 1000, height: 500, webPreferences: { zoomFactor: dpr, offscreen: false } });
       await w.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html)); await new Promise(r => setTimeout(r, 150));
@@ -53,10 +53,10 @@ function lev(a, b) { const m = a.length, n = b.length; if (!m) return n; if (!n)
   let totE = 0, totN = 0, lines = 0, okLines = 0; const report = [];
   for (const im of imgs) {
     const url = 'data:image/png;base64,' + fs.readFileSync(im.file).toString('base64'), t0 = Date.now();
-    // what runOcr does before calling Windows OCR (10.3.12: no enlargement here; ocr.ps1 enlarges 2x)
-    const got = await p.evaluate(async url => { const img = new Image(); img.src = url; await img.decode(); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0);
-      const k = 1, b = document.createElement('canvas'); b.width = Math.max(1, Math.round(c.width * k)); b.height = Math.max(1, Math.round(c.height * k));
-      const g = b.getContext('2d'); g.fillStyle = 'white'; g.fillRect(0, 0, b.width, b.height); g.imageSmoothingQuality = 'high'; g.drawImage(c, 0, 0, b.width, b.height); return window.bench.ocr(b.toDataURL()); }, url).catch(e => 'ERROR ' + e.message);
+    // what runOcr does before calling Windows OCR (10.3.12: no enlargement here; ocr.ps1 enlarges 2x). OCR_OLD_PRESCALE=1 measures 10.3.11 and older, which enlarged small pictures 2x here first
+    const got = await p.evaluate(async ([url, oldPrescale]) => { const img = new Image(); img.src = url; await img.decode(); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0);
+      const k = oldPrescale ? (c.width < 1000 && c.height < 500 ? Math.min(2, 2000 / Math.max(c.width, c.height)) : 1) : 1, b = document.createElement('canvas'); b.width = Math.max(1, Math.round(c.width * k)); b.height = Math.max(1, Math.round(c.height * k));
+      const g = b.getContext('2d'); g.fillStyle = 'white'; g.fillRect(0, 0, b.width, b.height); g.imageSmoothingQuality = 'high'; g.drawImage(c, 0, 0, b.width, b.height); return window.bench.ocr(b.toDataURL()); }, [url, !!process.env.OCR_OLD_PRESCALE]).catch(e => 'ERROR ' + e.message);
     const ms = Date.now() - t0, gl = got.split('\n').map(norm).filter(Boolean), wl = im.want.map(norm), e = lev(gl.join('\n'), wl.join('\n'));
     totE += e; totN += wl.join('\n').length; lines += wl.length; const good = wl.filter((l, i) => gl[i] === l).length; okLines += good;
     const bad = wl.map((l, i) => gl[i] === l ? null : `    want: ${l}\n    got:  ${gl[i] ?? '(missing)'}`).filter(Boolean);

@@ -44,8 +44,11 @@ function Read-Bitmap($bmp) { $bmp.Save($tilePath,[System.Drawing.Imaging.ImageFo
   $file=Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($tilePath)) ([Windows.Storage.StorageFile]); $stream=Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream]); $sbm=$null
   try { $dec=Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder]); $sbm=Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap]); return (Await ($engine.RecognizeAsync($sbm)) ([Windows.Media.Ocr.OcrResult])) } finally { if($sbm){$sbm.Dispose()}; $stream.Dispose() } }
 # add a recognised line; map(x,y) turns positions in the read bitmap into positions in the original picture
-function Add-Lines($result,[scriptblock]$map,[double]$k,[string]$how) { foreach ($line in $result.Lines) { $words=@();$left=[double]::MaxValue;$top=[double]::MaxValue;$right=0;$bottom=0
-  foreach ($word in $line.Words) { if ($how -eq 'recovered' -and $word.Text -notmatch '[A-Za-z0-9]') { continue }; $r=$word.BoundingRect;$p=& $map $r.X $r.Y;$ww=$r.Width/$k;$hh=$r.Height/$k
+# keep (optional): only words for which it returns true are added
+function Add-Lines($result,[scriptblock]$map,[double]$k,[string]$how,[scriptblock]$keep=$null) { foreach ($line in $result.Lines) { $words=@();$left=[double]::MaxValue;$top=[double]::MaxValue;$right=0;$bottom=0
+  # 10.3.12: a re-read keeps code operators, and quotes or brackets that sit in a line with real words (the " of console.log("Free); other lone marks are noise
+  $real=@($line.Words|Where-Object{$_.Text -match '[A-Za-z0-9]'}).Count -gt 0
+  foreach ($word in $line.Words) { if ($how -eq 'recovered' -and $word.Text -notmatch '[A-Za-z0-9]' -and $word.Text -notmatch '^(=>|==|!=|<=|>=|&&|\|\||->|===|!==)$' -and -not ($real -and $word.Text -match '^["''`()\[\]{};,]{1,3}$')) { continue }; $r=$word.BoundingRect; if ($keep -and -not (& $keep $r)) { continue }; $p=& $map $r.X $r.Y;$ww=$r.Width/$k;$hh=$r.Height/$k
    $words+=@{text=$word.Text;how=$how;rect=@{x=$p[0];y=$p[1];w=$ww;h=$hh}};$left=[Math]::Min($left,$p[0]);$top=[Math]::Min($top,$p[1]);$right=[Math]::Max($right,$p[0]+$ww);$bottom=[Math]::Max($bottom,$p[1]+$hh) }
   if ($words.Count -gt 0) { $script:lines.Add(@{text=(($words|ForEach-Object{$_.text}) -join ' ');words=@($words);rect=@{x=$left;y=$top;w=$right-$left;h=$bottom-$top}}) } } }
 $source = [System.Drawing.Bitmap]::FromFile($Path)
@@ -74,7 +77,21 @@ try {
       $bx=$boxes[$k];$by=$boxes[$k+1];$bw=$boxes[$k+2];$bh=$boxes[$k+3];$m=[int]($bh*.5);$my=[int]($bh*.12);$cx=[Math]::Max(0,$bx-$m);$cy=[Math]::Max(0,$by-$my);$cw=[Math]::Min($sw-$cx,$bw+2*$m);$ch=[Math]::Min($sh-$cy,$bh+2*$my);$pad=30
       $crop=$sb.Clone([System.Drawing.Rectangle]::new($cx,$cy,$cw,$ch),[System.Drawing.Imaging.PixelFormat]::Format32bppArgb);$bg=$crop.GetPixel(0,0)
       $pb=New-Object System.Drawing.Bitmap(($cw+2*$pad),($ch+2*$pad),[System.Drawing.Imaging.PixelFormat]::Format32bppArgb);$g2=[System.Drawing.Graphics]::FromImage($pb);$g2.Clear($bg);$g2.DrawImage($crop,$pad,$pad,$cw,$ch);$g2.Dispose();$crop.Dispose()
+      $before=$script:lines.Count
       try { $r2=Read-Bitmap $pb;$ox=$cx;$oy=$cy; Add-Lines $r2 { param($a,$b) @((($a-$pad+$ox)/$Scale+$tx),(($b-$pad+$oy)/$Scale+$ty)) } $Scale 'recovered' } finally { $pb.Dispose() }
+      # 10.3.12: a short piece, such as the "11" of "2026-11-07", is often not read on its own. Read it again together with the text beside it and keep
+      # only the words that cover the missed piece; main.js then lets a longer word ("2026-11-07") replace the pieces it covers ("2026-", "-07").
+      # Only short pieces (up to about 4 characters wide) with a recognised word right beside them on the same line are retried: a long piece that could
+      # not be read alone is not read with its neighbours either, and icons standing on their own are not text.
+      $beside=$false; if ($script:lines.Count -eq $before -and $bw -le $bh*3) { for ($q=0;$q -lt $rects.Count;$q+=4) { $wx=$rects[$q];$wy=$rects[$q+1];$ww2=$rects[$q+2];$wh=$rects[$q+3]
+        $ov=[Math]::Min($by+$bh,$wy+$wh)-[Math]::Max($by,$wy); $gap=[Math]::Max($wx-($bx+$bw),$bx-($wx+$ww2))
+        if ($ov -ge 0.5*[Math]::Min($bh,$wh) -and $gap -le 1.5*$bh) { $beside=$true; break } } }
+      if ($beside) {
+       $m=[int]($bh*4);$cx=[Math]::Max(0,$bx-$m);$cw=[Math]::Min($sw-$cx,$bw+2*$m)
+       $crop=$sb.Clone([System.Drawing.Rectangle]::new($cx,$cy,$cw,$ch),[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+       $pb=New-Object System.Drawing.Bitmap(($cw+2*$pad),($ch+2*$pad),[System.Drawing.Imaging.PixelFormat]::Format32bppArgb);$g2=[System.Drawing.Graphics]::FromImage($pb);$g2.Clear($bg);$g2.DrawImage($crop,$pad,$pad,$cw,$ch);$g2.Dispose();$crop.Dispose()
+       try { $r2=Read-Bitmap $pb;$ox=$cx;$oy=$cy; Add-Lines $r2 { param($a,$b) @((($a-$pad+$ox)/$Scale+$tx),(($b-$pad+$oy)/$Scale+$ty)) } $Scale 'recovered' { param($r) ($r.X-$pad+$ox) -lt ($bx+$bw*.8) -and ($r.X+$r.Width-$pad+$ox) -gt ($bx+$bw*.2) } } finally { $pb.Dispose() }
+      }
      }
     }
    } finally { $sb.Dispose() }

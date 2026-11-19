@@ -37,12 +37,19 @@ ipcMain.handle('workflow-save',async(e,list)=>{mainSender33(e);if(!Array.isArray
 ipcMain.handle('workflow-folder',async e=>{mainSender33(e);const r=await dialog.showOpenDialog(win,{title:'Choose automatic capture save folder',properties:['openDirectory','createDirectory']});if(r.canceled||!r.filePaths[0])return null;const folder=path.resolve(r.filePaths[0]);if(!workflowConfig.folders.includes(folder))workflowConfig.folders.push(folder);await saveWorkflowConfig();return folder});
 ipcMain.handle('workflow-file',async(e,folder,name,data)=>{mainSender33(e);if(!workflowConfig.folders.includes(folder))throw Error('Choose this save folder in Workflows first.');const safe=path.basename(String(name)).replace(/[<>:"/\\|?*\x00-\x1f]/g,'-');if(!safe||!safe.endsWith('.png'))throw Error('Expected a PNG filename');const parsed=path.parse(safe);let out=path.join(folder,safe),i=2;while(fs.existsSync(out))out=path.join(folder,parsed.name+'-'+i+++parsed.ext);await fs.promises.writeFile(out,Buffer.from(data),{flag:'wx'});return out});
 // 10.1.2: Grab Text output. Words far apart in one row are separated by a tab (a table cell, a label next to its value).
-function ocrJoinRow35(w) { const hs = w.map(a => a.rect.h).sort((a, b) => a - b), limit = Math.max(14, 1.5 * hs[Math.floor(hs.length / 2)]); let t = ''; w.forEach((a, i) => { if (i) { const gap = a.rect.x - (w[i - 1].rect.x + w[i - 1].rect.w); t += gap > limit ? '\t' : ' '; } t += a.text; }); return t; }
+// 10.3.12: cols = column edges found by ocrColumns; a smaller gap in front of a word that starts at a column edge is a cell break too.
+function ocrJoinRow35(w, cols = []) { const hs = w.map(a => a.rect.h).sort((a, b) => a - b), med = hs[Math.floor(hs.length / 2)], limit = Math.max(14, 1.5 * med); let t = ''; w.forEach((a, i) => { if (i) { const gap = a.rect.x - (w[i - 1].rect.x + w[i - 1].rect.w); t += gap > limit || (gap > .5 * med && cols.some(x => Math.abs(x - a.rect.x) <= Math.max(3, med * .4))) ? '\t' : ' '; } t += a.text; }); return t; }
+// 10.3.12: table columns. A wide gap (wider than a space) in front of words that start at the same x in at least three rows marks a column edge, so
+// every cell of a table is separated by a tab and the text pastes into a spreadsheet as columns.
+function ocrColumns(rows) {
+  const starts = []; for (const row of rows) { const w = [...row.words].sort((a, b) => a.rect.x - b.rect.x); for (let i = 1; i < w.length; i++) { const gap = w[i].rect.x - (w[i - 1].rect.x + w[i - 1].rect.w); if (gap > .7 * row.h) starts.push({ x: w[i].rect.x, row, tol: Math.max(3, row.h * .4) }); } }
+  return starts.filter(s => new Set(starts.filter(t => Math.abs(t.x - s.x) <= s.tol).map(t => t.row)).size >= 3).map(s => s.x); }
 // 10.3.12: Windows OCR puts spaces around code punctuation ("items. reduce( (a, b)", "fetch ( \"https://...\" ) ;"). Only on lines that clearly are code
 // (a ; or { or => and several brackets or =) those spaces are removed; a space after if/for/while/switch/catch/return stays, as code is written.
 function ocrFixCode(line){
   if(!/[;{}]|=>/.test(line)||(line.match(/[(){};=]/g)||[]).length<3)return line;
-  return line.replace(/([A-Za-z_$][\w$]*)\. (?=[a-z_$])/g,'$1.').replace(/([A-Za-z_$][\w$]*) \(/g,(m,w)=>/^(if|for|while|switch|catch|return|function|await|of|in|and|or)$/.test(w)?m:w+'(')
+  // a symbol Windows could not read (often =>) leaves a wide gap, which would come out as a tab inside the code
+  return line.replace(/\t+/g,' ').replace(/([A-Za-z_$][\w$]*)\. (?=[a-z_$])/g,'$1.').replace(/([A-Za-z_$][\w$]*) \(/g,(m,w)=>/^(if|for|while|switch|catch|return|function|await|of|in|and|or)$/.test(w)?m:w+'(')
     .replace(/\( +(?=\S)/g,'(').replace(/(\S) +\)/g,'$1)').replace(/(\S) +;/g,'$1;').replace(/\( +\(/g,'((').replace(/\((["'`]) +/g,'($1').replace(/ +(["'`])\)/g,'$1)')}
 // 10.1.12: Grab Text fixes look-alike characters only where the meaning is clear: money after a misread $ sign, and tokens that are plainly numbers.
 function ocrFixLine(line){
@@ -55,7 +62,11 @@ function ocrFixLine(line){
   line=line.replace(/(^|[\s(:])[Ss]\s?([lI|1]?[\dOoSlI|,]*[.,][\dOoSlI]{2})(?=$|[\s).,;:])/g,(m,pre,num)=>{const v=num.replace(/[lI|]/g,'1').replace(/[Oo]/g,'0').replace(/S/g,'5');return /^\d{1,3}(,\d{3})*\.\d{2}$|^\d+\.\d{2}$/.test(v)?pre+'$'+v:m});
   // 10.3.12: web addresses come back with spaces around their punctuation ("https : / / api . example . com/v2"); those spaces are removed
   line=line.replace(/\bhttps? ?: ?\/ ?\/ ?[\w\-%~+]+(?: ?[.\/?=&#:] ?[\w\-%~+]+)*\/?/g,m=>m.replace(/ /g,''));
-  // 10.3.12: an ID or hex code in dash-separated groups ("7F3A-91C2-OB8E"): a letter O is a zero when that makes every group hex digits
+  // 10.3.12: a space read after the dash of an order or ticket number: "A- 1009" -> "A-1009", "INV- 2041" -> "INV-2041"
+  line=line.replace(/\b([A-Z]{1,5})- (?=\d{2,}\b)/g,'$1-');
+  // 10.3.12: an ID or hex code in dash-separated groups ("7F3A-91C2-OB8E"): a stray space inside a group is removed when every group then has the
+  // same length of four or more ("7F3A-91 C2-0B8E" -> "7F3A-91C2-0B8E"), and a letter O is a zero when that makes every group hex digits
+  line=line.replace(/\b[0-9A-FO]{2,}(?:[- ][0-9A-FO]{1,})*-[0-9A-FO]{1,}(?: [0-9A-FO]{1,})*\b/g,m=>{if(!m.includes(' ')||!/\d/.test(m))return m;const j=m.replace(/ /g,''),g=j.split('-');return g.length>=3&&g[0].length>=4&&g.every(x=>x.length===g[0].length)?j:m});
   line=line.replace(/\b[0-9A-FO]{4,}(?:-[0-9A-FO]{4,})+\b/g,m=>/O/.test(m)&&/\d/.test(m)?m.replace(/O/g,'0'):m);
   line=line.replace(/\b0x[0-9A-FO]{2,}\b/g,m=>m.slice(0,2)+m.slice(2).replace(/O/g,'0'));
   line=ocrFixCode(line);
@@ -926,10 +937,12 @@ async function recognize35(url){
  });
  // Merge repeated words in tile overlaps, preserving two identical lines at different positions.
  const words=[];const overlap=(a,b)=>{const w=Math.max(0,Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x)),h=Math.max(0,Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y));return w*h/Math.max(1,Math.min(a.w*a.h,b.w*b.h))};
- for(const line of data.lines||[])for(const word of line.words||[]){const duplicate=words.find(w=>overlap(w.rect,word.rect)>.65);if(!duplicate)words.push(word);else if(word.text.length>duplicate.text.length)Object.assign(duplicate,word)}
- const rows=ocrBlocks(words).flatMap(ocrRows);
+ for(const line of data.lines||[])for(const word of line.words||[]){const dups=words.filter(w=>overlap(w.rect,word.rect)>.65);if(!dups.length)words.push(word);
+   // 10.3.12: a word read again with its neighbours ("2026-11-07") replaces all the pieces it covers ("2026-", "-07") when it holds more text than they do
+   else if(word.text.length>dups.reduce((n,w)=>n+w.text.length,0)){for(const d of dups.slice(1))words.splice(words.indexOf(d),1);Object.assign(dups[0],word)}}
+ const rows=ocrBlocks(words).flatMap(ocrRows);const cols=ocrColumns(rows);
  // 10.1.2: a gap much wider than a space (more than about one and a half text heights) is a column break, so a table row or a sidebar label stays apart from its neighbours.
- const lines=rows.map(row=>{const w=row.words.sort((a,b)=>a.rect.x-b.rect.x),x=Math.min(...w.map(a=>a.rect.x)),y=Math.min(...w.map(a=>a.rect.y)),right=Math.max(...w.map(a=>a.rect.x+a.rect.w)),bottom=Math.max(...w.map(a=>a.rect.y+a.rect.h));w.forEach(a=>{a.text=ocrFixLine(a.text)});return{text:ocrFixLine(ocrJoinRow35(w)),words:w,rect:{x,y,w:right-x,h:bottom-y}}});
+ const lines=rows.map(row=>{const w=row.words.sort((a,b)=>a.rect.x-b.rect.x),x=Math.min(...w.map(a=>a.rect.x)),y=Math.min(...w.map(a=>a.rect.y)),right=Math.max(...w.map(a=>a.rect.x+a.rect.w)),bottom=Math.max(...w.map(a=>a.rect.y+a.rect.h));w.forEach(a=>{a.text=ocrFixLine(a.text)});return{text:ocrFixLine(ocrJoinRow35(w,cols)),words:w,rect:{x,y,w:right-x,h:bottom-y}}});
  return{lines,width:size.width,height:size.height};
  }finally{await fs.promises.rm(dir,{recursive:true,force:true}).catch(()=>{})}
 }

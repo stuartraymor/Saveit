@@ -85,6 +85,30 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
     check('a box around one line reads just that line', text.trim() === 'Press Print Screen to capture a region, or Shift + Print Screen', JSON.stringify(text));
     await closeText();
 
+    // 5. the capture mode: Selection > Grab text, Capture, drag over text that is really on screen (a window showing a table), OK
+    const target = await app.evaluate(async ({ BrowserWindow, screen }) => { const wa = screen.getPrimaryDisplay().workArea;
+      const w = new BrowserWindow({ x: wa.x + 120, y: wa.y + 140, width: 640, height: 200, frame: false, alwaysOnTop: true, show: false, backgroundColor: '#ffffff' });
+      w.setAlwaysOnTop(true, 'screen-saver'); global.__ocrTarget = w;
+      await w.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<body style="margin:0;padding:16px;font:14px 'Segoe UI',sans-serif"><table cellpadding="6" style="border-collapse:collapse"><tr style="font-weight:600;background:#f2f4f7"><td>Order</td><td>Item</td><td>Qty</td><td>Total</td></tr><tr><td>A-1007</td><td>Desk lamp</td><td>2</td><td>$84.00</td></tr><tr><td>A-1008</td><td>Monitor stand</td><td>1</td><td>$129.99</td></tr><tr><td>A-1009</td><td>USB-C cable</td><td>4</td><td>$35.96</td></tr></table></body>`));
+      w.showInactive(); await new Promise(r => setTimeout(r, 400)); return w.getBounds(); });
+    await p.locator('#mImg').click(); await p.locator('#area').selectOption('text');
+    check('Selection > Grab text turns Capture into Grab text', /grab text/i.test(await p.locator('#capBtn').innerText()), await p.locator('#capBtn').innerText());
+    const nItems = await p.evaluate(() => window.__wf.items.length);
+    await p.locator('#capBtn').click();
+    let ov = null; for (let i = 0; i < 100 && !ov; i++) { for (const w of app.windows().filter(w => w.url().includes('overlay.html'))) { const b = await app.evaluate(({ BrowserWindow }, u) => { const bw = BrowserWindow.getAllWindows().find(x => !x.isDestroyed() && x.webContents.getURL() === u); return bw && bw.getBounds(); }, w.url()).catch(() => null); if (b && target.x >= b.x && target.x < b.x + b.width && target.y >= b.y && target.y < b.y + b.height) ov = { w, b }; } if (!ov) await p.waitForTimeout(100); }
+    if (!ov) throw Error('no capture overlay on the screen with the text window');
+    await ov.w.waitForSelector('#c'); await ov.w.waitForFunction(() => ready); await ov.w.waitForTimeout(350);
+    const ox = target.x - ov.b.x, oy = target.y - ov.b.y;
+    await ov.w.mouse.move(ox + 4, oy + 4); await ov.w.mouse.down(); await ov.w.mouse.move(ox + 330, oy + 100, { steps: 6 }); await ov.w.mouse.move(ox + target.width - 4, oy + target.height - 4, { steps: 6 }); await ov.w.mouse.up();
+    await ov.w.screenshot({ path: path.join(out, 'capture-overlay.png') }).catch(() => {});
+    await ov.w.locator('#ok').click();
+    text = await grabbed(); fs.writeFileSync(path.join(out, 'capture-mode.txt'), text); await p.screenshot({ path: path.join(out, 'capture-mode-result.png') });
+    await app.evaluate(() => { global.__ocrTarget.destroy(); });
+    check('capture mode: the table on screen is read as tab-separated rows',
+      text.trim() === 'Order\tItem\tQty\tTotal\nA-1007\tDesk lamp\t2\t$84.00\nA-1008\tMonitor stand\t1\t$129.99\nA-1009\tUSB-C cable\t4\t$35.96', JSON.stringify(text));
+    check('capture mode: Grab text does not add a picture to the library', (await p.evaluate(() => window.__wf.items.length)) === nItems);
+    await closeText(); await p.locator('#area').selectOption('region');
+
     check('no page errors', errors.length === 0, errors.join(' | '));
   } catch (e) { check('test ran to the end', false, e.stack); }
   fs.writeFileSync(path.join(out, 'results.txt'), lines.join('\n') + `\n${fails ? fails + ' FAILED' : 'ALL PASS'}\n`);
