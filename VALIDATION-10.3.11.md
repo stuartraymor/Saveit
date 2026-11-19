@@ -90,3 +90,25 @@ These fail on 10.3.9 too, with the same checks:
 - Recording size on the 200% screen:
   - Windows reports the screen as 801 points tall, and the stream is 1600 px.
   - A 640 × 360 selection now records at 1280 × 720 (it was 1280 × 718).
+
+## Release
+- Published: https://github.com/stuartraymor/Saveit/releases/tag/v10.3.11. It is a normal release (not a draft or pre-release), and GitHub's "latest" points to it.
+- Assets:
+  - Saveit-10.3.11.zip (751,126 bytes)
+  - Saveit-10.3.11.zip.sig, checked against the public key built into the app
+  - Saveit-10.3.11.sha256 (sha256 63653a7a…d91e)
+  - Saveit-Setup.exe (833,536 bytes)
+- The one-click link `releases/latest/download/Saveit-Setup.exe` returns HTTP 200 with the new installer.
+- The release `app/` is identical to the tested app, apart from line endings. Files on main are stored with CRLF, the same as earlier releases.
+- Installer test (tests/setup-ui-test.ps1, scratch folder): 11/11 PASS.
+
+## Real update from GitHub
+- A scratch copy of Saveit 10.3.9 (scratch install folder and test profile) ran Check for Updates.
+- It showed "Version 10.3.11 is available", then downloaded and verified the release ("ready to install").
+- After Install and restart, update.log shows:
+  - "update 10.3.9 -> 10.3.11"
+  - "backup verified", then "new app in place"
+  - "result: ok - Saveit was updated to version 10.3.11 and is running"
+- The scratch install now runs "Saveit 10.3.11". The real installed Saveit and its registry entry were left alone.
+- Waiting for 10.3.9 to close took 55 s. That wait is done by 10.3.9's own updater, which still has the slow process scan.
+- Updates that start from 10.3.11 use the fixed scan (0.16 s).
