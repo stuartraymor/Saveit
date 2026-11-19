@@ -66,3 +66,11 @@ What changed:
   - native: widget-hide1022, window-capture, workflow-everyday, workflow-paste-layer, bar-parity (49 checks), gui-10310, live-scroll, video-journey, record-controls, grabtext-10312 (16), capture-hides-saveit, walkthrough;
   - ocr-bench (48 screenshots) and ocr-stress (500 pictures), numbers above;
   - browser suites review2, review103, rotate, polish, stepguide, update-ui (in Chrome).
+
+## Release record (2026-11-19)
+- Published at https://github.com/stuartraymor/Saveit/releases/tag/v10.4.1 from main commit e41c27a. It is a normal release (not a draft or pre-release) and GitHub's "latest".
+- Assets: Saveit-10.4.1.zip (757,510 bytes, SHA-256 a0001904900f4c9e6a387c2c2af35e3898cdff141e5f22a529b67995791f3997), .zip.sig (checked against the key in app/updater.js), .sha256, and Saveit-Setup.exe (840,192 bytes).
+- The zip's app folder matches the tested app and the app installed on this PC, file for file (ignoring line endings).
+- Saveit-Setup.exe: tests/setup-ui-test.ps1 passed all 11 checks, installing into a scratch folder. On the first attempt the scripted Install click did not register; the second run passed.
+- Real update from GitHub: a scratch copy of 10.3.11 clicked Check for Updates, then Install Update (download and verify), then Install and restart. update.log: "result: ok - Saveit was updated to version 10.4.1 and is running."
+- Website (GitHub Pages, docs/ on main) rebuilt from e41c27a. The live pages show the new Grab Text text. The one-click link https://github.com/stuartraymor/Saveit/releases/latest/download/Saveit-Setup.exe redirects to v10.4.1.
