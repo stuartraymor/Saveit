@@ -86,7 +86,7 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
     await closeText();
 
     // 5. the capture mode: Selection > Grab text, Capture, drag over text that is really on screen (a window showing a table), OK
-    const target = await app.evaluate(async ({ BrowserWindow, screen }) => { const wa = screen.getPrimaryDisplay().workArea;
+    const target = await app.evaluate(async ({ BrowserWindow, screen }) => { const wa = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
       const w = new BrowserWindow({ x: wa.x + 120, y: wa.y + 140, width: 640, height: 200, frame: false, alwaysOnTop: true, show: false, backgroundColor: '#ffffff' });
       w.setAlwaysOnTop(true, 'screen-saver'); global.__ocrTarget = w;
       await w.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<body style="margin:0;padding:16px;font:14px 'Segoe UI',sans-serif"><table cellpadding="6" style="border-collapse:collapse"><tr style="font-weight:600;background:#f2f4f7"><td>Order</td><td>Item</td><td>Qty</td><td>Total</td></tr><tr><td>A-1007</td><td>Desk lamp</td><td>2</td><td>$84.00</td></tr><tr><td>A-1008</td><td>Monitor stand</td><td>1</td><td>$129.99</td></tr><tr><td>A-1009</td><td>USB-C cable</td><td>4</td><td>$35.96</td></tr></table></body>`));
@@ -95,7 +95,7 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
     check('Selection > Grab text turns Capture into Grab text', /grab text/i.test(await p.locator('#capBtn').innerText()), await p.locator('#capBtn').innerText());
     const nItems = await p.evaluate(() => window.__wf.items.length);
     await p.locator('#capBtn').click();
-    let ov = null; for (let i = 0; i < 100 && !ov; i++) { for (const w of app.windows().filter(w => w.url().includes('overlay.html'))) { const b = await app.evaluate(({ BrowserWindow }, u) => { const bw = BrowserWindow.getAllWindows().find(x => !x.isDestroyed() && x.webContents.getURL() === u); return bw && bw.getBounds(); }, w.url()).catch(() => null); if (b && target.x >= b.x && target.x < b.x + b.width && target.y >= b.y && target.y < b.y + b.height) ov = { w, b }; } if (!ov) await p.waitForTimeout(100); }
+    let ov = null; for (let i = 0; i < 100 && !ov; i++) { for (const w of app.windows().filter(w => w.url().includes('overlay.html'))) { const b = await w.evaluate(() => document.visibilityState === 'visible' ? { x: screenX, y: screenY, width: outerWidth, height: outerHeight } : null).catch(() => null); /* 10.4.1: skip the hidden selector kept ready in advance */ if (b && target.x >= b.x && target.x < b.x + b.width && target.y >= b.y && target.y < b.y + b.height) ov = { w, b }; } if (!ov) await p.waitForTimeout(100); }
     if (!ov) throw Error('no capture overlay on the screen with the text window');
     await ov.w.waitForSelector('#c'); await ov.w.waitForFunction(() => ready); await ov.w.waitForTimeout(350);
     const ox = target.x - ov.b.x, oy = target.y - ov.b.y;

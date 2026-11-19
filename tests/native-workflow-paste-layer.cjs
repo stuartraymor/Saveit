@@ -13,8 +13,8 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
   fs.writeFileSync(idx, crlf ? html.replace(/\n/g, '\r\n') : html);
   const app = await _electron.launch({ executablePath: exe, env: { ...process.env, SAVEIT_REVIEW_DATA: path.join(out, 'profile') }, timeout: 30000 });
   let fails = 0; const lines = [], check = (name, ok, extra) => { const l = (ok ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : ''); console.log(l); lines.push(l); if (!ok) fails++; };
-  const windowFor = async suffix => { for (let i = 0; i < 80; i++) { const w = app.windows().find(w => w.url().includes(suffix)); if (w) return w; await new Promise(r => setTimeout(r, 100)); } return null; };
-  const gone = async suffix => { for (let i = 0; i < 50; i++) { const open = await app.evaluate(({ BrowserWindow }, s) => BrowserWindow.getAllWindows().some(w => !w.isDestroyed() && w.webContents.getURL().includes(s)), suffix); if (!open) return true; await new Promise(r => setTimeout(r, 100)); } return false; };
+  const windowFor = async suffix => { for (let i = 0; i < 80; i++) { for (const w of app.windows().filter(w => w.url().includes(suffix))) if (await w.evaluate(() => document.visibilityState === 'visible').catch(() => false)) return w; await new Promise(r => setTimeout(r, 100)); } return null; };
+  const gone = async suffix => { for (let i = 0; i < 50; i++) { const open = await app.evaluate(({ BrowserWindow }, s) => BrowserWindow.getAllWindows().some(w => !w.isDestroyed() && w.isVisible() && w.webContents.getURL().includes(s)), suffix); if (!open) return true; await new Promise(r => setTimeout(r, 100)); } return false; };
   const toasts = [];
   try {
     const p = await app.firstWindow(); p.setDefaultTimeout(15000); await p.waitForFunction(() => document.body.dataset.catalogCount && window.__wf);

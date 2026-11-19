@@ -45,11 +45,11 @@ canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
 <script src="fxdefs.js"></script><script src="fxui.js"></script>
 <script>
 const $=id=>document.getElementById(id);
-const c=$('c'),g=c.getContext('2d'),img=new Image(),tip=$('tip');
+const c=$('c'),g=c.getContext('2d'),tip=$('tip');let img=new Image(); // 10.4.0: a canvas when Saveit sends raw screen pixels
 let W=innerWidth,H=innerHeight,dpr=devicePixelRatio||1,ready=false,mode='image';
 let state='drag',start=null,cur={x:W/2,y:H/2},sel=null,act=null; // act: {type:'move'|'resize'|'new', ...}
 const HS=6;
-const K=()=>img.naturalWidth/W||1;
+const K=()=>(img.naturalWidth||img.width)/W||1;
 function size(){W=innerWidth;H=innerHeight;dpr=devicePixelRatio||1;c.width=W*dpr;c.height=H*dpr;g.setTransform(dpr,0,0,dpr,0,0);draw()}
 addEventListener('resize',size);
 let vmode='image',sent=false;
@@ -66,7 +66,10 @@ window.overlay.onData(d=>{sent=false;const o=d.opts||{};vmode=o.mode==='video'?'
   $('oCur').checked=!!o.cursor;$('oClip').checked=!!o.clip;$('oSys').checked=o.sys!==false;$('oMic').checked=!!o.mic;$('oCam').checked=!!o.cam;fxUi.set(o.fx||{id:'none',p:{}});
   if(d.init==='full'||$('area').value==='screen'){$('area').value='screen';state='adjust';tip.style.display='none'}
   labels();
-  img.onload=()=>{ready=true;size();if(state==='adjust'){sel={x:0,y:0,w:W,h:H};draw()}};img.src=d.shot});
+  const shown=()=>{ready=true;size();if(state==='adjust'){sel={x:0,y:0,w:W,h:H};draw()}};
+  // 10.4.0: raw BGRA pixels (no PNG to encode and decode, which took a noticeable part of a second on a large screen)
+  if(d.raw){const w=d.w,h=d.h,src=d.raw,px=new Uint8ClampedArray(w*h*4);for(let i=0;i<px.length;i+=4){px[i]=src[i+2];px[i+1]=src[i+1];px[i+2]=src[i];px[i+3]=255}const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').putImageData(new ImageData(px,w,h),0,0);img=cv;shown();return}
+  img=new Image();img.onload=shown;img.src=d.shot});
 function norm(a,b){return{x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y)}}
 function clampSel(){sel.w=Math.max(4,Math.min(sel.w,W));sel.h=Math.max(4,Math.min(sel.h,H));sel.x=Math.max(0,Math.min(W-sel.w,sel.x));sel.y=Math.max(0,Math.min(H-sel.h,sel.y))}
 function handles(r){const mx=r.x+r.w/2,my=r.y+r.h/2,R=r.x+r.w,B=r.y+r.h;return[['nw',r.x,r.y],['n',mx,r.y],['ne',R,r.y],['e',R,my],['se',R,B],['s',mx,B],['sw',r.x,B],['w',r.x,my]]}

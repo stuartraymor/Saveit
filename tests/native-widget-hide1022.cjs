@@ -27,7 +27,7 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
       await w.click('#hide');
       await new Promise(r => setTimeout(r, 600));
       const after = await state(), editorAfter = after.find(s => s.url.includes('index.html'));
-      check(`round ${round}: widget is gone after the click`, !after.some(s => s.url.includes('widget.html') && !s.destroyed));
+      check(`round ${round}: widget is gone after the click`, !after.some(s => s.url.includes('widget.html') && !s.destroyed && s.visible)); // 10.4.1: kept hidden for a fast reopen
       check(`round ${round}: editor was not opened by it`, !!editorAfter && editorAfter.visible === editorBefore.visible && !editorAfter.visible, JSON.stringify({ before: editorBefore.visible, after: editorAfter && editorAfter.visible }));
       check(`round ${round}: Saveit is still running`, (await app.evaluate(({ app }) => !app.isQuitting)) === true && !page.isClosed());
     }

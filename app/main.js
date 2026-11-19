@@ -52,6 +52,34 @@ function ocrFixCode(line){
   return line.replace(/\t+/g,' ').replace(/([A-Za-z_$][\w$]*)\. (?=[a-z_$])/g,'$1.').replace(/([A-Za-z_$][\w$]*) \(/g,(m,w)=>/^(if|for|while|switch|catch|return|function|await|of|in|and|or)$/.test(w)?m:w+'(')
     .replace(/\( +(?=\S)/g,'(').replace(/(\S) +\)/g,'$1)').replace(/(\S) +;/g,'$1;').replace(/\( +\(/g,'((').replace(/\((["'`]) +/g,'($1').replace(/ +(["'`])\)/g,'$1)')}
 // 10.1.12: Grab Text fixes look-alike characters only where the meaning is clear: money after a misread $ sign, and tokens that are plainly numbers.
+// 10.4.1: misreads found by reading 500 generated pictures (tests/ocr-stress.cjs); each rule only fires on a pattern that is
+// not normal text, so ordinary sentences are left alone.
+function ocrFixMore(line){
+  // a minus sign before an amount read as S: "-S966.85" -> "-$966.85"; a pound sign read as E: "E70,441.53" -> "£70,441.53"
+  line=line.replace(/(^|\s|\()-S(?=\d{1,3}(?:,\d{3})*\.\d{2}\b|\d+\.\d{2}\b)/g,'$1-$$');
+  line=line.replace(/(^|\s|\()E[l1I]?(?=,?\d{0,3}(?:,\d{3})+\.\d{2}\b)/g,(m,pre)=>pre+'£'+(m.length-pre.length>1?'1':''));
+  // a decimal point read as a dash in money and in times: "$999-39" -> "$999.39", "3:18-3" -> "3:18.3"
+  line=line.replace(/([$€£]\d+)-(\d{2})\b/g,'$1.$2').replace(/\b(\d{1,2}:\d{2})-(\d)\b/g,'$1.$2');
+  // stray spaces inside times and before commas: "6:41 .9" -> "6:41.9", "9: 35.5" -> "9:35.5", "Sep 3 , 2019" -> "Sep 3, 2019"
+  line=line.replace(/\b(\d{1,2}:\d{2}) \.(?=\d\b)/g,'$1.').replace(/\b(\d{1,2}): (\d{2})(?=[.:]\d|\s?[AaPp][Mm]\b)/g,'$1:$2').replace(/(\w) ,(?=\s)/g,'$1,');
+  // degrees: "86.2 oc" -> "86.2 °C"
+  line=line.replace(/(\d)( ?)[oO°º]([CcFf])\b/g,(m,d,sp,u)=>d+sp+'°'+u.toUpperCase());
+  // a percent sign read as "0/0": "500/0 off" -> "50% off"
+  line=line.replace(/\b(\d+)0\/0(?=$|[\s!.,;:)])/g,'$1%');
+  // a zero read as ø between digits: "2ø27" -> "2027"
+  line=line.replace(/(?<=\d)[øØ]|[øØ](?=\d)/g,'0');
+  // an S between digits in a number or ID: "INV-9S904" -> "INV-95904"
+  line=line.replace(/(?<=\d)S(?=\d)/g,'5');
+  // a double hyphen read as a dash before an option: "npm install —save-dev" -> "--save-dev"; a tilde read as a dash at the start
+  // of a home path or prompt: "—/Downloads" -> "~/Downloads", "—$ sudo" -> "~$ sudo"
+  line=line.replace(/(^|\s)—(?=[a-z][\w-]*\b)/g,'$1--').replace(/(^|\s)[—–](?=\/\w|\$ )/g,'$1~');
+  // e-mail addresses: an underscore read as a dash ("a.b—c@") and ".corn" for ".com"
+  line=line.replace(/[\w.+—–-]+@[\w-]+(?:\.[\w-]+)+/g,m=>m.replace(/[—–]/g,'_'));
+  line=line.replace(/\b([\w-]+)\.corn\b/g,'$1.com');
+  // hex after 0x: l or I is 1 ("0xlCA62704" -> "0x1CA62704")
+  line=line.replace(/\b[O0]x[0-9A-FlIO]{4,}\b/g,m=>/\d/.test(m.slice(2))?'0x'+m.slice(2).replace(/[lI]/g,'1').replace(/O/g,'0'):m);
+  return line;
+}
 function ocrFixLine(line){
   // hex codes: "Ox80070005" -> "0x80070005"; a money decimal point read as a dash: "$1,234-56" -> "$1,234.56"
   line=line.replace(/\bOx(?=[0-9A-Fa-f]{2,}\b)/g,'0x').replace(/\$(\d{1,3}(?:,\d{3})+)-(\d{2})\b/g,'$$$1.$2');
@@ -69,6 +97,7 @@ function ocrFixLine(line){
   line=line.replace(/\b[0-9A-FO]{2,}(?:[- ][0-9A-FO]{1,})*-[0-9A-FO]{1,}(?: [0-9A-FO]{1,})*\b/g,m=>{if(!m.includes(' ')||!/\d/.test(m))return m;const j=m.replace(/ /g,''),g=j.split('-');return g.length>=3&&g[0].length>=4&&g.every(x=>x.length===g[0].length)?j:m});
   line=line.replace(/\b[0-9A-FO]{4,}(?:-[0-9A-FO]{4,})+\b/g,m=>/O/.test(m)&&/\d/.test(m)?m.replace(/O/g,'0'):m);
   line=line.replace(/\b0x[0-9A-FO]{2,}\b/g,m=>m.slice(0,2)+m.slice(2).replace(/O/g,'0'));
+  line=ocrFixMore(line);
   line=ocrFixCode(line);
   // number tokens: letters that look like digits become digits ("2O24" -> "2024", "1O,OO8" -> "10,008")
   // only when the token has a real digit and becomes a plain number once O/o -> 0 and I/l/| -> 1 (so "Q0O8", "8B0O-1Il7", "IO" or "MP3" are left alone)
@@ -230,31 +259,51 @@ function createWindow() {
 }
 
 // ---------- floating capture widget (editor hidden) ----------
-let widgetWin = null, widgetOpts = null, reopenWidget = false;
-function closeWidget() { if (widgetWin && !widgetWin.isDestroyed()) widgetWin.destroy(); widgetWin = null; }
+let widgetWin = null, widgetOpts = null, reopenWidget = false, widgetUp = false;
+const CAPTURE_HIDE_MS = 200;
+// 10.4.0: the widget window is kept (hidden) when it goes away, instead of being destroyed and built again each time it
+// comes back (after every capture and every switch from the editor). Showing it again is immediate.
+function closeWidget() { widgetUp = false; if (widgetWin && !widgetWin.isDestroyed()) widgetWin.hide(); }
+const widgetOpen = () => !!(widgetUp && widgetWin && !widgetWin.isDestroyed());
 // The widget and the editor share one anchor: the Saveit logo. Opening the widget puts its logo where the editor's was,
 // size changes keep the left edge still, and returning to the editor lines its logo up with the widget's.
 let widgetAnchor = null, editorLogo = null, widgetLogo = { x: 11, y: 11 };
-function openWidget(opts) {
-  if (opts) widgetOpts = opts;
-  if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.show(); return; }
+function widgetPlace() {
   const saved = workflowConfig.widgetPos, sx = saved ? (saved.x ?? saved.cx - 620) : 0;
   const onScreen = !widgetAnchor && saved && screen.getAllDisplays().some(s => sx + 40 >= s.bounds.x && sx < s.bounds.x + s.bounds.width - 40 && saved.y >= s.bounds.y && saved.y < s.bounds.y + s.bounds.height - 40);
   const d = widgetAnchor ? screen.getDisplayNearestPoint({ x: Math.round(widgetAnchor.x), y: Math.round(widgetAnchor.y) }) : onScreen ? screen.getDisplayNearestPoint({ x: Math.round(sx), y: Math.round(saved.y) }) : activeDisplay(), W = Math.min(1240, d.bounds.width - 40), H = 84;
   const x = widgetAnchor ? widgetAnchor.x - widgetLogo.x : onScreen ? sx : d.bounds.x + (d.bounds.width - W) / 2, y = widgetAnchor ? widgetAnchor.y - widgetLogo.y : onScreen ? saved.y : d.bounds.y + 14;
-  widgetWin = new BrowserWindow({ x: Math.round(x), y: Math.round(y), width: W, height: H, frame: false, resizable: false, maximizable: false, minimizable: false, skipTaskbar: false, alwaysOnTop: true, backgroundColor: '#16181a', hasShadow: true, show: false,
+  return { x: Math.round(x), y: Math.round(y), W, H };
+}
+function makeWidget() {
+  const p = widgetPlace();
+  widgetWin = new BrowserWindow({ x: p.x, y: p.y, width: p.W, height: p.H, frame: false, resizable: false, maximizable: false, minimizable: false, skipTaskbar: false, alwaysOnTop: true, backgroundColor: '#16181a', hasShadow: true, show: false,
     webPreferences: { preload: asset('widget-preload.js'), contextIsolation: true } });
   widgetWin.setContentProtection(true);
   widgetWin.setAlwaysOnTop(true, 'floating');
   widgetWin.loadFile(asset('widget.html'));
-  // Shown once it has sized itself (so it never appears in the wrong place first), with a fallback.
-  widgetWin.webContents.once('did-finish-load', () => { widgetWin.webContents.send('init', widgetOpts); setTimeout(() => { if (widgetWin && !widgetWin.isDestroyed() && !widgetWin.isVisible()) widgetWin.show(); }, 800); });
-  widgetWin.on('moved', () => { if (!widgetWin || widgetWin.isDestroyed()) return; const b = widgetWin.getBounds(); workflowConfig.widgetPos = { x: b.x, y: b.y }; saveWorkflowConfig().catch(() => {}); });
-  widgetWin.on('closed', () => { widgetWin = null; });
+  // Shown once it has sized itself (so it never appears in the wrong place first), with a fallback. A widget prepared in
+  // advance stays hidden until it is opened.
+  widgetWin.webContents.once('did-finish-load', () => { if (!widgetWin || widgetWin.isDestroyed()) return; widgetWin.webContents.send('init', widgetOpts); setTimeout(() => { if (widgetOpen() && !widgetWin.isVisible()) widgetWin.show(); }, 800); });
+  widgetWin.on('moved', () => { if (!widgetOpen()) return; const b = widgetWin.getBounds(); workflowConfig.widgetPos = { x: b.x, y: b.y }; saveWorkflowConfig().catch(() => {}); });
+  widgetWin.on('closed', () => { widgetWin = null; widgetUp = false; });
+}
+function openWidget(opts) {
+  if (opts) widgetOpts = opts;
+  widgetUp = true;
+  if (widgetWin && !widgetWin.isDestroyed() && !widgetWin.webContents.isLoading()) {
+    // the kept widget: put it in place, refresh its settings and show it now; the size it reports back adjusts the width
+    const p = widgetPlace(), b = widgetWin.getBounds();
+    widgetWin.setBounds({ x: p.x, y: p.y, width: b.width, height: b.height }); widgetAnchor = null;
+    widgetWin.webContents.send('init', widgetOpts);
+    widgetWin.show();
+  } else if (!widgetWin || widgetWin.isDestroyed()) makeWidget();
   if (win) win.hide();
 }
+// 10.4.0: the widget is prepared in the background a few seconds after start, so even the first switch to it is immediate
+app.whenReady().then(() => setTimeout(() => { if (!widgetWin || widgetWin.isDestroyed()) { try { makeWidget(); } catch (_) {} } }, 2500));
 // Called at the start of a capture or recording: the widget steps aside, and comes back if the user cancels.
-function beginCaptureUI() { if (widgetWin && !widgetWin.isDestroyed()) { reopenWidget = true; closeWidget(); } }
+function beginCaptureUI() { if (widgetOpen()) { reopenWidget = true; closeWidget(); } }
 function restoreUI(wasVisible) { if (reopenWidget) { reopenWidget = false; openWidget(); } else if (wasVisible) showWindow(); }
 function showWindow() { reopenWidget = false; closeWidget(); if (!win) return; if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
 ipcMain.on('widget-open', (e, opts, logo) => {
@@ -263,7 +312,8 @@ ipcMain.on('widget-open', (e, opts, logo) => {
   if (win && win.isVisible() && editorLogo) { const c = win.getContentBounds(); widgetAnchor = { x: c.x + editorLogo.x, y: c.y + editorLogo.y }; }
   openWidget(opts);
 });
-ipcMain.on('widget-opts', (e, o) => { widgetOpts = o; if (win) win.webContents.send('widget-opts', o); });
+// a widget prepared in advance (hidden, not opened yet) must not change the editor's settings
+ipcMain.on('widget-opts', (e, o) => { if (!widgetOpen()) return; widgetOpts = o; if (win) win.webContents.send('widget-opts', o); });
 ipcMain.on('widget-go', (e, o) => { widgetOpts = o; reopenWidget = true; closeWidget(); if (win) win.webContents.send('widget-go', o); });
 // The red button on the widget: put the bar away without opening the editor. Saveit keeps running (tray icon, Print Screen).
 ipcMain.on('widget-hide', e => { if (!widgetWin || widgetWin.isDestroyed() || e.sender !== widgetWin.webContents) return; reopenWidget = false; closeWidget(); });
@@ -293,14 +343,42 @@ ipcMain.on('widget-size', (e, w, h, lx, ly) => {
   const b = widgetWin.getBounds(), x = widgetAnchor ? Math.round(widgetAnchor.x - widgetLogo.x) : b.x, y = widgetAnchor ? Math.round(widgetAnchor.y - widgetLogo.y) : b.y;
   const d = screen.getDisplayNearestPoint({ x, y }), W = Math.min(Math.round(w) + 2, d.bounds.width - 20), H = Math.min(520, Math.round(h));
   widgetWin.setBounds({ x, y, width: W, height: H }); widgetAnchor = null;
-  if (!widgetWin.isVisible()) widgetWin.show();
+  if (widgetUp && !widgetWin.isVisible()) widgetWin.show();
 });
 
 function activeDisplay() { return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()); }
 
+// 10.4.0: screenshots read the screen through saveit-region-grab.exe (the GDI helper scrolling capture uses), which is kept
+// running after the first use. A full screen takes tens of ms instead of 0.5 s through desktopCapturer, which captures every
+// screen each time. Measured identical pixels, including transparent windows. Any problem falls back to desktopCapturer.
+let screenReader = null;
+function fastScreenReader() {
+  if (screenReader && !screenReader.dead) return screenReader;
+  if (process.platform !== 'win32') return null;
+  const exe = asset('saveit-region-grab.exe'); if (!fs.existsSync(exe)) return null;
+  let child; try { child = spawn(exe, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] }); } catch (_) { return null; }
+  const r = { dead: false, queue: [], parts: [], got: 0 };
+  const fail = () => { r.dead = true; for (const q of r.queue.splice(0)) q.reject(new Error('The screen reader stopped.')); };
+  child.on('error', fail); child.on('exit', fail); child.stdin.on('error', () => {});
+  child.stdout.on('data', b => { r.parts.push(b); r.got += b.length;
+    while (r.queue.length && r.got >= r.queue[0].need) { const all = Buffer.concat(r.parts), q = r.queue.shift(); r.parts = [all.subarray(q.need)]; r.got -= q.need; q.resolve(Buffer.from(all.subarray(0, q.need))); } });
+  r.read = (x, y, w, h) => new Promise((resolve, reject) => { if (r.dead) { reject(new Error('The screen reader stopped.')); return; } r.queue.push({ need: w * h * 4, resolve, reject }); child.stdin.write(`${x} ${y} ${w} ${h}\n`); });
+  r.stop = () => { r.dead = true; try { child.stdin.end('q\n'); } catch (_) {} setTimeout(() => { try { child.kill(); } catch (_) {} }, 1000); };
+  screenReader = r; return r;
+}
+app.on('will-quit', () => { if (screenReader) screenReader.stop(); });
+async function grabDisplayFast(d, size) {
+  const reader = fastScreenReader(); if (!reader) return null;
+  const phys = screen.dipToScreenRect(null, d.bounds);
+  if (!phys || Math.abs(phys.width - size.width) > 2 || Math.abs(phys.height - size.height) > 2) return null;
+  let timer; const buf = await Promise.race([reader.read(phys.x, phys.y, phys.width, phys.height), new Promise((_, rej) => { timer = setTimeout(() => { reader.stop(); rej(new Error('timeout')); }, 3000); })]).finally(() => clearTimeout(timer));
+  if (buf[3] !== 255) return null; // the helper answers with all zeros when Windows refused the read
+  return nativeImage.createFromBitmap(buf, { width: phys.width, height: phys.height });
+}
 async function grabDisplay(d) {
   const sf = d.scaleFactor || 1;
   const size = { width: Math.round(d.size.width * sf), height: Math.round(d.size.height * sf) };
+  try { const fast = await grabDisplayFast(d, size); if (fast && !fast.isEmpty()) return fast; } catch (_) {}
   const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
   const src = sources.find(s => String(s.display_id) === String(d.id)) || sources[0];
   if (!src) throw new Error('No screen available');
@@ -308,25 +386,47 @@ async function grabDisplay(d) {
 }
 
 // Full-screen overlay on one display (region selector or window picker). Resolves with whatever the page sends back.
+function newOverlay(d, file) {
+  const ov = new BrowserWindow({
+    x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height,
+    frame: false, resizable: false, movable: false, minimizable: false, maximizable: false,
+    skipTaskbar: true, alwaysOnTop: true, show: false, backgroundColor: '#000000', enableLargerThanScreen: true, hasShadow: false,
+    webPreferences: { preload: asset('overlay-preload.js'), contextIsolation: true }
+  });
+  ov.setAlwaysOnTop(true, 'screen-saver');
+  ov.setBounds(d.bounds);
+  ov.loaded = new Promise(res => ov.webContents.once('did-finish-load', res));
+  ov.loadFile(asset(file));
+  return ov;
+}
+// 10.4.0: one region selector is kept loaded (hidden) for the screen it was made for, so Capture shows it at once instead of
+// creating a window and loading the page first. Each one is used once; a fresh one is prepared shortly after.
+let spareOverlay = null;
+const overlayKey = d => [d.id, d.bounds.x, d.bounds.y, d.bounds.width, d.bounds.height, d.scaleFactor].join(',');
+function prepareOverlay(d) {
+  if (!d) return;
+  if (spareOverlay && !spareOverlay.win.isDestroyed() && spareOverlay.key === overlayKey(d)) return;
+  if (spareOverlay && !spareOverlay.win.isDestroyed()) spareOverlay.win.destroy();
+  spareOverlay = { key: overlayKey(d), win: newOverlay(d, 'overlay.html') };
+  spareOverlay.win.on('closed', () => { if (spareOverlay && spareOverlay.win.isDestroyed()) spareOverlay = null; });
+}
+app.whenReady().then(() => { const drop = () => { if (spareOverlay && !spareOverlay.win.isDestroyed()) spareOverlay.win.destroy(); spareOverlay = null; };
+  screen.on('display-metrics-changed', drop); screen.on('display-added', drop); screen.on('display-removed', drop);
+  setTimeout(() => { try { prepareOverlay(activeDisplay()); } catch (_) {} }, 1500); });
 function overlayWindow(d, file, payload) {
   return new Promise(resolve => {
-    let settled = false;
-    const ov = new BrowserWindow({
-      x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height,
-      frame: false, resizable: false, movable: false, minimizable: false, maximizable: false,
-      skipTaskbar: true, alwaysOnTop: true, show: false, backgroundColor: '#000000', enableLargerThanScreen: true, hasShadow: false,
-      webPreferences: { preload: asset('overlay-preload.js'), contextIsolation: true }
-    });
-    const finish = r => { if (settled) return; settled = true; ipcMain.removeAllListeners('overlay-done'); if (!ov.isDestroyed()) ov.destroy(); resolve(r); };
-    ov.setAlwaysOnTop(true, 'screen-saver');
-    ov.setBounds(d.bounds);
-    ov.loadFile(asset(file));
+    let settled = false, ov;
+    if (file === 'overlay.html' && spareOverlay && !spareOverlay.win.isDestroyed() && spareOverlay.key === overlayKey(d)) { ov = spareOverlay.win; spareOverlay = null; }
+    else ov = newOverlay(d, file);
+    const finish = r => { if (settled) return; settled = true; ipcMain.removeAllListeners('overlay-done'); if (!ov.isDestroyed()) ov.destroy(); resolve(r);
+      if (file === 'overlay.html') setTimeout(() => { try { prepareOverlay(activeDisplay()); } catch (_) {} }, 1500); };
     ipcMain.on('overlay-done', (e, r) => finish(r));
     ov.on('closed', () => finish(null));
-    ov.webContents.once('did-finish-load', () => { ov.webContents.send('data', payload); ov.show(); ov.focus(); });
+    ov.loaded.then(() => { if (settled || ov.isDestroyed()) return; ov.webContents.send('data', payload); ov.show(); ov.focus(); });
   });
 }
-const selectRegion = (d, img, opts, init) => overlayWindow(d, 'overlay.html', { shot: img.toDataURL(), opts: opts || {}, init: init || '' });
+// 10.4.0: the frozen screen goes to the region selector as raw pixels (BGRA), not as a PNG data URL
+const selectRegion = (d, img, opts, init) => { const s = img.getSize(); return overlayWindow(d, 'overlay.html', { raw: img.toBitmap(), w: s.width, h: s.height, opts: opts || {}, init: init || '' }); };
 const displayById = id => screen.getAllDisplays().find(x => x.id === id) || activeDisplay();
 
 async function listWindowSources(size) {
@@ -401,10 +501,12 @@ async function scrollCapture(d, r, horizontal=false) {
 let lastScrollNote = '';
 
 async function doCapture(mode, delay = 0, opts = {}, pre = null) {
-  const wasVisible = win && win.isVisible() && !win.isMinimized();
+  const wasVisible = win && win.isVisible() && !win.isMinimized(), widgetWasUp = widgetOpen();
   beginCaptureUI();
   if (win) win.hide();
-  await sleep(350 + delay * 1000);
+  // 10.4.0: wait only as long as needed for Saveit's own windows to leave the screen (it was always 350 ms): the editor
+  // needs a few frames, the small widget one or two, and from Print Screen with nothing of Saveit showing no wait is needed.
+  await sleep((wasVisible ? CAPTURE_HIDE_MS : widgetWasUp ? 80 : 20) + delay * 1000);
   try {
     const d = pre ? displayById(pre.did) : activeDisplay();
     const cur = screen.getCursorScreenPoint();

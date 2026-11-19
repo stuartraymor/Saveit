@@ -4,7 +4,7 @@
 const fs = require('fs'), path = require('path'), assert = require('assert/strict');
 const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'main.js'), 'utf8');
 const pick = n => { const i = src.indexOf('function ' + n + '('); assert.ok(i >= 0, n + ' not found'); let d = 0, j = src.indexOf('{', i); for (; j < src.length; j++) { if (src[j] === '{') d++; else if (src[j] === '}' && !--d) break; } return src.slice(i, j + 1); };
-const { ocrFixLine, ocrJoinRow35, ocrColumns, ocrRows, ocrBlocks } = new Function(['ocrFixCode', 'ocrFixLine', 'ocrJoinRow35', 'ocrColumns', 'ocrRows', 'ocrBlocks'].map(pick).join('\n') + '\nreturn{ocrFixLine,ocrJoinRow35,ocrColumns,ocrRows,ocrBlocks}')();
+const { ocrFixLine, ocrJoinRow35, ocrColumns, ocrRows, ocrBlocks } = new Function(['ocrFixMore', 'ocrFixCode', 'ocrFixLine', 'ocrJoinRow35', 'ocrColumns', 'ocrRows', 'ocrBlocks'].map(pick).join('\n') + '\nreturn{ocrFixLine,ocrJoinRow35,ocrColumns,ocrRows,ocrBlocks}')();
 let n = 0; const eq = (input, want) => { assert.equal(ocrFixLine(input), want, JSON.stringify(input)); n++; };
 // money
 eq('INV-2041 Northwind Traders 2026-11-03 s 1,284.50', 'INV-2041 Northwind Traders 2026-11-03 $1,284.50');
@@ -31,6 +31,15 @@ const rows = ocrRows(table.flat()), cols = ocrColumns(rows);
 assert.deepEqual(rows.map(r => ocrJoinRow35([...r.words].sort((a, b) => a.rect.x - b.rect.x), cols)), ['Invoice\tCustomer\tAmount', 'INV-1\tNorthwind Traders\t$1.00', 'INV-2\tContoso\t$2.00', 'INV-3\tFabrikam\t$3.00']); n++;
 // a quote mark above the middle of a line stays on that line
 assert.equal(ocrRows([W('log(', 0, 10, 30, 14), W('"', 32, 9, 4, 5), W('Free', 40, 10, 30, 14)]).length, 1); n++;
+// 10.4.1 rules from the 500-picture stress test
+eq('-S966.85', '-$966.85'); eq('E70,441.53', '£70,441.53'); eq('El,596.78', '£1,596.78'); eq('-$999-39', '-$999.39'); eq('3:18-3', '3:18.3');
+eq('6:41 .9', '6:41.9'); eq('9: 35.5', '9:35.5'); eq('Sep 3 , 2019', 'Sep 3, 2019'); eq('86.2 oc', '86.2 °C'); eq('56.8 OC', '56.8 °C');
+eq('500/0 off!', '50% off!'); eq('Feb 19, 2ø27', 'Feb 19, 2027'); eq('INV-9S904', 'INV-95904'); eq('npm install —save-dev', 'npm install --save-dev');
+eq('—/Downloads/invoice-2026.pdf', '~/Downloads/invoice-2026.pdf'); eq('—$ sudo apt update', '~$ sudo apt update'); eq('a.b—c@contoso.org', 'a.b_c@contoso.org');
+eq('https://www.example.corn/help', 'https://www.example.com/help'); eq('OxlCA62704', '0x1CA62704');
+// ...and ordinary text is left alone
+eq('Note: 35 items', 'Note: 35 items'); eq('Score 3: 25 points', 'Score 3: 25 points'); eq('Pages 10-12', 'Pages 10-12'); eq('Elsewhere 1,000.00', 'Elsewhere 1,000.00');
+eq('He said — sure', 'He said — sure'); eq('Ox 1234', 'Ox 1234'); eq('Sales -S team', 'Sales -S team'); eq('the corn field', 'the corn field'); eq('Model 3S', 'Model 3S');
 // a sidebar beside a page whose lines do not line up is read column by column; a table is not split
 const side = [W('Dashboard', 0, 10, 60), W('Projects', 0, 36, 50), W('Reports', 0, 62, 48), W('Welcome', 120, 0, 60), W('You', 120, 26, 20), W('Next', 120, 52, 30)];
 assert.deepEqual(ocrBlocks(side).map(b => b.map(w => w.text)), [['Dashboard', 'Projects', 'Reports'], ['Welcome', 'You', 'Next']]); n++;
