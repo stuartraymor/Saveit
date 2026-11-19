@@ -23,11 +23,12 @@ public static class Gaps {
       while(q.Count>0){int p=q.Pop(),x=p%w,y=p/w;n++;if(x<mnx)mnx=x;if(x>mxx)mxx=x;if(y<mny)mny=y;if(y>mxy)mxy=y;
         for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++){int nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=w||ny>=h)continue;int np=ny*w+nx;if(ink[np]&&!seen[np]){seen[np]=true;q.Push(np);}}}
       int cw=mxx-mnx+1,ch=mxy-mny+1; if(n<4||ch>maxH||(ch<=3&&cw>20)||(cw<=3&&ch>maxH/2))continue; comps.Add(new int[]{mnx,mny,cw,ch,n}); if(comps.Count>4000)return new int[0];}
-    // merge pieces that sit on the same line and close together into one box
+    // 10.4.1: pieces as narrow as a quarter of their height are kept (a lone "1" in a table cell); a re-read that gives only l, I or | is dropped in Add-Lines
+  // merge pieces that sit on the same line and close together into one box
     bool merged=true; while(merged){merged=false;for(int i=0;i<comps.Count&&!merged;i++)for(int j=i+1;j<comps.Count;j++){var a=comps[i];var c=comps[j];
       int ov=Math.Min(a[1]+a[3],c[1]+c[3])-Math.Max(a[1],c[1]),gap=Math.Max(a[0],c[0])-Math.Min(a[0]+a[2],c[0]+c[2]),mh=Math.Max(a[3],c[3]);
       if(ov>=0.4*Math.Min(a[3],c[3])&&gap<=0.9*mh){int x0=Math.Min(a[0],c[0]),y0=Math.Min(a[1],c[1]),x1=Math.Max(a[0]+a[2],c[0]+c[2]),y1=Math.Max(a[1]+a[3],c[1]+c[3]);comps[i]=new int[]{x0,y0,x1-x0,y1-y0,a[4]+c[4]};comps.RemoveAt(j);merged=true;break;}}}
-    var outp=new List<int>(); foreach(var c in comps){if(c[3]<minH||c[3]>maxH||c[2]<c[3]*0.6||c[4]<15)continue;outp.AddRange(new int[]{c[0],c[1],c[2],c[3]}); if(outp.Count>=4*40)break;}
+    var outp=new List<int>(); foreach(var c in comps){if(c[3]<minH||c[3]>maxH||c[2]<c[3]*0.25||c[4]<15)continue;outp.AddRange(new int[]{c[0],c[1],c[2],c[3]}); if(outp.Count>=4*40)break;}
     return outp.ToArray();
   }
 }
@@ -44,8 +45,11 @@ function Read-Bitmap($bmp) { $bmp.Save($tilePath,[System.Drawing.Imaging.ImageFo
   $file=Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($tilePath)) ([Windows.Storage.StorageFile]); $stream=Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream]); $sbm=$null
   try { $dec=Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder]); $sbm=Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap]); return (Await ($engine.RecognizeAsync($sbm)) ([Windows.Media.Ocr.OcrResult])) } finally { if($sbm){$sbm.Dispose()}; $stream.Dispose() } }
 # add a recognised line; map(x,y) turns positions in the read bitmap into positions in the original picture
-function Add-Lines($result,[scriptblock]$map,[double]$k,[string]$how) { foreach ($line in $result.Lines) { $words=@();$left=[double]::MaxValue;$top=[double]::MaxValue;$right=0;$bottom=0
-  foreach ($word in $line.Words) { if ($how -eq 'recovered' -and $word.Text -notmatch '[A-Za-z0-9]') { continue }; $r=$word.BoundingRect;$p=& $map $r.X $r.Y;$ww=$r.Width/$k;$hh=$r.Height/$k
+# keep (optional): only words for which it returns true are added
+function Add-Lines($result,[scriptblock]$map,[double]$k,[string]$how,[scriptblock]$keep=$null) { foreach ($line in $result.Lines) { $words=@();$left=[double]::MaxValue;$top=[double]::MaxValue;$right=0;$bottom=0
+  # 10.3.12: a re-read keeps code operators, and quotes or brackets that sit in a line with real words (the " of console.log("Free); other lone marks are noise
+  $real=@($line.Words|Where-Object{$_.Text -match '[A-Za-z0-9]'}).Count -gt 0
+  foreach ($word in $line.Words) { if ($how -eq 'recovered' -and $word.Text -notmatch '[A-Za-z0-9]' -and $word.Text -notmatch '^(=>|==|!=|<=|>=|&&|\|\||->|===|!==)$' -and -not ($real -and $word.Text -match '^["''`()\[\]{};,]{1,3}$')) { continue }; $r=$word.BoundingRect; if ($keep -and -not (& $keep $r)) { continue }; if ($how -eq 'recovered' -and $word.Text -match '^[lI|!]$') { continue }; $p=& $map $r.X $r.Y;$ww=$r.Width/$k;$hh=$r.Height/$k
    $words+=@{text=$word.Text;how=$how;rect=@{x=$p[0];y=$p[1];w=$ww;h=$hh}};$left=[Math]::Min($left,$p[0]);$top=[Math]::Min($top,$p[1]);$right=[Math]::Max($right,$p[0]+$ww);$bottom=[Math]::Max($bottom,$p[1]+$hh) }
   if ($words.Count -gt 0) { $script:lines.Add(@{text=(($words|ForEach-Object{$_.text}) -join ' ');words=@($words);rect=@{x=$left;y=$top;w=$right-$left;h=$bottom-$top}}) } } }
 $source = [System.Drawing.Bitmap]::FromFile($Path)
@@ -55,7 +59,14 @@ try {
  # Small overlapping tiles avoid loss of text on wide/long captures and engine dimension limits.
  # Windows OCR reads small text far more accurately when it is larger (a capital J in 12 px UI text is read as 1 at 1x), so every tile is enlarged first.
  # Word positions are divided by the scale again, so they stay in the original picture's pixels.
- if ($Scale -le 0) { $Scale = 2; if ($source.Width -le 1000 -and $source.Height -le 700) { $Scale = 3 } }
+ # 10.3.12: measured on real screenshots, 2x reads best both for 100% and 200% display scaling; 3x and more blur letters together
+ # ("in" was read as "m"). Saveit's editor no longer enlarges the picture before this, so 2x is the total enlargement.
+ # 10.4.1: Windows OCR sometimes returns nothing at all for a short line it cannot match to words ("x == y && z != 0", "25.5", an e-mail address),
+ # although the same picture is read at another enlargement. When a picture of up to 1 megapixel (a selection, not a whole screen) gives no text at 2x, it is read again at 1x, 3x,
+ # 1.5x and 4x, and the first enlargement that finds text is used. Pictures with text are read once, as before.
+ $scales = if ($Scale -gt 0) { @($Scale) } elseif ([long]$source.Width*$source.Height -le 1000000) { @(2,1,3,1.5,4) } else { @(2) }
+ foreach ($Scale in $scales) {
+ if ($lines.Count -gt 0) { break }
  $tileSize = [Math]::Min(2000,[int][Math]::Floor(4000/$Scale)); $stride = $tileSize - 160
  for ($y=0; $y -lt $source.Height; $y+=$stride) {
   for ($x=0; $x -lt $source.Width; $x+=$stride) {
@@ -72,11 +83,26 @@ try {
       $bx=$boxes[$k];$by=$boxes[$k+1];$bw=$boxes[$k+2];$bh=$boxes[$k+3];$m=[int]($bh*.5);$my=[int]($bh*.12);$cx=[Math]::Max(0,$bx-$m);$cy=[Math]::Max(0,$by-$my);$cw=[Math]::Min($sw-$cx,$bw+2*$m);$ch=[Math]::Min($sh-$cy,$bh+2*$my);$pad=30
       $crop=$sb.Clone([System.Drawing.Rectangle]::new($cx,$cy,$cw,$ch),[System.Drawing.Imaging.PixelFormat]::Format32bppArgb);$bg=$crop.GetPixel(0,0)
       $pb=New-Object System.Drawing.Bitmap(($cw+2*$pad),($ch+2*$pad),[System.Drawing.Imaging.PixelFormat]::Format32bppArgb);$g2=[System.Drawing.Graphics]::FromImage($pb);$g2.Clear($bg);$g2.DrawImage($crop,$pad,$pad,$cw,$ch);$g2.Dispose();$crop.Dispose()
+      $before=$script:lines.Count
       try { $r2=Read-Bitmap $pb;$ox=$cx;$oy=$cy; Add-Lines $r2 { param($a,$b) @((($a-$pad+$ox)/$Scale+$tx),(($b-$pad+$oy)/$Scale+$ty)) } $Scale 'recovered' } finally { $pb.Dispose() }
+      # 10.3.12: a short piece, such as the "11" of "2026-11-07", is often not read on its own. Read it again together with the text beside it and keep
+      # only the words that cover the missed piece; main.js then lets a longer word ("2026-11-07") replace the pieces it covers ("2026-", "-07").
+      # Only short pieces (up to about 4 characters wide) with a recognised word right beside them on the same line are retried: a long piece that could
+      # not be read alone is not read with its neighbours either, and icons standing on their own are not text.
+      $beside=$false; if ($script:lines.Count -eq $before -and $bw -le $bh*3) { for ($q=0;$q -lt $rects.Count;$q+=4) { $wx=$rects[$q];$wy=$rects[$q+1];$ww2=$rects[$q+2];$wh=$rects[$q+3]
+        $ov=[Math]::Min($by+$bh,$wy+$wh)-[Math]::Max($by,$wy); $gap=[Math]::Max($wx-($bx+$bw),$bx-($wx+$ww2))
+        if ($ov -ge 0.5*[Math]::Min($bh,$wh) -and $gap -le 1.5*$bh) { $beside=$true; break } } }
+      if ($beside) {
+       $m=[int]($bh*4);$cx=[Math]::Max(0,$bx-$m);$cw=[Math]::Min($sw-$cx,$bw+2*$m)
+       $crop=$sb.Clone([System.Drawing.Rectangle]::new($cx,$cy,$cw,$ch),[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+       $pb=New-Object System.Drawing.Bitmap(($cw+2*$pad),($ch+2*$pad),[System.Drawing.Imaging.PixelFormat]::Format32bppArgb);$g2=[System.Drawing.Graphics]::FromImage($pb);$g2.Clear($bg);$g2.DrawImage($crop,$pad,$pad,$cw,$ch);$g2.Dispose();$crop.Dispose()
+       try { $r2=Read-Bitmap $pb;$ox=$cx;$oy=$cy; Add-Lines $r2 { param($a,$b) @((($a-$pad+$ox)/$Scale+$tx),(($b-$pad+$oy)/$Scale+$ty)) } $Scale 'recovered' { param($r) ($r.X-$pad+$ox) -lt ($bx+$bw*.8) -and ($r.X+$r.Width-$pad+$ox) -gt ($bx+$bw*.2) } } finally { $pb.Dispose() }
+      }
      }
     }
    } finally { $sb.Dispose() }
   }
+ }
  }
  @{lines=@($lines.ToArray());width=$source.Width;height=$source.Height} | ConvertTo-Json -Depth 8 -Compress
 } finally { $source.Dispose() }

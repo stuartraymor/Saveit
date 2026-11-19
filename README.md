@@ -38,7 +38,7 @@ It is **free, with no account, no subscription and no watermark**, and the whole
 - **Step guides:** click through a task and Saveit builds an illustrated guide, naming each step from what you click ("Click Start") and what you type. Export to Word, searchable PDF, PowerPoint, PNG, JPG or a Saveit file.
 - **Record video:** your screen with optional microphone, system sound and webcam. Then edit on a multi-clip timeline: trim and move clips, add transitions, captions and arrows that appear and disappear, a voice-over, equalizer and effects. Save as MP4, WebM or GIF.
 - **Record audio:** one or two microphones and the computer's sound, each on its own track, with live level bars. Edit on a multitrack timeline and save as WAV, MP3 or M4A. The audio studio has voice presets, noise reduction, equalizer, compression, de-esser and loudness matching, plus voice effects (Deep Voice, High Pitch, Robot, Radio, Echo and Reverb) for audio and video.
-- **Stays out of the way:** it lives in the system tray, so the hotkeys work even when the window is closed.
+- **Stays out of the way:** it lives in the system tray, so the hotkeys work even when the window is closed. The region selector opens in under half a second, and the small capture bar appears instantly.
 
 ## See it in action
 
@@ -50,7 +50,7 @@ It is **free, with no account, no subscription and no watermark**, and the whole
 
 <p align="center"><img src="docs/images/hide-private-info.gif" alt="Saveit: blur an email and an API key, then spotlight a button" width="860"></p>
 
-**Grab Text.** Drag around any text in a picture and Saveit reads it for you to edit and copy.
+**Grab Text.** Drag around any text in a picture and Saveit reads it for you to edit and copy. Tables paste into a spreadsheet as columns, and money, dates, codes and web addresses come out the way they look. It all runs on your PC with Windows' own text recognition; nothing is uploaded.
 
 <p align="center"><img src="docs/images/grab-text.gif" alt="Saveit Grab Text: select text in a picture and copy the recognized words" width="860"></p>
 
@@ -88,7 +88,7 @@ It installs for your user account only, with no admin rights. Setup downloads th
 
 **Updating:** from version 10.2.0 on, click **Check for Updates →** at the bottom right of the editor. It checks only when you click it, verifies each release's digital signature before installing, keeps your library and settings, and puts the previous version back if the new one does not start. Every release zip is published with a `.sig` signature file and a `.sha256` checksum.
 
-What's new: [10.3.11](docs/changes/CHANGES-10.3.11.md) · [10.3.10](docs/changes/CHANGES-10.3.10.md) · [10.3.9](docs/changes/CHANGES-10.3.9.md) · [10.3.8](docs/changes/CHANGES-10.3.8.md) · [10.3.7](docs/changes/CHANGES-10.3.7.md) · [all versions](docs/changes)
+What's new: [10.4.1](docs/changes/CHANGES-10.4.1.md) · [10.4.0](docs/changes/CHANGES-10.4.0.md) · [10.3.12](docs/changes/CHANGES-10.3.12.md) · [10.3.11](docs/changes/CHANGES-10.3.11.md) · [10.3.10](docs/changes/CHANGES-10.3.10.md) · [all versions](docs/changes)
 
 ## Where Saveit is going
 

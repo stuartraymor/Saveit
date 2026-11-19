@@ -37,15 +37,68 @@ ipcMain.handle('workflow-save',async(e,list)=>{mainSender33(e);if(!Array.isArray
 ipcMain.handle('workflow-folder',async e=>{mainSender33(e);const r=await dialog.showOpenDialog(win,{title:'Choose automatic capture save folder',properties:['openDirectory','createDirectory']});if(r.canceled||!r.filePaths[0])return null;const folder=path.resolve(r.filePaths[0]);if(!workflowConfig.folders.includes(folder))workflowConfig.folders.push(folder);await saveWorkflowConfig();return folder});
 ipcMain.handle('workflow-file',async(e,folder,name,data)=>{mainSender33(e);if(!workflowConfig.folders.includes(folder))throw Error('Choose this save folder in Workflows first.');const safe=path.basename(String(name)).replace(/[<>:"/\\|?*\x00-\x1f]/g,'-');if(!safe||!safe.endsWith('.png'))throw Error('Expected a PNG filename');const parsed=path.parse(safe);let out=path.join(folder,safe),i=2;while(fs.existsSync(out))out=path.join(folder,parsed.name+'-'+i+++parsed.ext);await fs.promises.writeFile(out,Buffer.from(data),{flag:'wx'});return out});
 // 10.1.2: Grab Text output. Words far apart in one row are separated by a tab (a table cell, a label next to its value).
-function ocrJoinRow35(w) { const hs = w.map(a => a.rect.h).sort((a, b) => a - b), limit = Math.max(14, 1.5 * hs[Math.floor(hs.length / 2)]); let t = ''; w.forEach((a, i) => { if (i) { const gap = a.rect.x - (w[i - 1].rect.x + w[i - 1].rect.w); t += gap > limit ? '\t' : ' '; } t += a.text; }); return t; }
+// 10.3.12: cols = column edges found by ocrColumns; a smaller gap in front of a word that starts at a column edge is a cell break too.
+function ocrJoinRow35(w, cols = []) { const hs = w.map(a => a.rect.h).sort((a, b) => a - b), med = hs[Math.floor(hs.length / 2)], limit = Math.max(14, 1.5 * med); let t = ''; w.forEach((a, i) => { if (i) { const gap = a.rect.x - (w[i - 1].rect.x + w[i - 1].rect.w); t += gap > limit || (gap > .5 * med && cols.some(x => Math.abs(x - a.rect.x) <= Math.max(3, med * .4))) ? '\t' : ' '; } t += a.text; }); return t; }
+// 10.3.12: table columns. A wide gap (wider than a space) in front of words that start at the same x in at least three rows marks a column edge, so
+// every cell of a table is separated by a tab and the text pastes into a spreadsheet as columns.
+function ocrColumns(rows) {
+  const starts = []; for (const row of rows) { const w = [...row.words].sort((a, b) => a.rect.x - b.rect.x); for (let i = 1; i < w.length; i++) { const gap = w[i].rect.x - (w[i - 1].rect.x + w[i - 1].rect.w); if (gap > .7 * row.h) starts.push({ x: w[i].rect.x, row, tol: Math.max(3, row.h * .4) }); } }
+  return starts.filter(s => new Set(starts.filter(t => Math.abs(t.x - s.x) <= s.tol).map(t => t.row)).size >= 3).map(s => s.x); }
+// 10.3.12: Windows OCR puts spaces around code punctuation ("items. reduce( (a, b)", "fetch ( \"https://...\" ) ;"). Only on lines that clearly are code
+// (a ; or { or => and several brackets or =) those spaces are removed; a space after if/for/while/switch/catch/return stays, as code is written.
+function ocrFixCode(line){
+  if(!/[;{}]|=>/.test(line)||(line.match(/[(){};=]/g)||[]).length<3)return line;
+  // a symbol Windows could not read (often =>) leaves a wide gap, which would come out as a tab inside the code
+  return line.replace(/\t+/g,' ').replace(/([A-Za-z_$][\w$]*)\. (?=[a-z_$])/g,'$1.').replace(/([A-Za-z_$][\w$]*) \(/g,(m,w)=>/^(if|for|while|switch|catch|return|function|await|of|in|and|or)$/.test(w)?m:w+'(')
+    .replace(/\( +(?=\S)/g,'(').replace(/(\S) +\)/g,'$1)').replace(/(\S) +;/g,'$1;').replace(/\( +\(/g,'((').replace(/\((["'`]) +/g,'($1').replace(/ +(["'`])\)/g,'$1)')}
 // 10.1.12: Grab Text fixes look-alike characters only where the meaning is clear: money after a misread $ sign, and tokens that are plainly numbers.
+// 10.4.1: misreads found by reading 500 generated pictures (tests/ocr-stress.cjs); each rule only fires on a pattern that is
+// not normal text, so ordinary sentences are left alone.
+function ocrFixMore(line){
+  // a minus sign before an amount read as S: "-S966.85" -> "-$966.85"; a pound sign read as E: "E70,441.53" -> "£70,441.53"
+  line=line.replace(/(^|\s|\()-S(?=\d{1,3}(?:,\d{3})*\.\d{2}\b|\d+\.\d{2}\b)/g,'$1-$$');
+  line=line.replace(/(^|\s|\()E[l1I]?(?=,?\d{0,3}(?:,\d{3})+\.\d{2}\b)/g,(m,pre)=>pre+'£'+(m.length-pre.length>1?'1':''));
+  // a decimal point read as a dash in money and in times: "$999-39" -> "$999.39", "3:18-3" -> "3:18.3"
+  line=line.replace(/([$€£]\d+)-(\d{2})\b/g,'$1.$2').replace(/\b(\d{1,2}:\d{2})-(\d)\b/g,'$1.$2');
+  // stray spaces inside times and before commas: "6:41 .9" -> "6:41.9", "9: 35.5" -> "9:35.5", "Sep 3 , 2019" -> "Sep 3, 2019"
+  line=line.replace(/\b(\d{1,2}:\d{2}) \.(?=\d\b)/g,'$1.').replace(/\b(\d{1,2}): (\d{2})(?=[.:]\d|\s?[AaPp][Mm]\b)/g,'$1:$2').replace(/(\w) ,(?=\s)/g,'$1,');
+  // degrees: "86.2 oc" -> "86.2 °C"
+  line=line.replace(/(\d)( ?)[oO°º]([CcFf])\b/g,(m,d,sp,u)=>d+sp+'°'+u.toUpperCase());
+  // a percent sign read as "0/0": "500/0 off" -> "50% off"
+  line=line.replace(/\b(\d+)0\/0(?=$|[\s!.,;:)])/g,'$1%');
+  // a zero read as ø between digits: "2ø27" -> "2027"
+  line=line.replace(/(?<=\d)[øØ]|[øØ](?=\d)/g,'0');
+  // an S between digits in a number or ID: "INV-9S904" -> "INV-95904"
+  line=line.replace(/(?<=\d)S(?=\d)/g,'5');
+  // a double hyphen read as a dash before an option: "npm install —save-dev" -> "--save-dev"; a tilde read as a dash at the start
+  // of a home path or prompt: "—/Downloads" -> "~/Downloads", "—$ sudo" -> "~$ sudo"
+  line=line.replace(/(^|\s)—(?=[a-z][\w-]*\b)/g,'$1--').replace(/(^|\s)[—–](?=\/\w|\$ )/g,'$1~');
+  // e-mail addresses: an underscore read as a dash ("a.b—c@") and ".corn" for ".com"
+  line=line.replace(/[\w.+—–-]+@[\w-]+(?:\.[\w-]+)+/g,m=>m.replace(/[—–]/g,'_'));
+  line=line.replace(/\b([\w-]+)\.corn\b/g,'$1.com');
+  // hex after 0x: l or I is 1 ("0xlCA62704" -> "0x1CA62704")
+  line=line.replace(/\b[O0]x[0-9A-FlIO]{4,}\b/g,m=>/\d/.test(m.slice(2))?'0x'+m.slice(2).replace(/[lI]/g,'1').replace(/O/g,'0'):m);
+  return line;
+}
 function ocrFixLine(line){
   // hex codes: "Ox80070005" -> "0x80070005"; a money decimal point read as a dash: "$1,234-56" -> "$1,234.56"
   line=line.replace(/\bOx(?=[0-9A-Fa-f]{2,}\b)/g,'0x').replace(/\$(\d{1,3}(?:,\d{3})+)-(\d{2})\b/g,'$$$1.$2');
   // a space wrongly read inside a thousands group: "1 ,234.56" -> "1,234.56"
   line=line.replace(/(\d|[lI|]) ,(?=\d{3}\b)/g,'$1,');
   // money: "S1,234.56", "Sl,234.56", "S 1,234.56", "S1,234.S6" -> "$1,234.56"
-  line=line.replace(/(^|[\s(:])S\s?([lI|1]?[\dOo,]*[.,][\dOoSlI]{2})(?=$|[\s).,;:])/g,(m,pre,num)=>pre+'$'+num.replace(/[lI|]/g,'1').replace(/[Oo]/g,'0').replace(/S/g,'5'));
+  // 10.3.12: also "s 1,284.50" and "Sl,2S4.50"; only when the result is a real amount (1,284.50), so words like "Sales" are never touched
+  line=line.replace(/(^|[\s(:])[Ss]\s?([lI|1]?[\dOoSlI|,]*[.,][\dOoSlI]{2})(?=$|[\s).,;:])/g,(m,pre,num)=>{const v=num.replace(/[lI|]/g,'1').replace(/[Oo]/g,'0').replace(/S/g,'5');return /^\d{1,3}(,\d{3})*\.\d{2}$|^\d+\.\d{2}$/.test(v)?pre+'$'+v:m});
+  // 10.3.12: web addresses come back with spaces around their punctuation ("https : / / api . example . com/v2"); those spaces are removed
+  line=line.replace(/\bhttps? ?: ?\/ ?\/ ?[\w\-%~+]+(?: ?[.\/?=&#:] ?[\w\-%~+]+)*\/?/g,m=>m.replace(/ /g,''));
+  // 10.3.12: a space read after the dash of an order or ticket number: "A- 1009" -> "A-1009", "INV- 2041" -> "INV-2041"
+  line=line.replace(/\b([A-Z]{1,5})- (?=\d{2,}\b)/g,'$1-');
+  // 10.3.12: an ID or hex code in dash-separated groups ("7F3A-91C2-OB8E"): a stray space inside a group is removed when every group then has the
+  // same length of four or more ("7F3A-91 C2-0B8E" -> "7F3A-91C2-0B8E"), and a letter O is a zero when that makes every group hex digits
+  line=line.replace(/\b[0-9A-FO]{2,}(?:[- ][0-9A-FO]{1,})*-[0-9A-FO]{1,}(?: [0-9A-FO]{1,})*\b/g,m=>{if(!m.includes(' ')||!/\d/.test(m))return m;const j=m.replace(/ /g,''),g=j.split('-');return g.length>=3&&g[0].length>=4&&g.every(x=>x.length===g[0].length)?j:m});
+  line=line.replace(/\b[0-9A-FO]{4,}(?:-[0-9A-FO]{4,})+\b/g,m=>/O/.test(m)&&/\d/.test(m)?m.replace(/O/g,'0'):m);
+  line=line.replace(/\b0x[0-9A-FO]{2,}\b/g,m=>m.slice(0,2)+m.slice(2).replace(/O/g,'0'));
+  line=ocrFixMore(line);
+  line=ocrFixCode(line);
   // number tokens: letters that look like digits become digits ("2O24" -> "2024", "1O,OO8" -> "10,008")
   // only when the token has a real digit and becomes a plain number once O/o -> 0 and I/l/| -> 1 (so "Q0O8", "8B0O-1Il7", "IO" or "MP3" are left alone)
   return line.replace(/[^\s]+/g,tok=>{const core=tok.replace(/^[(\[{"'#$+]+|[)\]}"',.;:!?]+$/g,'');if(core.length<2||!/\d/.test(core)||!/[OoIl|]/.test(core))return tok;
@@ -206,31 +259,51 @@ function createWindow() {
 }
 
 // ---------- floating capture widget (editor hidden) ----------
-let widgetWin = null, widgetOpts = null, reopenWidget = false;
-function closeWidget() { if (widgetWin && !widgetWin.isDestroyed()) widgetWin.destroy(); widgetWin = null; }
+let widgetWin = null, widgetOpts = null, reopenWidget = false, widgetUp = false;
+const CAPTURE_HIDE_MS = 200;
+// 10.4.0: the widget window is kept (hidden) when it goes away, instead of being destroyed and built again each time it
+// comes back (after every capture and every switch from the editor). Showing it again is immediate.
+function closeWidget() { widgetUp = false; if (widgetWin && !widgetWin.isDestroyed()) widgetWin.hide(); }
+const widgetOpen = () => !!(widgetUp && widgetWin && !widgetWin.isDestroyed());
 // The widget and the editor share one anchor: the Saveit logo. Opening the widget puts its logo where the editor's was,
 // size changes keep the left edge still, and returning to the editor lines its logo up with the widget's.
 let widgetAnchor = null, editorLogo = null, widgetLogo = { x: 11, y: 11 };
-function openWidget(opts) {
-  if (opts) widgetOpts = opts;
-  if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.show(); return; }
+function widgetPlace() {
   const saved = workflowConfig.widgetPos, sx = saved ? (saved.x ?? saved.cx - 620) : 0;
   const onScreen = !widgetAnchor && saved && screen.getAllDisplays().some(s => sx + 40 >= s.bounds.x && sx < s.bounds.x + s.bounds.width - 40 && saved.y >= s.bounds.y && saved.y < s.bounds.y + s.bounds.height - 40);
   const d = widgetAnchor ? screen.getDisplayNearestPoint({ x: Math.round(widgetAnchor.x), y: Math.round(widgetAnchor.y) }) : onScreen ? screen.getDisplayNearestPoint({ x: Math.round(sx), y: Math.round(saved.y) }) : activeDisplay(), W = Math.min(1240, d.bounds.width - 40), H = 84;
   const x = widgetAnchor ? widgetAnchor.x - widgetLogo.x : onScreen ? sx : d.bounds.x + (d.bounds.width - W) / 2, y = widgetAnchor ? widgetAnchor.y - widgetLogo.y : onScreen ? saved.y : d.bounds.y + 14;
-  widgetWin = new BrowserWindow({ x: Math.round(x), y: Math.round(y), width: W, height: H, frame: false, resizable: false, maximizable: false, minimizable: false, skipTaskbar: false, alwaysOnTop: true, backgroundColor: '#16181a', hasShadow: true, show: false,
+  return { x: Math.round(x), y: Math.round(y), W, H };
+}
+function makeWidget() {
+  const p = widgetPlace();
+  widgetWin = new BrowserWindow({ x: p.x, y: p.y, width: p.W, height: p.H, frame: false, resizable: false, maximizable: false, minimizable: false, skipTaskbar: false, alwaysOnTop: true, backgroundColor: '#16181a', hasShadow: true, show: false,
     webPreferences: { preload: asset('widget-preload.js'), contextIsolation: true } });
   widgetWin.setContentProtection(true);
   widgetWin.setAlwaysOnTop(true, 'floating');
   widgetWin.loadFile(asset('widget.html'));
-  // Shown once it has sized itself (so it never appears in the wrong place first), with a fallback.
-  widgetWin.webContents.once('did-finish-load', () => { widgetWin.webContents.send('init', widgetOpts); setTimeout(() => { if (widgetWin && !widgetWin.isDestroyed() && !widgetWin.isVisible()) widgetWin.show(); }, 800); });
-  widgetWin.on('moved', () => { if (!widgetWin || widgetWin.isDestroyed()) return; const b = widgetWin.getBounds(); workflowConfig.widgetPos = { x: b.x, y: b.y }; saveWorkflowConfig().catch(() => {}); });
-  widgetWin.on('closed', () => { widgetWin = null; });
+  // Shown once it has sized itself (so it never appears in the wrong place first), with a fallback. A widget prepared in
+  // advance stays hidden until it is opened.
+  widgetWin.webContents.once('did-finish-load', () => { if (!widgetWin || widgetWin.isDestroyed()) return; widgetWin.webContents.send('init', widgetOpts); setTimeout(() => { if (widgetOpen() && !widgetWin.isVisible()) widgetWin.show(); }, 800); });
+  widgetWin.on('moved', () => { if (!widgetOpen()) return; const b = widgetWin.getBounds(); workflowConfig.widgetPos = { x: b.x, y: b.y }; saveWorkflowConfig().catch(() => {}); });
+  widgetWin.on('closed', () => { widgetWin = null; widgetUp = false; });
+}
+function openWidget(opts) {
+  if (opts) widgetOpts = opts;
+  widgetUp = true;
+  if (widgetWin && !widgetWin.isDestroyed() && !widgetWin.webContents.isLoading()) {
+    // the kept widget: put it in place, refresh its settings and show it now; the size it reports back adjusts the width
+    const p = widgetPlace(), b = widgetWin.getBounds();
+    widgetWin.setBounds({ x: p.x, y: p.y, width: b.width, height: b.height }); widgetAnchor = null;
+    widgetWin.webContents.send('init', widgetOpts);
+    widgetWin.show();
+  } else if (!widgetWin || widgetWin.isDestroyed()) makeWidget();
   if (win) win.hide();
 }
+// 10.4.0: the widget is prepared in the background a few seconds after start, so even the first switch to it is immediate
+app.whenReady().then(() => setTimeout(() => { if (!widgetWin || widgetWin.isDestroyed()) { try { makeWidget(); } catch (_) {} } }, 2500));
 // Called at the start of a capture or recording: the widget steps aside, and comes back if the user cancels.
-function beginCaptureUI() { if (widgetWin && !widgetWin.isDestroyed()) { reopenWidget = true; closeWidget(); } }
+function beginCaptureUI() { if (widgetOpen()) { reopenWidget = true; closeWidget(); } }
 function restoreUI(wasVisible) { if (reopenWidget) { reopenWidget = false; openWidget(); } else if (wasVisible) showWindow(); }
 function showWindow() { reopenWidget = false; closeWidget(); if (!win) return; if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
 ipcMain.on('widget-open', (e, opts, logo) => {
@@ -239,7 +312,8 @@ ipcMain.on('widget-open', (e, opts, logo) => {
   if (win && win.isVisible() && editorLogo) { const c = win.getContentBounds(); widgetAnchor = { x: c.x + editorLogo.x, y: c.y + editorLogo.y }; }
   openWidget(opts);
 });
-ipcMain.on('widget-opts', (e, o) => { widgetOpts = o; if (win) win.webContents.send('widget-opts', o); });
+// a widget prepared in advance (hidden, not opened yet) must not change the editor's settings
+ipcMain.on('widget-opts', (e, o) => { if (!widgetOpen()) return; widgetOpts = o; if (win) win.webContents.send('widget-opts', o); });
 ipcMain.on('widget-go', (e, o) => { widgetOpts = o; reopenWidget = true; closeWidget(); if (win) win.webContents.send('widget-go', o); });
 // The red button on the widget: put the bar away without opening the editor. Saveit keeps running (tray icon, Print Screen).
 ipcMain.on('widget-hide', e => { if (!widgetWin || widgetWin.isDestroyed() || e.sender !== widgetWin.webContents) return; reopenWidget = false; closeWidget(); });
@@ -269,14 +343,42 @@ ipcMain.on('widget-size', (e, w, h, lx, ly) => {
   const b = widgetWin.getBounds(), x = widgetAnchor ? Math.round(widgetAnchor.x - widgetLogo.x) : b.x, y = widgetAnchor ? Math.round(widgetAnchor.y - widgetLogo.y) : b.y;
   const d = screen.getDisplayNearestPoint({ x, y }), W = Math.min(Math.round(w) + 2, d.bounds.width - 20), H = Math.min(520, Math.round(h));
   widgetWin.setBounds({ x, y, width: W, height: H }); widgetAnchor = null;
-  if (!widgetWin.isVisible()) widgetWin.show();
+  if (widgetUp && !widgetWin.isVisible()) widgetWin.show();
 });
 
 function activeDisplay() { return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()); }
 
+// 10.4.0: screenshots read the screen through saveit-region-grab.exe (the GDI helper scrolling capture uses), which is kept
+// running after the first use. A full screen takes tens of ms instead of 0.5 s through desktopCapturer, which captures every
+// screen each time. Measured identical pixels, including transparent windows. Any problem falls back to desktopCapturer.
+let screenReader = null;
+function fastScreenReader() {
+  if (screenReader && !screenReader.dead) return screenReader;
+  if (process.platform !== 'win32') return null;
+  const exe = asset('saveit-region-grab.exe'); if (!fs.existsSync(exe)) return null;
+  let child; try { child = spawn(exe, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] }); } catch (_) { return null; }
+  const r = { dead: false, queue: [], parts: [], got: 0 };
+  const fail = () => { r.dead = true; for (const q of r.queue.splice(0)) q.reject(new Error('The screen reader stopped.')); };
+  child.on('error', fail); child.on('exit', fail); child.stdin.on('error', () => {});
+  child.stdout.on('data', b => { r.parts.push(b); r.got += b.length;
+    while (r.queue.length && r.got >= r.queue[0].need) { const all = Buffer.concat(r.parts), q = r.queue.shift(); r.parts = [all.subarray(q.need)]; r.got -= q.need; q.resolve(Buffer.from(all.subarray(0, q.need))); } });
+  r.read = (x, y, w, h) => new Promise((resolve, reject) => { if (r.dead) { reject(new Error('The screen reader stopped.')); return; } r.queue.push({ need: w * h * 4, resolve, reject }); child.stdin.write(`${x} ${y} ${w} ${h}\n`); });
+  r.stop = () => { r.dead = true; try { child.stdin.end('q\n'); } catch (_) {} setTimeout(() => { try { child.kill(); } catch (_) {} }, 1000); };
+  screenReader = r; return r;
+}
+app.on('will-quit', () => { if (screenReader) screenReader.stop(); });
+async function grabDisplayFast(d, size) {
+  const reader = fastScreenReader(); if (!reader) return null;
+  const phys = screen.dipToScreenRect(null, d.bounds);
+  if (!phys || Math.abs(phys.width - size.width) > 2 || Math.abs(phys.height - size.height) > 2) return null;
+  let timer; const buf = await Promise.race([reader.read(phys.x, phys.y, phys.width, phys.height), new Promise((_, rej) => { timer = setTimeout(() => { reader.stop(); rej(new Error('timeout')); }, 3000); })]).finally(() => clearTimeout(timer));
+  if (buf[3] !== 255) return null; // the helper answers with all zeros when Windows refused the read
+  return nativeImage.createFromBitmap(buf, { width: phys.width, height: phys.height });
+}
 async function grabDisplay(d) {
   const sf = d.scaleFactor || 1;
   const size = { width: Math.round(d.size.width * sf), height: Math.round(d.size.height * sf) };
+  try { const fast = await grabDisplayFast(d, size); if (fast && !fast.isEmpty()) return fast; } catch (_) {}
   const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
   const src = sources.find(s => String(s.display_id) === String(d.id)) || sources[0];
   if (!src) throw new Error('No screen available');
@@ -284,25 +386,47 @@ async function grabDisplay(d) {
 }
 
 // Full-screen overlay on one display (region selector or window picker). Resolves with whatever the page sends back.
+function newOverlay(d, file) {
+  const ov = new BrowserWindow({
+    x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height,
+    frame: false, resizable: false, movable: false, minimizable: false, maximizable: false,
+    skipTaskbar: true, alwaysOnTop: true, show: false, backgroundColor: '#000000', enableLargerThanScreen: true, hasShadow: false,
+    webPreferences: { preload: asset('overlay-preload.js'), contextIsolation: true }
+  });
+  ov.setAlwaysOnTop(true, 'screen-saver');
+  ov.setBounds(d.bounds);
+  ov.loaded = new Promise(res => ov.webContents.once('did-finish-load', res));
+  ov.loadFile(asset(file));
+  return ov;
+}
+// 10.4.0: one region selector is kept loaded (hidden) for the screen it was made for, so Capture shows it at once instead of
+// creating a window and loading the page first. Each one is used once; a fresh one is prepared shortly after.
+let spareOverlay = null;
+const overlayKey = d => [d.id, d.bounds.x, d.bounds.y, d.bounds.width, d.bounds.height, d.scaleFactor].join(',');
+function prepareOverlay(d) {
+  if (!d) return;
+  if (spareOverlay && !spareOverlay.win.isDestroyed() && spareOverlay.key === overlayKey(d)) return;
+  if (spareOverlay && !spareOverlay.win.isDestroyed()) spareOverlay.win.destroy();
+  spareOverlay = { key: overlayKey(d), win: newOverlay(d, 'overlay.html') };
+  spareOverlay.win.on('closed', () => { if (spareOverlay && spareOverlay.win.isDestroyed()) spareOverlay = null; });
+}
+app.whenReady().then(() => { const drop = () => { if (spareOverlay && !spareOverlay.win.isDestroyed()) spareOverlay.win.destroy(); spareOverlay = null; };
+  screen.on('display-metrics-changed', drop); screen.on('display-added', drop); screen.on('display-removed', drop);
+  setTimeout(() => { try { prepareOverlay(activeDisplay()); } catch (_) {} }, 1500); });
 function overlayWindow(d, file, payload) {
   return new Promise(resolve => {
-    let settled = false;
-    const ov = new BrowserWindow({
-      x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height,
-      frame: false, resizable: false, movable: false, minimizable: false, maximizable: false,
-      skipTaskbar: true, alwaysOnTop: true, show: false, backgroundColor: '#000000', enableLargerThanScreen: true, hasShadow: false,
-      webPreferences: { preload: asset('overlay-preload.js'), contextIsolation: true }
-    });
-    const finish = r => { if (settled) return; settled = true; ipcMain.removeAllListeners('overlay-done'); if (!ov.isDestroyed()) ov.destroy(); resolve(r); };
-    ov.setAlwaysOnTop(true, 'screen-saver');
-    ov.setBounds(d.bounds);
-    ov.loadFile(asset(file));
+    let settled = false, ov;
+    if (file === 'overlay.html' && spareOverlay && !spareOverlay.win.isDestroyed() && spareOverlay.key === overlayKey(d)) { ov = spareOverlay.win; spareOverlay = null; }
+    else ov = newOverlay(d, file);
+    const finish = r => { if (settled) return; settled = true; ipcMain.removeAllListeners('overlay-done'); if (!ov.isDestroyed()) ov.destroy(); resolve(r);
+      if (file === 'overlay.html') setTimeout(() => { try { prepareOverlay(activeDisplay()); } catch (_) {} }, 1500); };
     ipcMain.on('overlay-done', (e, r) => finish(r));
     ov.on('closed', () => finish(null));
-    ov.webContents.once('did-finish-load', () => { ov.webContents.send('data', payload); ov.show(); ov.focus(); });
+    ov.loaded.then(() => { if (settled || ov.isDestroyed()) return; ov.webContents.send('data', payload); ov.show(); ov.focus(); });
   });
 }
-const selectRegion = (d, img, opts, init) => overlayWindow(d, 'overlay.html', { shot: img.toDataURL(), opts: opts || {}, init: init || '' });
+// 10.4.0: the frozen screen goes to the region selector as raw pixels (BGRA), not as a PNG data URL
+const selectRegion = (d, img, opts, init) => { const s = img.getSize(); return overlayWindow(d, 'overlay.html', { raw: img.toBitmap(), w: s.width, h: s.height, opts: opts || {}, init: init || '' }); };
 const displayById = id => screen.getAllDisplays().find(x => x.id === id) || activeDisplay();
 
 async function listWindowSources(size) {
@@ -377,10 +501,12 @@ async function scrollCapture(d, r, horizontal=false) {
 let lastScrollNote = '';
 
 async function doCapture(mode, delay = 0, opts = {}, pre = null) {
-  const wasVisible = win && win.isVisible() && !win.isMinimized();
+  const wasVisible = win && win.isVisible() && !win.isMinimized(), widgetWasUp = widgetOpen();
   beginCaptureUI();
   if (win) win.hide();
-  await sleep(350 + delay * 1000);
+  // 10.4.0: wait only as long as needed for Saveit's own windows to leave the screen (it was always 350 ms): the editor
+  // needs a few frames, the small widget one or two, and from Print Screen with nothing of Saveit showing no wait is needed.
+  await sleep((wasVisible ? CAPTURE_HIDE_MS : widgetWasUp ? 80 : 20) + delay * 1000);
   try {
     const d = pre ? displayById(pre.did) : activeDisplay();
     const cur = screen.getCursorScreenPoint();
@@ -879,6 +1005,27 @@ function syncShortcutIdentity() {
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', e => { /* keep running in the tray */ });
 // The text and positioned-text paths use the same local Windows OCR service.
+// 10.3.12: rows. Full-size words join a row when their centres line up (as before). Small marks (quotes, dots, commas, a "0." beside a "%") join the
+// row they overlap most, instead of becoming a line of their own. Tallest words are placed first so a row is defined by its real text.
+function ocrRows(words){
+  const rows=[];
+  for(const word of [...words].sort((a,b)=>b.rect.h-a.rect.h||a.rect.y-b.rect.y)){const r=word.rect,c=r.y+r.h/2;let best=null,score=0;
+    for(const row of rows){const ov=Math.min(r.y+r.h,row.top+row.h)-Math.max(r.y,row.top);
+      const s=r.h>=row.h*.6?(Math.abs(row.y-c)<Math.min(row.h,r.h)*.45?1+ov:0):(ov>=r.h*.5?ov/r.h:0);if(s>score){score=s;best=row}}
+    if(!best){best={y:c,top:r.y,h:r.h,words:[]};rows.push(best)}best.words.push(word)}
+  return rows.sort((a,b)=>a.y-b.y)}
+// 10.3.12: side-by-side columns (a sidebar beside a page) whose lines do not line up are read one column after the other instead of interleaved line by
+// line. A table keeps its rows, because its cells line up across the gap. Only a clear vertical gap that no word crosses counts as a column edge.
+function ocrBlocks(words){
+  if(words.length<4)return[words];
+  const hs=words.map(w=>w.rect.h).sort((a,b)=>a-b),med=hs[hs.length>>1],sorted=[...words].sort((a,b)=>a.rect.x-b.rect.x),groups=[[sorted[0]]];let right=sorted[0].rect.x+sorted[0].rect.w;
+  for(const w of sorted.slice(1)){if(w.rect.x-right>2.5*med)groups.push([]);groups[groups.length-1].push(w);right=Math.max(right,w.rect.x+w.rect.w)}
+  if(groups.length<2)return[words];
+  const out=[groups[0]];
+  for(const g of groups.slice(1)){const a=out[out.length-1],inA=new Set(a),rows=ocrRows([...a,...g]),both=rows.filter(r=>r.words.some(w=>inA.has(w))&&r.words.some(w=>!inA.has(w))).length,
+      fewer=Math.min(ocrRows(a).length,ocrRows(g).length);
+    if(fewer>=2&&both<fewer*.5)out.push(g);else a.push(...g)}
+  return out}
 async function recognize35(url){
  if(process.platform!=='win32')throw Error('Grab Text requires Windows OCR.');
  if(typeof url!=='string'||!/^data:image\/png;base64,/.test(url)||url.length>180000000)throw Error('Choose a PNG image up to 64 million pixels.');
@@ -892,11 +1039,12 @@ async function recognize35(url){
  });
  // Merge repeated words in tile overlaps, preserving two identical lines at different positions.
  const words=[];const overlap=(a,b)=>{const w=Math.max(0,Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x)),h=Math.max(0,Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y));return w*h/Math.max(1,Math.min(a.w*a.h,b.w*b.h))};
- for(const line of data.lines||[])for(const word of line.words||[]){const duplicate=words.find(w=>overlap(w.rect,word.rect)>.65);if(!duplicate)words.push(word);else if(word.text.length>duplicate.text.length)Object.assign(duplicate,word)}
- words.sort((a,b)=>a.rect.y-b.rect.y||a.rect.x-b.rect.x);const rows=[];
- for(const word of words){let row=rows.find(r=>Math.abs(r.y-(word.rect.y+word.rect.h/2))<Math.min(r.h,word.rect.h)*.45);if(!row){row={y:word.rect.y+word.rect.h/2,h:word.rect.h,words:[]};rows.push(row)}row.words.push(word)}
+ for(const line of data.lines||[])for(const word of line.words||[]){const dups=words.filter(w=>overlap(w.rect,word.rect)>.65);if(!dups.length)words.push(word);
+   // 10.3.12: a word read again with its neighbours ("2026-11-07") replaces all the pieces it covers ("2026-", "-07") when it holds more text than they do
+   else if(word.text.length>dups.reduce((n,w)=>n+w.text.length,0)){for(const d of dups.slice(1))words.splice(words.indexOf(d),1);Object.assign(dups[0],word)}}
+ const rows=ocrBlocks(words).flatMap(ocrRows);const cols=ocrColumns(rows);
  // 10.1.2: a gap much wider than a space (more than about one and a half text heights) is a column break, so a table row or a sidebar label stays apart from its neighbours.
- const lines=rows.sort((a,b)=>a.y-b.y).map(row=>{const w=row.words.sort((a,b)=>a.rect.x-b.rect.x),x=Math.min(...w.map(a=>a.rect.x)),y=Math.min(...w.map(a=>a.rect.y)),right=Math.max(...w.map(a=>a.rect.x+a.rect.w)),bottom=Math.max(...w.map(a=>a.rect.y+a.rect.h));w.forEach(a=>{a.text=ocrFixLine(a.text)});return{text:ocrFixLine(ocrJoinRow35(w)),words:w,rect:{x,y,w:right-x,h:bottom-y}}});
+ const lines=rows.map(row=>{const w=row.words.sort((a,b)=>a.rect.x-b.rect.x),x=Math.min(...w.map(a=>a.rect.x)),y=Math.min(...w.map(a=>a.rect.y)),right=Math.max(...w.map(a=>a.rect.x+a.rect.w)),bottom=Math.max(...w.map(a=>a.rect.y+a.rect.h));w.forEach(a=>{a.text=ocrFixLine(a.text)});return{text:ocrFixLine(ocrJoinRow35(w,cols)),words:w,rect:{x,y,w:right-x,h:bottom-y}}});
  return{lines,width:size.width,height:size.height};
  }finally{await fs.promises.rm(dir,{recursive:true,force:true}).catch(()=>{})}
 }
