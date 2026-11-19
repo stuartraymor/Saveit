@@ -38,6 +38,12 @@ ipcMain.handle('workflow-folder',async e=>{mainSender33(e);const r=await dialog.
 ipcMain.handle('workflow-file',async(e,folder,name,data)=>{mainSender33(e);if(!workflowConfig.folders.includes(folder))throw Error('Choose this save folder in Workflows first.');const safe=path.basename(String(name)).replace(/[<>:"/\\|?*\x00-\x1f]/g,'-');if(!safe||!safe.endsWith('.png'))throw Error('Expected a PNG filename');const parsed=path.parse(safe);let out=path.join(folder,safe),i=2;while(fs.existsSync(out))out=path.join(folder,parsed.name+'-'+i+++parsed.ext);await fs.promises.writeFile(out,Buffer.from(data),{flag:'wx'});return out});
 // 10.1.2: Grab Text output. Words far apart in one row are separated by a tab (a table cell, a label next to its value).
 function ocrJoinRow35(w) { const hs = w.map(a => a.rect.h).sort((a, b) => a - b), limit = Math.max(14, 1.5 * hs[Math.floor(hs.length / 2)]); let t = ''; w.forEach((a, i) => { if (i) { const gap = a.rect.x - (w[i - 1].rect.x + w[i - 1].rect.w); t += gap > limit ? '\t' : ' '; } t += a.text; }); return t; }
+// 10.3.12: Windows OCR puts spaces around code punctuation ("items. reduce( (a, b)", "fetch ( \"https://...\" ) ;"). Only on lines that clearly are code
+// (a ; or { or => and several brackets or =) those spaces are removed; a space after if/for/while/switch/catch/return stays, as code is written.
+function ocrFixCode(line){
+  if(!/[;{}]|=>/.test(line)||(line.match(/[(){};=]/g)||[]).length<3)return line;
+  return line.replace(/([A-Za-z_$][\w$]*)\. (?=[a-z_$])/g,'$1.').replace(/([A-Za-z_$][\w$]*) \(/g,(m,w)=>/^(if|for|while|switch|catch|return|function|await|of|in|and|or)$/.test(w)?m:w+'(')
+    .replace(/\( +(?=\S)/g,'(').replace(/(\S) +\)/g,'$1)').replace(/(\S) +;/g,'$1;').replace(/\( +\(/g,'((').replace(/\((["'`]) +/g,'($1').replace(/ +(["'`])\)/g,'$1)')}
 // 10.1.12: Grab Text fixes look-alike characters only where the meaning is clear: money after a misread $ sign, and tokens that are plainly numbers.
 function ocrFixLine(line){
   // hex codes: "Ox80070005" -> "0x80070005"; a money decimal point read as a dash: "$1,234-56" -> "$1,234.56"
@@ -45,7 +51,14 @@ function ocrFixLine(line){
   // a space wrongly read inside a thousands group: "1 ,234.56" -> "1,234.56"
   line=line.replace(/(\d|[lI|]) ,(?=\d{3}\b)/g,'$1,');
   // money: "S1,234.56", "Sl,234.56", "S 1,234.56", "S1,234.S6" -> "$1,234.56"
-  line=line.replace(/(^|[\s(:])S\s?([lI|1]?[\dOo,]*[.,][\dOoSlI]{2})(?=$|[\s).,;:])/g,(m,pre,num)=>pre+'$'+num.replace(/[lI|]/g,'1').replace(/[Oo]/g,'0').replace(/S/g,'5'));
+  // 10.3.12: also "s 1,284.50" and "Sl,2S4.50"; only when the result is a real amount (1,284.50), so words like "Sales" are never touched
+  line=line.replace(/(^|[\s(:])[Ss]\s?([lI|1]?[\dOoSlI|,]*[.,][\dOoSlI]{2})(?=$|[\s).,;:])/g,(m,pre,num)=>{const v=num.replace(/[lI|]/g,'1').replace(/[Oo]/g,'0').replace(/S/g,'5');return /^\d{1,3}(,\d{3})*\.\d{2}$|^\d+\.\d{2}$/.test(v)?pre+'$'+v:m});
+  // 10.3.12: web addresses come back with spaces around their punctuation ("https : / / api . example . com/v2"); those spaces are removed
+  line=line.replace(/\bhttps? ?: ?\/ ?\/ ?[\w\-%~+]+(?: ?[.\/?=&#:] ?[\w\-%~+]+)*\/?/g,m=>m.replace(/ /g,''));
+  // 10.3.12: an ID or hex code in dash-separated groups ("7F3A-91C2-OB8E"): a letter O is a zero when that makes every group hex digits
+  line=line.replace(/\b[0-9A-FO]{4,}(?:-[0-9A-FO]{4,})+\b/g,m=>/O/.test(m)&&/\d/.test(m)?m.replace(/O/g,'0'):m);
+  line=line.replace(/\b0x[0-9A-FO]{2,}\b/g,m=>m.slice(0,2)+m.slice(2).replace(/O/g,'0'));
+  line=ocrFixCode(line);
   // number tokens: letters that look like digits become digits ("2O24" -> "2024", "1O,OO8" -> "10,008")
   // only when the token has a real digit and becomes a plain number once O/o -> 0 and I/l/| -> 1 (so "Q0O8", "8B0O-1Il7", "IO" or "MP3" are left alone)
   return line.replace(/[^\s]+/g,tok=>{const core=tok.replace(/^[(\[{"'#$+]+|[)\]}"',.;:!?]+$/g,'');if(core.length<2||!/\d/.test(core)||!/[OoIl|]/.test(core))return tok;
@@ -879,6 +892,27 @@ function syncShortcutIdentity() {
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', e => { /* keep running in the tray */ });
 // The text and positioned-text paths use the same local Windows OCR service.
+// 10.3.12: rows. Full-size words join a row when their centres line up (as before). Small marks (quotes, dots, commas, a "0." beside a "%") join the
+// row they overlap most, instead of becoming a line of their own. Tallest words are placed first so a row is defined by its real text.
+function ocrRows(words){
+  const rows=[];
+  for(const word of [...words].sort((a,b)=>b.rect.h-a.rect.h||a.rect.y-b.rect.y)){const r=word.rect,c=r.y+r.h/2;let best=null,score=0;
+    for(const row of rows){const ov=Math.min(r.y+r.h,row.top+row.h)-Math.max(r.y,row.top);
+      const s=r.h>=row.h*.6?(Math.abs(row.y-c)<Math.min(row.h,r.h)*.45?1+ov:0):(ov>=r.h*.5?ov/r.h:0);if(s>score){score=s;best=row}}
+    if(!best){best={y:c,top:r.y,h:r.h,words:[]};rows.push(best)}best.words.push(word)}
+  return rows.sort((a,b)=>a.y-b.y)}
+// 10.3.12: side-by-side columns (a sidebar beside a page) whose lines do not line up are read one column after the other instead of interleaved line by
+// line. A table keeps its rows, because its cells line up across the gap. Only a clear vertical gap that no word crosses counts as a column edge.
+function ocrBlocks(words){
+  if(words.length<4)return[words];
+  const hs=words.map(w=>w.rect.h).sort((a,b)=>a-b),med=hs[hs.length>>1],sorted=[...words].sort((a,b)=>a.rect.x-b.rect.x),groups=[[sorted[0]]];let right=sorted[0].rect.x+sorted[0].rect.w;
+  for(const w of sorted.slice(1)){if(w.rect.x-right>2.5*med)groups.push([]);groups[groups.length-1].push(w);right=Math.max(right,w.rect.x+w.rect.w)}
+  if(groups.length<2)return[words];
+  const out=[groups[0]];
+  for(const g of groups.slice(1)){const a=out[out.length-1],inA=new Set(a),rows=ocrRows([...a,...g]),both=rows.filter(r=>r.words.some(w=>inA.has(w))&&r.words.some(w=>!inA.has(w))).length,
+      fewer=Math.min(ocrRows(a).length,ocrRows(g).length);
+    if(fewer>=2&&both<fewer*.5)out.push(g);else a.push(...g)}
+  return out}
 async function recognize35(url){
  if(process.platform!=='win32')throw Error('Grab Text requires Windows OCR.');
  if(typeof url!=='string'||!/^data:image\/png;base64,/.test(url)||url.length>180000000)throw Error('Choose a PNG image up to 64 million pixels.');
@@ -893,10 +927,9 @@ async function recognize35(url){
  // Merge repeated words in tile overlaps, preserving two identical lines at different positions.
  const words=[];const overlap=(a,b)=>{const w=Math.max(0,Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x)),h=Math.max(0,Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y));return w*h/Math.max(1,Math.min(a.w*a.h,b.w*b.h))};
  for(const line of data.lines||[])for(const word of line.words||[]){const duplicate=words.find(w=>overlap(w.rect,word.rect)>.65);if(!duplicate)words.push(word);else if(word.text.length>duplicate.text.length)Object.assign(duplicate,word)}
- words.sort((a,b)=>a.rect.y-b.rect.y||a.rect.x-b.rect.x);const rows=[];
- for(const word of words){let row=rows.find(r=>Math.abs(r.y-(word.rect.y+word.rect.h/2))<Math.min(r.h,word.rect.h)*.45);if(!row){row={y:word.rect.y+word.rect.h/2,h:word.rect.h,words:[]};rows.push(row)}row.words.push(word)}
+ const rows=ocrBlocks(words).flatMap(ocrRows);
  // 10.1.2: a gap much wider than a space (more than about one and a half text heights) is a column break, so a table row or a sidebar label stays apart from its neighbours.
- const lines=rows.sort((a,b)=>a.y-b.y).map(row=>{const w=row.words.sort((a,b)=>a.rect.x-b.rect.x),x=Math.min(...w.map(a=>a.rect.x)),y=Math.min(...w.map(a=>a.rect.y)),right=Math.max(...w.map(a=>a.rect.x+a.rect.w)),bottom=Math.max(...w.map(a=>a.rect.y+a.rect.h));w.forEach(a=>{a.text=ocrFixLine(a.text)});return{text:ocrFixLine(ocrJoinRow35(w)),words:w,rect:{x,y,w:right-x,h:bottom-y}}});
+ const lines=rows.map(row=>{const w=row.words.sort((a,b)=>a.rect.x-b.rect.x),x=Math.min(...w.map(a=>a.rect.x)),y=Math.min(...w.map(a=>a.rect.y)),right=Math.max(...w.map(a=>a.rect.x+a.rect.w)),bottom=Math.max(...w.map(a=>a.rect.y+a.rect.h));w.forEach(a=>{a.text=ocrFixLine(a.text)});return{text:ocrFixLine(ocrJoinRow35(w)),words:w,rect:{x,y,w:right-x,h:bottom-y}}});
  return{lines,width:size.width,height:size.height};
  }finally{await fs.promises.rm(dir,{recursive:true,force:true}).catch(()=>{})}
 }

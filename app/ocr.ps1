@@ -55,7 +55,9 @@ try {
  # Small overlapping tiles avoid loss of text on wide/long captures and engine dimension limits.
  # Windows OCR reads small text far more accurately when it is larger (a capital J in 12 px UI text is read as 1 at 1x), so every tile is enlarged first.
  # Word positions are divided by the scale again, so they stay in the original picture's pixels.
- if ($Scale -le 0) { $Scale = 2; if ($source.Width -le 1000 -and $source.Height -le 700) { $Scale = 3 } }
+ # 10.3.12: measured on real screenshots, 2x reads best both for 100% and 200% display scaling; 3x and more blur letters together
+ # ("in" was read as "m"). Saveit's editor no longer enlarges the picture before this, so 2x is the total enlargement.
+ if ($Scale -le 0) { $Scale = 2 }
  $tileSize = [Math]::Min(2000,[int][Math]::Floor(4000/$Scale)); $stride = $tileSize - 160
  for ($y=0; $y -lt $source.Height; $y+=$stride) {
   for ($x=0; $x -lt $source.Width; $x+=$stride) {
