@@ -8,7 +8,7 @@ fs.rmSync(OUT,{recursive:true,force:true});fs.cpSync(APP,OUT,{recursive:true});
 const stub=`<script>
 window.__saved=[];window.__toasts=[];
 (function(){const ok=v=>()=>Promise.resolve(v),noop=()=>{};
-const api={appVersion:ok('test'),workflowConfig:ok({}),saveWorkflows:ok(true),readClipboard:ok(null),capture:ok(null),prepareRecord:ok(null),ocr:ok({lines:[]}),
+const api={textWindow:undefined,appVersion:ok('test'),workflowConfig:ok({}),saveWorkflows:ok(true),readClipboard:ok(null),capture:ok(null),prepareRecord:ok(null),ocr:ok({lines:[]}),
   updateCheck:async()=>{window.__updCalls=window.__updCalls||{};window.__updCalls.check=(window.__updCalls.check||0)+1;return{ok:true,state:'current',current:'test'}},updateDownload:async()=>{window.__updCalls=window.__updCalls||{};window.__updCalls.download=(window.__updCalls.download||0)+1;return{ok:false,message:'not stubbed'}},updateApply:async()=>{window.__updCalls=window.__updCalls||{};window.__updCalls.apply=(window.__updCalls.apply||0)+1;return{ok:false,message:'not stubbed'}},updateStartupResult:async()=>null,onUpdateProgress:()=>{},onUpdateCancelled:()=>{},
   copyImage:ok(true),copyFile:ok(true),copyEditable:ok(true),printPdf:ok(null),saveMany:ok([]),quickMarkup:ok(null),ocrLayout:ok(null),printImage:ok(null),
   savePick:(name,exts)=>Promise.resolve('C:\\\\test\\\\'+name+'.'+((exts&&exts[0])||'png')),

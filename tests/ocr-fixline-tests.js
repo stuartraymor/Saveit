@@ -44,4 +44,8 @@ eq('He said — sure', 'He said — sure'); eq('Ox 1234', 'Ox 1234'); eq('Sales 
 const side = [W('Dashboard', 0, 10, 60), W('Projects', 0, 36, 50), W('Reports', 0, 62, 48), W('Welcome', 120, 0, 60), W('You', 120, 26, 20), W('Next', 120, 52, 30)];
 assert.deepEqual(ocrBlocks(side).map(b => b.map(w => w.text)), [['Dashboard', 'Projects', 'Reports'], ['Welcome', 'You', 'Next']]); n++;
 assert.equal(ocrBlocks(table.flat()).length, 1); n++;
+// 10.4.2: words Windows read as one line stay one row although it reports them sloping (noisy picture); separate lines stay apart
+{ const slope = ['Saveit', 'keeps', 'every', 'capture', 'until', 'you', 'delete', 'it.'].map((t, k) => ({ ...W(t, k * 80, 61 - k * 4, 70, 28), line: 0 }));
+  assert.deepEqual(ocrRows(slope).map(r => r.words.length), [8]); n++;
+  assert.equal(ocrRows([{ ...W('one', 0, 0, 30), line: 0 }, { ...W('two', 0, 20, 30), line: 1 }]).length, 2); n++; }
 console.log(`PASS ocr-fixline-tests (${n} checks)`);

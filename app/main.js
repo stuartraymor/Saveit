@@ -260,7 +260,7 @@ function createWindow() {
 
 // ---------- floating capture widget (editor hidden) ----------
 let widgetWin = null, widgetOpts = null, reopenWidget = false, widgetUp = false;
-const CAPTURE_HIDE_MS = 200;
+const CAPTURE_HIDE_MS = 50; // 10.4.2: Saveit's windows go transparent first, so two or three frames are enough (was 200)
 // 10.4.0: the widget window is kept (hidden) when it goes away, instead of being destroyed and built again each time it
 // comes back (after every capture and every switch from the editor). Showing it again is immediate.
 function closeWidget() { widgetUp = false; if (widgetWin && !widgetWin.isDestroyed()) widgetWin.hide(); }
@@ -336,6 +336,8 @@ ipcMain.on('cam-settings', () => {
   camWin.setMenu(null); camWin.setAlwaysOnTop(true, 'pop-up-menu'); camWin.loadFile(asset('camsettings.html'));
   camWin.on('closed', () => { camWin = null; });
 });
+// 10.4.2: the Grab Text window (app/textwin.js)
+const textWin = require('./textwin')({ ipcMain, BrowserWindow, Menu, clipboard, dialog, screen, asset, editor: () => win, showEditor: () => showWindow() });
 ipcMain.on('widget-size', (e, w, h, lx, ly) => {
   if (!widgetWin || widgetWin.isDestroyed() || !(h > 30 && w > 200)) return;
   if (Number.isFinite(lx) && Number.isFinite(ly)) widgetLogo = { x: lx, y: ly };
@@ -391,7 +393,7 @@ function newOverlay(d, file) {
     x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height,
     frame: false, resizable: false, movable: false, minimizable: false, maximizable: false,
     skipTaskbar: true, alwaysOnTop: true, show: false, backgroundColor: '#000000', enableLargerThanScreen: true, hasShadow: false,
-    webPreferences: { preload: asset('overlay-preload.js'), contextIsolation: true }
+    webPreferences: { preload: asset('overlay-preload.js'), contextIsolation: true, backgroundThrottling: false }
   });
   ov.setAlwaysOnTop(true, 'screen-saver');
   ov.setBounds(d.bounds);
@@ -412,7 +414,7 @@ function prepareOverlay(d) {
 }
 app.whenReady().then(() => { const drop = () => { if (spareOverlay && !spareOverlay.win.isDestroyed()) spareOverlay.win.destroy(); spareOverlay = null; };
   screen.on('display-metrics-changed', drop); screen.on('display-added', drop); screen.on('display-removed', drop);
-  setTimeout(() => { try { prepareOverlay(activeDisplay()); } catch (_) {} }, 1500); });
+  setTimeout(() => { try { prepareOverlay(activeDisplay()); } catch (_) {} try { fastScreenReader(); } catch (_) {} }, 1500); });
 function overlayWindow(d, file, payload) {
   return new Promise(resolve => {
     let settled = false, ov;
@@ -422,7 +424,12 @@ function overlayWindow(d, file, payload) {
       if (file === 'overlay.html') setTimeout(() => { try { prepareOverlay(activeDisplay()); } catch (_) {} }, 1500); };
     ipcMain.on('overlay-done', (e, r) => finish(r));
     ov.on('closed', () => finish(null));
-    ov.loaded.then(() => { if (settled || ov.isDestroyed()) return; ov.webContents.send('data', payload); ov.show(); ov.focus(); });
+    // 10.4.2: the region selector says when the frozen screen is drawn, and only then appears (no blank frame, and it takes
+    // the mouse at once); other overlays, or a selector that does not answer within 600 ms, appear straight away.
+    ov.loaded.then(() => { if (settled || ov.isDestroyed()) return;
+      let up = false; const show = () => { if (up || settled || ov.isDestroyed()) return; up = true; ipcMain.removeListener('overlay-shown', onShown); ov.show(); ov.focus(); };
+      const onShown = e => { if (!ov.isDestroyed() && e.sender === ov.webContents) show(); };
+      if (file === 'overlay.html') { ipcMain.on('overlay-shown', onShown); setTimeout(show, 600); ov.webContents.send('data', payload); } else { ov.webContents.send('data', payload); show(); } });
   });
 }
 // 10.4.0: the frozen screen goes to the region selector as raw pixels (BGRA), not as a PNG data URL
@@ -502,11 +509,14 @@ let lastScrollNote = '';
 
 async function doCapture(mode, delay = 0, opts = {}, pre = null) {
   const wasVisible = win && win.isVisible() && !win.isMinimized(), widgetWasUp = widgetOpen();
+  // 10.4.2: the editor and the widget are made fully transparent before they are hidden, so they leave the screen on the next
+  // frame instead of after the Windows hide animation (the wait was 200 ms for the editor, 80 ms for the widget).
+  const vanished = [];
+  for (const w of [wasVisible ? win : null, widgetWasUp ? widgetWin : null]) if (w && !w.isDestroyed()) { try { w.setOpacity(0); vanished.push(w); } catch (_) {} }
   beginCaptureUI();
   if (win) win.hide();
-  // 10.4.0: wait only as long as needed for Saveit's own windows to leave the screen (it was always 350 ms): the editor
-  // needs a few frames, the small widget one or two, and from Print Screen with nothing of Saveit showing no wait is needed.
-  await sleep((wasVisible ? CAPTURE_HIDE_MS : widgetWasUp ? 80 : 20) + delay * 1000);
+  await sleep((vanished.length ? CAPTURE_HIDE_MS : wasVisible ? 200 : widgetWasUp ? 80 : 20) + delay * 1000);
+  for (const w of vanished) { try { if (!w.isDestroyed()) w.setOpacity(1); } catch (_) {} }
   try {
     const d = pre ? displayById(pre.did) : activeDisplay();
     const cur = screen.getCursorScreenPoint();
@@ -553,7 +563,8 @@ async function doCapture(mode, delay = 0, opts = {}, pre = null) {
   }
 }
 
-ipcMain.handle('capture', (e, mode, delay, opts, pre) => doCapture(mode, delay, opts || {}, pre || null));
+// 10.4.2: the Grab Text window stays out of screenshots like the editor, and comes back afterwards
+ipcMain.handle('capture', async (e, mode, delay, opts, pre) => { const teUp = textWin.hideForCapture(); try { if (teUp) await sleep(30); return await doCapture(mode, delay, opts || {}, pre || null); } finally { if (teUp) textWin.restore(); } });
 
 // ---------- recording ----------
 let pendingSource = null, recWins = [];
@@ -1007,11 +1018,12 @@ app.on('window-all-closed', e => { /* keep running in the tray */ });
 // The text and positioned-text paths use the same local Windows OCR service.
 // 10.3.12: rows. Full-size words join a row when their centres line up (as before). Small marks (quotes, dots, commas, a "0." beside a "%") join the
 // row they overlap most, instead of becoming a line of their own. Tallest words are placed first so a row is defined by its real text.
+// 10.4.2: words that Windows read as one line stay in one row, even when it reports them sloping (it sometimes does on noisy or stretched text).
 function ocrRows(words){
   const rows=[];
   for(const word of [...words].sort((a,b)=>b.rect.h-a.rect.h||a.rect.y-b.rect.y)){const r=word.rect,c=r.y+r.h/2;let best=null,score=0;
     for(const row of rows){const ov=Math.min(r.y+r.h,row.top+row.h)-Math.max(r.y,row.top);
-      const s=r.h>=row.h*.6?(Math.abs(row.y-c)<Math.min(row.h,r.h)*.45?1+ov:0):(ov>=r.h*.5?ov/r.h:0);if(s>score){score=s;best=row}}
+      const s=word.line!=null&&row.words.some(w=>w.line===word.line)?1e6:r.h>=row.h*.6?(Math.abs(row.y-c)<Math.min(row.h,r.h)*.45?1+ov:0):(ov>=r.h*.5?ov/r.h:0);if(s>score){score=s;best=row}}
     if(!best){best={y:c,top:r.y,h:r.h,words:[]};rows.push(best)}best.words.push(word)}
   return rows.sort((a,b)=>a.y-b.y)}
 // 10.3.12: side-by-side columns (a sidebar beside a page) whose lines do not line up are read one column after the other instead of interleaved line by
@@ -1039,7 +1051,7 @@ async function recognize35(url){
  });
  // Merge repeated words in tile overlaps, preserving two identical lines at different positions.
  const words=[];const overlap=(a,b)=>{const w=Math.max(0,Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x)),h=Math.max(0,Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y));return w*h/Math.max(1,Math.min(a.w*a.h,b.w*b.h))};
- for(const line of data.lines||[])for(const word of line.words||[]){const dups=words.filter(w=>overlap(w.rect,word.rect)>.65);if(!dups.length)words.push(word);
+ for(const [li,line] of (data.lines||[]).entries())for(const word of line.words||[]){word.line=li;const dups=words.filter(w=>overlap(w.rect,word.rect)>.65);if(!dups.length)words.push(word);
    // 10.3.12: a word read again with its neighbours ("2026-11-07") replaces all the pieces it covers ("2026-", "-07") when it holds more text than they do
    else if(word.text.length>dups.reduce((n,w)=>n+w.text.length,0)){for(const d of dups.slice(1))words.splice(words.indexOf(d),1);Object.assign(dups[0],word)}}
  const rows=ocrBlocks(words).flatMap(ocrRows);const cols=ocrColumns(rows);

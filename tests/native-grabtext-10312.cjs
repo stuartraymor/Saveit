@@ -31,8 +31,11 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
       catch (e) { await p.screenshot({ path: path.join(out, 'paste-failed.png') }); throw Error('paste did not add the picture: ' + JSON.stringify(await p.evaluate(() => ({ active: document.activeElement?.id || document.activeElement?.tagName, visible: document.visibilityState, toasts: [...document.querySelectorAll('.toast')].map(t => t.innerText), modal: [...document.querySelectorAll('.modal')].map(m => m.id || m.innerText.slice(0, 80)), items: window.__wf.items.length, formats: 0 })))); }
       await p.waitForTimeout(400);
     };
-    const grabbed = async () => { await p.locator('#grabbedText35 #ocrText').waitFor({ timeout: 30000 }); const t = await p.locator('#ocrText').inputValue(); return t; };
-    const closeText = async () => { await p.keyboard.press('Escape'); await p.locator('#grabbedText35').waitFor({ state: 'detached' }); };
+    // 10.4.2: the text opens in the Grab Text window (textedit.html); each grab gets a new entry there
+    let lastKey = '', tw = null;
+    const textWin = async () => { for (let i = 0; i < 150; i++) { tw = app.windows().find(w => w.url().includes('textedit.html')); if (tw) return tw; await p.waitForTimeout(200); } throw Error('the Grab Text window did not open'); };
+    const grabbed = async () => { const w = await textWin(); await w.waitForFunction(k => typeof entry !== 'undefined' && entry && entry.key !== k && document.body.dataset.state === 'ready', lastKey, { timeout: 30000, polling: 250 }).catch(async e => { console.log('TW STATE', JSON.stringify(await w.evaluate(() => ({ key: entry && entry.key, st: document.body.dataset.state, vis: document.visibilityState, banner: document.getElementById('banner').textContent })))); throw e; }); lastKey = await w.evaluate(() => entry.key); return w.evaluate(() => plain()); };
+    const closeText = async () => {};
     // turn on "Copy to clipboard" (Image mode), as many people have it
     if (!(await p.locator('#clipOn').isChecked())) await p.locator('#clipWrap').click();
     check('Copy to clipboard is on in Image mode', await p.locator('#clipOn').isChecked());
@@ -63,8 +66,8 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
     check('sidebar (box dragged with the mouse): the side column is read first, then the page, not mixed line by line',
       sl.join('|') === 'Dashboard|Projects|Reports|Welcome back, Taylor|You have 4 tasks due today|Next meeting: 2:30 PM', JSON.stringify(sl));
     // Join lines button
-    await p.locator('#grabbedText35 [data-a=one]').click();
-    check('Join lines makes one line', !(await p.locator('#ocrText').inputValue()).includes('\n'));
+    await tw.locator('#tools').click(); await tw.locator('.menu button', { hasText: 'Join lines into one paragraph' }).click();
+    check('Join lines makes one line', !(await tw.evaluate(() => plain())).includes('\n'));
     await closeText();
 
     // 3. code at 200% display scaling: punctuation is not spaced out, web address is whole
@@ -106,7 +109,7 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
     await app.evaluate(() => { global.__ocrTarget.destroy(); });
     check('capture mode: the table on screen is read as tab-separated rows',
       text.trim() === 'Order\tItem\tQty\tTotal\nA-1007\tDesk lamp\t2\t$84.00\nA-1008\tMonitor stand\t1\t$129.99\nA-1009\tUSB-C cable\t4\t$35.96', JSON.stringify(text));
-    check('capture mode: Grab text does not add a picture to the library', (await p.evaluate(() => window.__wf.items.length)) === nItems);
+    check('capture mode: the picture also opens in the editor (10.4.2)', (await p.evaluate(() => window.__wf.items.length)) === nItems + 1 && (await p.evaluate(() => window.__wf.cur?.kind)) === 'image');
     await closeText(); await p.locator('#area').selectOption('region');
 
     check('no page errors', errors.length === 0, errors.join(' | '));

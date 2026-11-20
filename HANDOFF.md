@@ -76,6 +76,7 @@ path\to\electron.exe app
 ```
 npm install playwright          # in any folder; set NODE_PATH to its node_modules
 node tests/run-node-tests.js    # parses every script, checks versions and line endings
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\test-all.ps1 -Quick   # 10.4.2: one command, 5-10 min; -Full for everything (~45 min), -Area grabtext,capture,... for one part
 node tests/build-harness.js C:\temp\h        # builds a test copy of the app
 node tests/serve.js C:\temp\h 8944           # serves it (leave running)
 node tests/rotate-tests.cjs http://127.0.0.1:8944 C:\temp\evidence

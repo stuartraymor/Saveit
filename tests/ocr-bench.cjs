@@ -40,7 +40,9 @@ function lev(a, b) { const m = a.length, n = b.length; if (!m) return n; if (!n)
 (async () => {
   const [exe, out, filter] = process.argv.slice(2); fs.mkdirSync(out, { recursive: true });
   const app = await _electron.launch({ executablePath: exe, env: { ...process.env, SAVEIT_REVIEW_DATA: path.join(out, 'profile') } });
-  const p = await app.firstWindow(); await p.waitForFunction(() => document.body.dataset.catalogCount);
+  // the editor window (Saveit also keeps a hidden region selector and widget ready, which can open first)
+  await app.firstWindow(); let p = null; for (let k = 0; k < 300 && !p; k++) { p = app.windows().find(w => w.url().includes('index.html')); if (!p) await new Promise(r => setTimeout(r, 100)); }
+  await p.waitForFunction(() => document.body.dataset.catalogCount, null, { timeout: 90000 });
   // screenshots are rendered by Chromium inside Saveit's own Electron, at 100% and 200% zoom (like 100% and 200% display scaling)
   const imgs = [];
   for (const dpr of (process.env.OCR_DPRS || '1,1.25,1.5,2').split(',').map(Number)) for (const [name, body, want] of CASES) { if (filter && !name.includes(filter)) continue;

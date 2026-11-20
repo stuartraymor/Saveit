@@ -2,7 +2,7 @@
 // node tests/flatten-tools-tests.cjs http://127.0.0.1:8944 <evidence-folder>
 const {chromium}=require('playwright'),assert=require('assert/strict'),fs=require('fs'),path=require('path');
 (async()=>{const out=path.resolve(process.argv[3]||'../flatten-evidence');fs.mkdirSync(out,{recursive:true});
-const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});const page=await browser.newPage({viewport:{width:1440,height:900}}),results=[],errors=[];page.on('pageerror',e=>errors.push(e.stack));page.setDefaultTimeout(15000);
+const browser=await chromium.launch({headless:true,executablePath:process.env.SAVEIT_BROWSER_PATH||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});const page=await browser.newPage({viewport:{width:1440,height:900}}),results=[],errors=[];page.on('pageerror',e=>errors.push(e.stack));page.setDefaultTimeout(15000);
 const ev=(fn,arg)=>page.evaluate(fn,arg),test=async(name,fn)=>{try{const d=await fn();results.push({name,pass:true,detail:d});console.log('PASS',name,d?JSON.stringify(d):'')}catch(e){results.push({name,pass:false,error:e.stack});console.log('FAIL',name,e.message);await page.screenshot({path:path.join(out,'failure-'+results.length+'.png')})}};
 try{await page.goto(process.argv[2]||'http://127.0.0.1:8944');await page.waitForFunction(()=>window.__T?.addImage&&window.QA);
 const fresh=()=>ev(async()=>{document.querySelectorAll('.modal').forEach(m=>m.remove());__T.addImage(QA.canvas(400,240,'#8ac'),'Flatten test');await QA.sleep(150);const it=__T.S.cur,a=__T.newShape('rect',40,40);Object.assign(a,{x2:200,y2:150,c:'#e5372a',fill:'#e5372a',w:6});it.shapes.push(a);__T.render();return it.shapes.length});

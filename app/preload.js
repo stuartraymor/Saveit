@@ -46,5 +46,10 @@ contextBridge.exposeInMainWorld('bench', {
   widgetOpen: (opts, logo) => ipcRenderer.send('widget-open', opts, logo),
   onWidgetOpts: fn => ipcRenderer.on('widget-opts', (e, o) => fn(o)),
   onWidgetGo: fn => ipcRenderer.on('widget-go', (e, o) => fn(o)),
+  // 10.4.2: the Grab Text window
+  textWindow: o => ipcRenderer.invoke('te-open', o),
+  onTextSave: fn => ipcRenderer.on('te-save', (e, req) => fn(req)),
+  textSaved: (req, result) => ipcRenderer.send('te-saved', req, result),
+  onGrabTextNow: fn => ipcRenderer.on('grab-text-now', () => fn()),
   onShortcutFailed: fn => ipcRenderer.on('shortcut-failed', (e, keys) => fn(keys))
 });

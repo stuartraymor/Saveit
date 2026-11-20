@@ -1,0 +1,108 @@
+{
+  "note": "Failures that also happen in the last released version. tools/test-all.ps1 reports them as KNOWN; anything else is NEW. Recorded for 10.4.2 against 10.4.1 on 2026-11-20. Remove an entry when its test is fixed.",
+  "suites": {
+    "layer-media-tests": {
+      "why": "Same 9 failures in 10.4.1 (media timeline context menus and effect persistence in the browser harness).",
+      "fails": [
+        "Audio middle insert creates a gap, shifts later source ranges and supp",
+        "Paste after earlier audio cuts preserves the edited content; repeated ",
+        "Audio region positions and inserted samples survive saving and reopeni",
+        "Stacked timed volume effects affect only their intervals and export th",
+        "Effect bars can move and resize; invalid times are rejected; undo rest",
+        "Mute, echo, reverb and fade effects are finite, time-bounded and stack",
+        "A selection becomes a reusable sound-effect Library clip without leavi",
+        "Effects survive persistence; deletion, trim and ripple insertion remap",
+        "Video context menu insertion from Recents and Library keeps the destin"
+      ]
+    },
+    "video-editor-tests": {
+      "why": "Needs ffmpeg on PATH for the independent annotation checks; same in 10.4.1.",
+      "fails": [
+        "Timed annotation appears only inside its range in mp4 export - ffmpeg ",
+        "Timed annotation appears only inside its range in webm export - ffmpeg"
+      ]
+    },
+    "audio114-tests": {
+      "why": "Compact studio layout check; same in 10.4.1.",
+      "fails": [
+        "Studio layout fits desktop and compact sizes; effects and output remai"
+      ]
+    },
+    "audio115-tests": {
+      "why": "Loudness checks need ffmpeg; compact layout check; same in 10.4.1.",
+      "fails": [
+        "Integrated LUFS agrees with independent FFmpeg at 44100 Expected value",
+        "Integrated LUFS agrees with independent FFmpeg at 48000 Expected value",
+        "Integrated LUFS agrees with independent FFmpeg at 96000 Expected value",
+        "Gated silence boundaries agree with FFmpeg; quieter recording differs ",
+        "Cleanup and loudness controls fit compact windows and output stays vis"
+      ]
+    },
+    "audio116-tests": {
+      "why": "Compact layout check; same in 10.4.1.",
+      "fails": [
+        "Controls, reduction display and transport fit large and compact layout"
+      ]
+    },
+    "audio-pitch-tests": {
+      "why": "Stops at start (needs an older test fixture); same in 10.4.1.",
+      "fails": [
+        "*"
+      ]
+    },
+    "video-recording-matrix": {
+      "why": "Needs ffprobe from another program (TasiaCraft tools); same in 10.4.1.",
+      "fails": [
+        "*"
+      ]
+    },
+    "native-stepguide": {
+      "why": "Expects Library Save to start in Pictures; on this PC it starts in Documents\\Saveit Exports; same in 10.4.1.",
+      "fails": [
+        "Library Save starts in Documents for documents and in Pictures for pic"
+      ]
+    },
+    "native-ocr1112": {
+      "why": "One file-path picture Windows OCR reads as \".docx\"; same in 10.4.1 (overall still improved: 3.45% -> 2.63%).",
+      "fails": [
+        "A file path that Windows OCR used to drop is read The file .docx is in"
+      ]
+    },
+    "native-audio113": {
+      "why": "The test insists on Electron 33.2.1 started from its own source copy; the runtime copy differs. Same in 10.4.1.",
+      "fails": [
+        "*"
+      ]
+    },
+    "native-audio114": {
+      "why": "The test insists on Electron 33.2.1 started from its own source copy; the runtime copy differs. Same in 10.4.1.",
+      "fails": [
+        "*"
+      ]
+    },
+    "native-audio115": {
+      "why": "The test insists on Electron 33.2.1 started from its own source copy; the runtime copy differs. Same in 10.4.1.",
+      "fails": [
+        "*"
+      ]
+    },
+    "native-audio116": {
+      "why": "The test insists on Electron 33.2.1 started from its own source copy; the runtime copy differs. Same in 10.4.1.",
+      "fails": [
+        "*"
+      ]
+    },
+    "native-video-journey": {
+      "why": "Needs a runtime copy inside its own evidence folder (\"Use an owned runtime inside the evidence workspace\"); setup, not Saveit.",
+      "fails": [
+        "*"
+      ]
+    },
+    "native-video-timeline-journey": {
+      "why": "Needs a runtime copy inside its own evidence folder (\"Use an owned runtime inside the evidence workspace\"); setup, not Saveit.",
+      "fails": [
+        "*"
+      ]
+    }
+  }
+}

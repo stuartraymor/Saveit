@@ -3,7 +3,7 @@
 // RECORD_SECONDS=2,30,180 (default); source uses nine annotations and a caption.
 const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),assert=require('assert/strict'),{execFileSync}=require('child_process');
 const out=path.resolve(process.argv[3]||'recording-matrix-evidence');fs.mkdirSync(out,{recursive:true});
-(async()=>{const b=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--autoplay-policy=no-user-gesture-required']});const results=[];
+(async()=>{const b=await chromium.launch({headless:true,executablePath:process.env.SAVEIT_BROWSER_PATH||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--autoplay-policy=no-user-gesture-required']});const results=[];
 try{const p=await b.newPage({viewport:{width:1440,height:1000}});p.setDefaultTimeout(30000);await p.goto(process.argv[2]||'http://127.0.0.1:8944');await p.waitForFunction(()=>window.__T&&window.QA);
 for(const seconds of (process.env.RECORD_SECONDS||'2,30,180').split(',').map(Number)){console.log('Recording',seconds);await p.evaluate(async seconds=>{
  document.querySelector('#mic').checked=false;document.querySelector('#clipOn').checked=false;

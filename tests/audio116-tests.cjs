@@ -1,7 +1,7 @@
 // Complete effects/UI audit and measured de-esser behavior, using disposable media.
 const {chromium}=require('playwright'),assert=require('assert/strict'),fs=require('fs'),path=require('path');
 (async()=>{
-const out=path.resolve(process.argv[3]||'../audio116-evidence');fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--autoplay-policy=no-user-gesture-required']});const page=await browser.newPage({viewport:{width:1440,height:1000}}),results=[],errors=[];page.on('pageerror',e=>errors.push(e.stack));page.setDefaultTimeout(12000);
+const out=path.resolve(process.argv[3]||'../audio116-evidence');fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({headless:true,executablePath:process.env.SAVEIT_BROWSER_PATH||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--autoplay-policy=no-user-gesture-required']});const page=await browser.newPage({viewport:{width:1440,height:1000}}),results=[],errors=[];page.on('pageerror',e=>errors.push(e.stack));page.setDefaultTimeout(12000);
 const ev=(fn,arg)=>page.evaluate(fn,arg),near=(a,b,t=.02)=>assert.ok(Math.abs(a-b)<t,a+' vs '+b),test=async(name,fn)=>{try{const detail=await fn();results.push({name,pass:true,detail});console.log('PASS',name,detail||'')}catch(e){results.push({name,pass:false,error:e.stack});console.log('FAIL',name,e.message);await page.screenshot({path:path.join(out,'failure-'+results.length+'.png')})}};
 try{
 await page.goto(process.argv[2]||'http://127.0.0.1:18947');await page.waitForFunction(()=>window.__T?.addAudio&&document.body.dataset.catalogCount);

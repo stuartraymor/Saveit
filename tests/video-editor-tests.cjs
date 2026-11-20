@@ -8,7 +8,7 @@ const FFPROBE=[process.env.FFPROBE,'C:/Users/stuar/AppData/Local/Programs/TasiaC
 const probe=file=>FFPROBE?JSON.parse(execFileSync(FFPROBE,['-v','error','-count_frames','-show_entries','stream=codec_type,codec_name,width,height,r_frame_rate,nb_read_frames,duration:format=duration','-of','json',file]).toString()):null;
 (async()=>{
 const out=path.resolve(process.argv[3]||'../video-editor-evidence');fs.mkdirSync(out,{recursive:true});
-const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--autoplay-policy=no-user-gesture-required']});
+const browser=await chromium.launch({headless:true,executablePath:process.env.SAVEIT_BROWSER_PATH||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--autoplay-policy=no-user-gesture-required']});
 const page=await browser.newPage({viewport:{width:1440,height:1000}}),results=[],errors=[];page.on('pageerror',e=>errors.push(e.stack));page.setDefaultTimeout(15000);
 const ev=(fn,arg)=>page.evaluate(fn,arg),near=(a,b,t=.02,m='')=>assert.ok(Math.abs(a-b)<=t,m+' '+a+' vs '+b);
 // ONLY=<regex> runs just the matching checks

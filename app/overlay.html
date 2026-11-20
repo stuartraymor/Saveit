@@ -66,9 +66,9 @@ window.overlay.onData(d=>{sent=false;const o=d.opts||{};vmode=o.mode==='video'?'
   $('oCur').checked=!!o.cursor;$('oClip').checked=!!o.clip;$('oSys').checked=o.sys!==false;$('oMic').checked=!!o.mic;$('oCam').checked=!!o.cam;fxUi.set(o.fx||{id:'none',p:{}});
   if(d.init==='full'||$('area').value==='screen'){$('area').value='screen';state='adjust';tip.style.display='none'}
   labels();
-  const shown=()=>{ready=true;size();if(state==='adjust'){sel={x:0,y:0,w:W,h:H};draw()}};
+  const shown=()=>{ready=true;size();if(state==='adjust'){sel={x:0,y:0,w:W,h:H};draw()}window.overlay.shown&&window.overlay.shown()};
   // 10.4.0: raw BGRA pixels (no PNG to encode and decode, which took a noticeable part of a second on a large screen)
-  if(d.raw){const w=d.w,h=d.h,src=d.raw,px=new Uint8ClampedArray(w*h*4);for(let i=0;i<px.length;i+=4){px[i]=src[i+2];px[i+1]=src[i+1];px[i+2]=src[i];px[i+3]=255}const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').putImageData(new ImageData(px,w,h),0,0);img=cv;shown();return}
+  if(d.raw){const w=d.w,h=d.h,n=w*h;let src=d.raw;if(src.byteOffset%4||src.byteLength<n*4){const c=new Uint8Array(n*4);c.set(src.subarray(0,n*4));src=c}const q=new Uint32Array(src.buffer,src.byteOffset,n);for(let i=0;i<n;i++){const v=q[i];q[i]=(v&0x0000ff00)|((v&0xff)<<16)|((v>>>16)&0xff)|0xff000000}const px=new Uint8ClampedArray(src.buffer,src.byteOffset,n*4);const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').putImageData(new ImageData(px,w,h),0,0);img=cv;shown();return}
   img=new Image();img.onload=shown;img.src=d.shot});
 function norm(a,b){return{x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y)}}
 function clampSel(){sel.w=Math.max(4,Math.min(sel.w,W));sel.h=Math.max(4,Math.min(sel.h,H));sel.x=Math.max(0,Math.min(W-sel.w,sel.x));sel.y=Math.max(0,Math.min(H-sel.h,sel.y))}
@@ -134,7 +134,7 @@ addEventListener('mousemove',e=>{const p={x:e.clientX,y:e.clientY};cur=p;
   else c.style.cursor='crosshair';
   draw()});
 addEventListener('mouseup',e=>{if(act){act=null;c.style.cursor='move';draw();return}if(!start)return;const r=norm(start,cur);start=null;
-  sel=(r.w<4||r.h<4)?{x:0,y:0,w:W,h:H}:r;if(sel.w>=W-1&&sel.h>=H-1)$('area').value='screen';state='adjust';tip.style.display='none';draw();$('ok').focus()});
+  sel=(r.w<4||r.h<4)?{x:0,y:0,w:W,h:H}:r;if(sel.w>=W-1&&sel.h>=H-1&&$('area').value!=='text')$('area').value='screen';state='adjust';tip.style.display='none';draw();$('ok').focus()});
 c.addEventListener('dblclick',e=>{if(state==='adjust'&&inside({x:e.clientX,y:e.clientY}))finish()});
 addEventListener('keydown',e=>{if((e.target.tagName==='INPUT'||e.target.tagName==='SELECT')&&e.key!=='Escape'&&e.key!=='Enter')return;if(e.target.tagName==='SELECT'&&e.key==='Enter')return;
   if(e.key==='Escape')cancel();

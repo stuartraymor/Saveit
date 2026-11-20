@@ -43,7 +43,9 @@ function lev(a, b) { const m = a.length, n = b.length; if (!m) return n; if (!n)
 (async () => {
   fs.mkdirSync(path.join(out, 'pics'), { recursive: true });
   const app = await _electron.launch({ executablePath: exe, env: { ...process.env, SAVEIT_REVIEW_DATA: path.join(out, 'profile') }, timeout: 30000 });
-  const p = await app.firstWindow(); await p.waitForFunction(() => document.body.dataset.catalogCount);
+  // the editor window (Saveit also keeps a hidden region selector and widget ready, which can open first)
+  await app.firstWindow(); let p = null; for (let k = 0; k < 300 && !p; k++) { p = app.windows().find(w => w.url().includes('index.html')); if (!p) await new Promise(r => setTimeout(r, 100)); }
+  await p.waitForFunction(() => document.body.dataset.catalogCount, null, { timeout: 90000 });
   const cases = Array.from({ length: COUNT }, (_, i) => makeCase(i)), results = [];
   // draw each picture on a canvas in Saveit's own page (exact size, nothing clipped); the display scale multiplies everything
   for (const c of cases) {
