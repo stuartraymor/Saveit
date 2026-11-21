@@ -50,7 +50,7 @@ It is **free, with no account, no subscription and no watermark**, and the whole
 
 <p align="center"><img src="docs/images/hide-private-info.gif" alt="Saveit: blur an email and an API key, then spotlight a button" width="860"></p>
 
-**Grab Text.** Drag around any text in a picture and Saveit reads it for you to edit and copy. Tables paste into a spreadsheet as columns, and money, dates, codes and web addresses come out the way they look. It all runs on your PC with Windows' own text recognition; nothing is uploaded.
+**Grab Text.** Drag around any text on screen or in a picture and Saveit reads it into its own small word processor, to edit, copy, print, or save in the Library when you want to keep it. Tables paste into a spreadsheet as columns, and money, dates, codes and web addresses come out the way they look. It all runs on your PC with Windows' own text recognition; nothing is uploaded.
 
 <p align="center"><img src="docs/images/grab-text.gif" alt="Saveit Grab Text: select text in a picture and copy the recognized words" width="860"></p>
 
@@ -88,7 +88,7 @@ It installs for your user account only, with no admin rights. Setup downloads th
 
 **Updating:** from version 10.2.0 on, click **Check for Updates →** at the bottom right of the editor. It checks only when you click it, verifies each release's digital signature before installing, keeps your library and settings, and puts the previous version back if the new one does not start. Every release zip is published with a `.sig` signature file and a `.sha256` checksum.
 
-What's new: [10.4.1](docs/changes/CHANGES-10.4.1.md) · [10.4.0](docs/changes/CHANGES-10.4.0.md) · [10.3.12](docs/changes/CHANGES-10.3.12.md) · [10.3.11](docs/changes/CHANGES-10.3.11.md) · [10.3.10](docs/changes/CHANGES-10.3.10.md) · [all versions](docs/changes)
+What's new: [10.4.2](docs/changes/CHANGES-10.4.2.md) · [10.4.1](docs/changes/CHANGES-10.4.1.md) · [10.4.0](docs/changes/CHANGES-10.4.0.md) · [10.3.12](docs/changes/CHANGES-10.3.12.md) · [10.3.11](docs/changes/CHANGES-10.3.11.md) · [all versions](docs/changes)
 
 ## Where Saveit is going
 
