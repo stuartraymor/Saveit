@@ -427,7 +427,9 @@ function overlayWindow(d, file, payload) {
     // 10.4.2: the region selector says when the frozen screen is drawn, and only then appears (no blank frame, and it takes
     // the mouse at once); other overlays, or a selector that does not answer within 600 ms, appear straight away.
     ov.loaded.then(() => { if (settled || ov.isDestroyed()) return;
-      let up = false; const show = () => { if (up || settled || ov.isDestroyed()) return; up = true; ipcMain.removeListener('overlay-shown', onShown); ov.show(); ov.focus(); };
+      let up = false; const show = () => { if (up || settled || ov.isDestroyed()) return; up = true; ipcMain.removeListener('overlay-shown', onShown);
+        // 10.5.1: shown fully transparent so Windows' open animation (zoom and fade) is invisible, then made opaque at once
+        try { ov.setOpacity(0); } catch (_) {} ov.show(); ov.focus(); setTimeout(() => { try { if (!ov.isDestroyed()) ov.setOpacity(1); } catch (_) {} }, 20); };
       const onShown = e => { if (!ov.isDestroyed() && e.sender === ov.webContents) show(); };
       if (file === 'overlay.html') { ipcMain.on('overlay-shown', onShown); setTimeout(show, 600); ov.webContents.send('data', payload); } else { ov.webContents.send('data', payload); show(); } });
   });

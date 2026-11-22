@@ -1218,9 +1218,10 @@ $('#camGear').onclick=e=>{e.preventDefault();e.stopPropagation();if(window.bench
 addEventListener('storage',e=>{if(e.key!=='saveit.cam')return;const id=CAMDRAW.load().deviceId||'';if(id!==devPick.cam){devPick.cam=id;try{localStorage.setItem('saveit.devices',JSON.stringify({mic:devPick.mic||'',cam:id}))}catch(_){}refreshDevices()}});
 // 10.4.12: the effects for new screenshots are chosen (and stacked) in the bar under the selection after Capture.
 // They are kept here as a list of {id,p}; older versions kept one {id,p}.
-var autoFx=[];try{autoFx=FXLIST(JSON.parse(localStorage.getItem('saveit.fx')||'[]'))}catch(e){}
-function setAutoFx(v){autoFx=FXLIST(v);try{localStorage.setItem('saveit.fx',JSON.stringify(autoFx))}catch(e){}}
-function applyAutoFx(it){if(!autoFx.length)return;it.fx=FXAPPLYALL(Object.assign(FXBLANK(),it.fx),autoFx);S.fx=it.fx;layoutStage();render();persist(it);renderTray()}
+// 10.5.1: every capture starts with No effect; the effects picked under the selection apply to that one capture only.
+var autoFx=[];try{localStorage.removeItem('saveit.fx')}catch(e){}
+function setAutoFx(v){autoFx=FXLIST(v)}
+function applyAutoFx(it){if(!autoFx.length)return;const l=autoFx;autoFx=[];it.fx=FXAPPLYALL(Object.assign(FXBLANK(),it.fx),l);S.fx=it.fx;layoutStage();render();persist(it);renderTray()}
 const OPT_IDS=['cursorOn','clipOn','mic','sysAudio','camOn','delay','area'];
 function saveOpts(){try{const o={mode:S.mode};for(const id of OPT_IDS){const e=$('#'+id);o[id]=e.type==='checkbox'?e.checked:e.value}localStorage.setItem('saveit.opts',JSON.stringify(o))}catch(e){}}
 function loadOpts(){try{const o=JSON.parse(localStorage.getItem('saveit.opts')||'{}');for(const id of OPT_IDS){const e=$('#'+id);if(!e||o[id]==null)continue;if(e.type==='checkbox')e.checked=!!o[id];else e.value=o[id]}return o}catch(e){return{}}}

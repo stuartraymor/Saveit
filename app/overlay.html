@@ -23,6 +23,7 @@ canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
 .wid [hidden]{display:none!important}
 .wid{flex-wrap:nowrap}.wid:not(.adj) .adjonly{display:none!important}.wid.adj{transform:none}
 .wid button.toggle{min-width:84px}
+.wid,.tip{opacity:0;transition:opacity .16s}body.in .wid,body.in .tip{opacity:1}
 .wid .r1,.wid .r2{display:flex;align-items:center;gap:6px 8px}
 .wid.adj{flex-direction:column;align-items:stretch}
 .wid #fxRow{display:flex;flex-direction:column;gap:6px;border-top:1px solid #3a3f45;padding-top:6px}
@@ -69,7 +70,7 @@ const HS=6;
 const K=()=>(img.naturalWidth||img.width)/W||1;
 function size(){W=innerWidth;H=innerHeight;dpr=devicePixelRatio||1;c.width=W*dpr;c.height=H*dpr;g.setTransform(dpr,0,0,dpr,0,0);draw()}
 addEventListener('resize',size);
-let vmode='image',sent=false;
+let vmode='image',sent=false,dimA=.45;
 let fxl=[];const fxUi=FXUI.stack($('fxRow'),l=>{fxl=l;draw()});
 function collect(){return{fx:fxl.map(e=>({id:e.id,p:{...e.p}})),mode:vmode,area:$('area').value,cursor:$('oCur').checked,clip:$('oClip').checked,sys:$('oSys').checked,mic:$('oMic').checked,cam:$('oCam').checked}}
 function labels(){const v=vmode==='video',a=$('area').value;
@@ -80,10 +81,12 @@ function labels(){const v=vmode==='video',a=$('area').value;
   if(state==='drag')tip.innerHTML=v?'Drag the area to <b>record</b> · <b>Click</b> for the whole screen · <b>Esc</b> to cancel':(a2==='text'?'Drag around the <b>text</b> to grab · <b>Esc</b> to cancel':'Drag to select an area · <b>Click</b> for the whole screen · <b>Esc</b> to cancel')}
 window.overlay.onData(d=>{sent=false;const o=d.opts||{};vmode=o.mode==='video'?'video':'image';
   $('area').value=o.area&&o.area!=='window'&&o.area!=='steps'?o.area:'region';
-  $('oCur').checked=!!o.cursor;$('oClip').checked=!!o.clip;$('oSys').checked=o.sys!==false;$('oMic').checked=!!o.mic;$('oCam').checked=!!o.cam;fxUi.set(o.fx);fxl=fxUi.get();
+  $('oCur').checked=!!o.cursor;$('oClip').checked=!!o.clip;$('oSys').checked=o.sys!==false;$('oMic').checked=!!o.mic;$('oCam').checked=!!o.cam;fxUi.set([]);fxl=[]; /* 10.5.1: each capture starts with No effect */
   if(d.init==='full'||$('area').value==='screen'){$('area').value='screen';state='adjust';tip.style.display='none'}
   labels();
-  const shown=()=>{ready=true;size();if(state==='adjust'){sel={x:0,y:0,w:W,h:H};draw()}window.overlay.shown&&window.overlay.shown()};
+  // 10.5.1: the frozen screen first appears exactly as the screen looks (no dimming), then the dimming and the bar fade in,
+  // so opening the selector does not flash
+  const shown=()=>{ready=true;dimA=0;document.body.classList.remove('in');size();requestAnimationFrame(()=>document.body.classList.add('in'));const t0=performance.now(),fade=()=>{const k=Math.min(1,(performance.now()-t0)/160);dimA=.45*k;draw();if(k<1)requestAnimationFrame(fade)};requestAnimationFrame(fade);if(state==='adjust'){sel={x:0,y:0,w:W,h:H};draw()}window.overlay.shown&&window.overlay.shown()};
   // 10.4.0: raw BGRA pixels (no PNG to encode and decode, which took a noticeable part of a second on a large screen)
   if(d.raw){const w=d.w,h=d.h,n=w*h;let src=d.raw;if(src.byteOffset%4||src.byteLength<n*4){const c=new Uint8Array(n*4);c.set(src.subarray(0,n*4));src=c}const q=new Uint32Array(src.buffer,src.byteOffset,n);for(let i=0;i<n;i++){const v=q[i];q[i]=(v&0x0000ff00)|((v&0xff)<<16)|((v>>>16)&0xff)|0xff000000}const px=new Uint8ClampedArray(src.buffer,src.byteOffset,n*4);const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').putImageData(new ImageData(px,w,h),0,0);img=cv;shown();return}
   img=new Image();img.onload=shown;img.src=d.shot});
@@ -135,7 +138,7 @@ function fxPreview(r){fxGuide=null;if(vmode==='video'||!fxl.length||r.w<2||r.h<2
   // 10.4.12: rounded corners get a dotted guide (white over dark) showing exactly where each corner is cut; it is drawn
   // after the selection outline (draw() calls fxGuide) so the outline does not cover it
   const R=f.radii||[f.radius,f.radius,f.radius,f.radius];if(!E&&R.some(v=>v>0))fxGuide=()=>{g.save();g.lineWidth=1.5;g.setLineDash([3,3]);cornerP(r.x+.75,r.y+.75,r.w-1.5,r.h-1.5,f,0);g.strokeStyle='rgba(0,0,0,.8)';g.stroke();g.lineDashOffset=3;g.strokeStyle='#ffffff';g.stroke();g.restore()}}
-function draw(){if(!ready)return;g.clearRect(0,0,W,H);g.drawImage(img,0,0,W,H);g.fillStyle='rgba(0,0,0,.45)';
+function draw(){if(!ready)return;g.clearRect(0,0,W,H);g.drawImage(img,0,0,W,H);g.fillStyle=`rgba(0,0,0,${dimA})`;
   const r=state==='adjust'?sel:(start?norm(start,cur):null);
   if(r&&r.w>1&&r.h>1){g.beginPath();g.rect(0,0,W,H);g.rect(r.x,r.y,r.w,r.h);g.fill('evenodd');fxPreview(r);
     g.strokeStyle='#2db3a0';g.lineWidth=1.5;if(state==='adjust'&&isFull()){g.lineWidth=3;g.setLineDash([10,7]);g.strokeRect(4,4,W-8,H-8);g.setLineDash([])}else g.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1);if(fxGuide)fxGuide();
