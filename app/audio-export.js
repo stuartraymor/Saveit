@@ -13,7 +13,22 @@ async function mp3(buf,k){if(!root.lamejs||!root.lamejs.Mp3Encoder)throw Error('
   for(let i=0,n=0;i<L.length;i+=step,n++){const d=R?enc.encodeBuffer(L.subarray(i,i+step),R.subarray(i,i+step)):enc.encodeBuffer(L.subarray(i,i+step));if(d.length)parts.push(new Uint8Array(d));if(n%40===39)await tick()}
   const e=enc.flush();if(e.length)parts.push(new Uint8Array(e));return new Blob(parts,{type:'audio/mpeg'})}
 const M4A_MIME='audio/mp4;codecs=mp4a.40.2';
-async function m4a(buf,k){if(!root.MediaRecorder||!MediaRecorder.isTypeSupported(M4A_MIME))throw Error('M4A is not available on this computer. Save as MP3 instead.');
+// 10.4.3: encode AAC directly (WebCodecs, the same encoder the video export uses) and write the .m4a, many times faster
+// than real time. The real-time recorder below stays as the fallback when this computer's encoder can't do it.
+async function m4aFast(buf,k){if(typeof AudioEncoder==='undefined'||typeof AudioData==='undefined'||!root.VExport||!root.VExport.mp4||buf.numberOfChannels>2)return null;
+  if(buf.sampleRate!==44100&&buf.sampleRate!==48000)buf=await resample(buf,48000);
+  const ch=Math.min(2,buf.numberOfChannels),rate=buf.sampleRate,br=(k||kbps())*1000,cfg={codec:'mp4a.40.2',sampleRate:rate,numberOfChannels:ch,bitrate:br};
+  try{if(!(await AudioEncoder.isConfigSupported(cfg)).supported)return null}catch(e){return null}
+  const chunks=[];let meta=null,err=null;const enc=new AudioEncoder({output:(c,m)=>{const d=new Uint8Array(c.byteLength);c.copyTo(d);chunks.push({ts:c.timestamp,dur:c.duration||Math.round(1024e6/rate),data:d});if(m&&m.decoderConfig&&!meta)meta=m.decoderConfig},error:x=>{err=x}});
+  try{enc.configure(cfg);const F=4800,chs=[];for(let i=0;i<ch;i++)chs.push(buf.getChannelData(i));
+    for(let p=0,n2=0;p<buf.length;p+=F,n2++){if(err)throw err;const n=Math.min(F,buf.length-p),data=new Float32Array(n*ch);chs.forEach((c,i)=>data.set(c.subarray(p,p+n),i*n));
+      const ad=new AudioData({format:'f32-planar',sampleRate:rate,numberOfFrames:n,numberOfChannels:ch,timestamp:Math.round(p*1e6/rate),data});while(enc.encodeQueueSize>8)await new Promise(r=>setTimeout(r,1));enc.encode(ad);ad.close();if(n2%50===49)await tick()}
+    await enc.flush();if(err)throw err}finally{try{if(enc.state!=='closed')enc.close()}catch(e){}}
+  if(!chunks.length)return null;const d=meta&&meta.description;
+  const asc=d?new Uint8Array(d instanceof ArrayBuffer?d.slice(0):d.buffer.slice(d.byteOffset,d.byteOffset+d.byteLength)):new Uint8Array([(2<<3)|((rate===44100?4:3)>>1),(((rate===44100?4:3)&1)<<7)|(ch<<3)]);
+  return root.VExport.mp4({video:null,audio:{chunks,rate,channels:ch,codec:'aac',asc,bitrate:br},durationMs:buf.duration*1000})}
+async function m4a(buf,k){try{const fast=await m4aFast(buf,k);if(fast)return fast}catch(e){console.warn('Fast M4A encoding failed, so it is recorded in real time instead:',e)}
+  if(!root.MediaRecorder||!MediaRecorder.isTypeSupported(M4A_MIME))throw Error('M4A is not available on this computer. Save as MP3 instead.');
   const ctx=new AudioContext({sampleRate:buf.sampleRate}),dest=ctx.createMediaStreamDestination(),src=ctx.createBufferSource();src.buffer=buf;src.connect(dest);
   const rec=new MediaRecorder(dest.stream,{mimeType:M4A_MIME,audioBitsPerSecond:(k||kbps())*1000}),chunks=[],done=new Promise(r=>rec.onstop=r);
   rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};rec.start(1000);src.onended=()=>setTimeout(()=>{if(rec.state!=='inactive')rec.stop()},250);

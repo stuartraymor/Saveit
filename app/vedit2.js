@@ -9,13 +9,17 @@ let HK={};
 const NEEDS_BASE=['blur','spotlight','magnify'];
 
 // ---------- media helpers ----------
-const waitEv=(el,ev,ms)=>new Promise(res=>{let d=false;const f=()=>{if(d)return;d=true;el.removeEventListener(ev,f);res()};el.addEventListener(ev,f);setTimeout(f,ms||3000)});
+const waitEv=(el,ev,ms)=>new Promise(res=>{let d=false;const f=()=>{if(d)return;d=true;el.removeEventListener(ev,f);el.removeEventListener('error',f);res()};el.addEventListener(ev,f);el.addEventListener('error',f);setTimeout(f,ms||3000)});
 function loadMeta(url,audioOnly){return new Promise((res,rej)=>{const v=document.createElement(audioOnly?'audio':'video');v.preload='auto';v.src=url;
   v.onerror=()=>rej(new Error('That file could not be opened.'));
   const done=()=>res({dur:isFinite(v.duration)?v.duration:0,w:v.videoWidth||0,h:v.videoHeight||0});
   v.onloadedmetadata=()=>{if(isFinite(v.duration)&&v.duration>0)return done();
     const f=()=>{v.removeEventListener('timeupdate',f);v.currentTime=0;setTimeout(done,60)};v.addEventListener('timeupdate',f);v.currentTime=1e101;setTimeout(done,4000)}})}
-async function seekEl(el,t){t=Math.max(0,t);if(Math.abs(el.currentTime-t)<0.01&&el.readyState>=2)return;const w=waitEv(el,'seeked',2500);el.currentTime=t;await w;await new Promise(r=>setTimeout(r,16))}
+// 10.4.3: a new element is asked to seek before it has loaded its metadata; the browser then never says "seeked" and the
+// preview stayed black (and the first timeline click waited) for the whole 2.5 s safety limit. Wait for the metadata first.
+async function seekEl(el,t){t=Math.max(0,t);if(Math.abs(el.currentTime-t)<0.01&&el.readyState>=2)return;
+  if(el.readyState<1&&el.getAttribute('src')&&!el.error){await waitEv(el,'loadedmetadata',2500);if(el.error||Math.abs(el.currentTime-t)<0.01&&el.readyState>=2)return}
+  const w=waitEv(el,'seeked',2500);el.currentTime=t;await w;await new Promise(r=>setTimeout(r,16))}
 
 // ---------- audio effects ----------
 const EQ_F=[60,170,310,600,1000,3000,6000,12000],EQ_L=['60','170','310','600','1k','3k','6k','12k'];

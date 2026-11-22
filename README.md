@@ -88,7 +88,7 @@ It installs for your user account only, with no admin rights. Setup downloads th
 
 **Updating:** from version 10.2.0 on, click **Check for Updates →** at the bottom right of the editor. It checks only when you click it, verifies each release's digital signature before installing, keeps your library and settings, and puts the previous version back if the new one does not start. Every release zip is published with a `.sig` signature file and a `.sha256` checksum.
 
-What's new: [10.4.2](docs/changes/CHANGES-10.4.2.md) · [10.4.1](docs/changes/CHANGES-10.4.1.md) · [10.4.0](docs/changes/CHANGES-10.4.0.md) · [10.3.12](docs/changes/CHANGES-10.3.12.md) · [10.3.11](docs/changes/CHANGES-10.3.11.md) · [all versions](docs/changes)
+What's new: [10.4.5](docs/changes/CHANGES-10.4.5.md) · [10.4.4](docs/changes/CHANGES-10.4.4.md) · [10.4.3](docs/changes/CHANGES-10.4.3.md) · [10.4.2](docs/changes/CHANGES-10.4.2.md) · [10.4.1](docs/changes/CHANGES-10.4.1.md) · [all versions](docs/changes)
 
 ## Where Saveit is going
 

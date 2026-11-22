@@ -299,6 +299,10 @@ details.more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size
 (()=>{
 const $=s=>document.querySelector(s);
 const cv=$('#cv'), ctx=cv.getContext('2d'), stage=$('#stage'), te=$('#te');
+/* 10.4.4: the screen canvas is drawn at zoom x display scale, but shadows and blur filters are not scaled by the transform; scale them so the screen matches the saved picture */
+(()=>{const P=CanvasRenderingContext2D.prototype,k=()=>{try{return cvK>0?cvK:1}catch(e){return 1}};
+for(const n of ['shadowBlur','shadowOffsetX','shadowOffsetY']){const d=Object.getOwnPropertyDescriptor(P,n);Object.defineProperty(ctx,n,{configurable:true,get(){return d.get.call(this)/k()},set(v){d.set.call(this,(+v||0)*k())}})}
+const fd=Object.getOwnPropertyDescriptor(P,'filter');Object.defineProperty(ctx,'filter',{configurable:true,get(){return fd.get.call(this)},set(v){const r=String(v),s=k();fd.set.call(this,s===1?r:r.replace(/blur\(\s*([\d.]+)px\s*\)/g,(m,x)=>'blur('+(+x*s)+'px)'))}})})();
 const ICON={
  fill:'<path d="M5 13l7-8 7 8-7 6z"/><path d="M19 17c1 1.6 1.6 2.6 1.6 3.4a1.6 1.6 0 01-3.2 0c0-.8.6-1.8 1.6-3.4z"/>',
  erase:'<path d="M4 16l8-9 7 6-6 6H8z"/><path d="M9 20h11"/>',
@@ -348,7 +352,7 @@ function actionError(e){console.error(e);toast(e?.message||'That action could no
 function idb(){if(dbp)return dbp;dbp=new Promise((resolve,reject)=>{const r=indexedDB.open('capture-bench',2);r.onupgradeneeded=()=>{for(const name of ['items','catalog'])if(!r.result.objectStoreNames.contains(name))r.result.createObjectStore(name,{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.onblocked=()=>reject(Error('Close other Saveit windows and try again.'))});return dbp}
 async function dbRead(id){const db=await idb();return new Promise((resolve,reject)=>{const r=db.transaction('items').objectStore('items').get(id);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 function catalogOf(rec,it){return{id:rec.id,kind:rec.kind,name:rec.name,title:rec.title,created:rec.created,folder:rec.folder||'',tags:rec.tags||[],pinned:!!rec.pinned,hiddenRecent:!!rec.hiddenRecent,width:rec.width||it?.base?.width||0,height:rec.height||it?.base?.height||0,stepCount:rec.steps?.length||0,bytes:(Array.isArray(rec.tracks)?rec.tracks.reduce((n,t)=>n+(t.blob?.size||0),0):rec.blob?.size)||0,dur:rec.dur||0,sourceCount:Array.isArray(rec.tracks)?rec.tracks.length:0,trackCount:rec.audioProject?.tracks?.length??(Array.isArray(rec.tracks)?rec.tracks.length:0),thumb:rec.thumb||it?._catalogThumb||null}}
-async function dbPut(rec){if(deletedItemIds.has(rec.id))return;const it=S.items.find(i=>i.id===rec.id);if(it){Object.assign(rec,{tags:it.tags||[],pinned:!!it.pinned,hiddenRecent:!!it.hiddenRecent,width:it.base?.width||it.width||0,height:it.base?.height||it.height||0});if(it.kind==='image'||it.kind==='guide')rec.thumb=thumbSrc(it,192)||it._catalogThumb||null}
+async function dbPut(rec){if(deletedItemIds.has(rec.id))return;const it=S.items.find(i=>i.id===rec.id);if(it){Object.assign(rec,{tags:it.tags||[],pinned:!!it.pinned,hiddenRecent:!!it.hiddenRecent,width:it.base?.width||it.width||0,height:it.base?.height||it.height||0});if(it.kind==='image'||it.kind==='guide'){rec.thumb=thumbSrc(it,192)||it._catalogThumb||null;if(it._thumbWait104)it._thumbStored104=true}}
  const db=await idb();if(deletedItemIds.has(rec.id))return;await new Promise((resolve,reject)=>{const t=db.transaction(['items','catalog'],'readwrite');t.objectStore('items').put(rec);t.objectStore('catalog').put(catalogOf(rec,it));t.oncomplete=resolve;t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||Error('Save was interrupted'))})}
 async function dbDel(id){deletedItemIds.add(id);try{const db=await idb();await new Promise((resolve,reject)=>{const t=db.transaction(['items','catalog'],'readwrite');for(const s of ['items','catalog'])t.objectStore(s).delete(id);t.oncomplete=resolve;t.onerror=()=>reject(t.error)})}catch(e){storageError(e)}}
 async function dbAll(){const db=await idb();return new Promise((resolve,reject)=>{const r=db.transaction('items').objectStore('items').getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error)})}
@@ -364,7 +368,7 @@ function persist(it){if(it.guide)return persist(it.guide);dirtyItems33.add(it.id
 async function persistNow(it){if(deletedItemIds.has(it.id)){dirtyItems33.delete(it.id);return}const revision=it._saveRevision||0;clearTimeout(saveTimers[it.id]);delete saveTimers[it.id];const job=(async()=>{const rec=await recordItem(it);await dbPut(rec)})();pendingWrites.add(job);try{await job;if(revision===(it._saveRevision||0))dirtyItems33.delete(it.id)}finally{pendingWrites.delete(job)}}
 async function flushLibrary(){storageFailed=false;await Promise.all([...pendingWrites]);for(const id of [...dirtyItems33]){const it=S.items.find(i=>i.id===id);if(it)await persistNow(it);else dirtyItems33.delete(id)}await Promise.all([...pendingWrites]);if(storageFailed||dirtyItems33.size)throw Error('Saving did not finish. Retry closing after exporting your work.');document.querySelector('#saveAlert33')?.remove();document.querySelector('.brand')?.removeAttribute('data-save-error')}
 async function imageFromBlob(blob){const u=URL.createObjectURL(blob);try{const im=new Image();im.src=u;let tm;await Promise.race([im.decode(),new Promise((_,no)=>{tm=setTimeout(()=>no(Error('The capture took too long to load. Try opening it again.')),45000)})]).finally(()=>clearTimeout(tm));return canvasFrom(im)}finally{URL.revokeObjectURL(u)}}
-async function hydrate(it){if(!it||!it._lazy)return it;if(it._loading)return it._loading;it._loading=(async()=>{const r=await dbRead(it.id);if(!r)throw Error('The saved capture could not be found.');if(r.savedPath)it.savedPath=r.savedPath;if(r.kind==='image'){it.base=await imageFromBlob(r.png);if(r.blank)it.base._blank=true;it.width=it.base.width;it.height=it.base.height;it.shapes=r.shapes||[];it.fx=r.fx||FXBLANK();it.undo=[];it.redo=[]}else if(r.kind==='video'){Object.assign(it,{blob:r.blob,mp4:r.mp4,webm:r.webm,edit:r.edit,_edBlobs:r.editBlobs||{},url:URL.createObjectURL(r.blob)})}else if(r.kind==='text'){Object.assign(it,{text:r.text||'',html:r.html||'',src:r.src||null,thumb:r.thumb||it.thumb||null})}else if(r.kind==='audio'){Object.assign(it,{tracks:r.tracks||[],blob:r.blob,dur:r.dur||0,edit:r.edit||null,audioProject:r.audioProject||null,audioLegacy:r.audioLegacy||null,thumb:r.thumb||it.thumb||null})}else{it.steps=[];it.pageShapes=r.pageShapes||[];it.numColor=r.numColor;for(const st of r.steps||[])it.steps.push({id:st.id,kind:'image',name:'Step',title:st.title,text:st.text,base:await imageFromBlob(st.png),shapes:st.shapes||[],fx:st.fx||FXBLANK(),undo:[],redo:[],guide:it})}it._lazy=false;bumpItem(it);return it})();try{return await it._loading}finally{delete it._loading}}
+async function hydrate(it){if(!it||!it._lazy)return it;if(it._loading)return it._loading;it._loading=(async()=>{await idOps104.get(it.id);const r=await dbRead(it.id);if(!r)throw Error('The saved capture could not be found.');if(r.savedPath)it.savedPath=r.savedPath;if(r.kind==='image'){it.base=await imageFromBlob(r.png);if(r.blank)it.base._blank=true;it.width=it.base.width;it.height=it.base.height;it.shapes=r.shapes||[];it.fx=r.fx||FXBLANK();it.undo=[];it.redo=[]}else if(r.kind==='video'){Object.assign(it,{blob:r.blob,mp4:r.mp4,webm:r.webm,edit:r.edit,_edBlobs:r.editBlobs||{},url:URL.createObjectURL(r.blob)})}else if(r.kind==='text'){Object.assign(it,{text:r.text||'',html:r.html||'',src:r.src||null,thumb:r.thumb||it.thumb||null})}else if(r.kind==='audio'){Object.assign(it,{tracks:r.tracks||[],blob:r.blob,dur:r.dur||0,edit:r.edit||null,audioProject:r.audioProject||null,audioLegacy:r.audioLegacy||null,thumb:r.thumb||it.thumb||null})}else{it.steps=[];it.pageShapes=r.pageShapes||[];it.numColor=r.numColor;for(const st of r.steps||[])it.steps.push({id:st.id,kind:'image',name:'Step',title:st.title,text:st.text,base:await imageFromBlob(st.png),shapes:st.shapes||[],fx:st.fx||FXBLANK(),undo:[],redo:[],guide:it})}it._lazy=false;bumpItem(it);return it})();try{return await it._loading}finally{delete it._loading}}
 function metaItem(r){return{...r,_catalogThumb:r.thumb||null,_lazy:true,base:null,shapes:[],fx:FXBLANK(),undo:[],redo:[],steps:r.kind==='guide'?Array.from({length:r.stepCount||0},()=>({})):undefined,blob:r.kind==='video'||r.kind==='audio'?{size:r.bytes||0}:undefined,tracks:r.kind==='audio'?Array.from({length:r.sourceCount||r.trackCount||1},()=>({})):undefined}}
 async function bootLibrary(){const db=await idb();let metas=await new Promise((resolve,reject)=>{const q=db.transaction('catalog').objectStore('catalog').getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});if(!metas.length){const old=await dbAll();if(old.length){await new Promise((resolve,reject)=>{const t=db.transaction('catalog','readwrite');for(const r of old)t.objectStore('catalog').put(catalogOf(r));t.oncomplete=resolve;t.onerror=()=>reject(t.error)});metas=old.map(r=>catalogOf(r))}}
  if(metas.length){metas.sort((a,b)=>(b.created||0)-(a.created||0));S.items=metas.map(metaItem);S.items.forEach(i=>{if(i.folder)folders.add(i.folder)});saveFolders();renderTray();await openItem(S.items.find(i=>i.kind!=='text')||null)}else sample();document.body.dataset.catalogCount=S.items.length;
@@ -420,12 +424,20 @@ const trash=[];
 function syncUndoDel(){const b=$('#undoDelBtn');if(b){b.hidden=!trash.length;b.textContent='Undo delete'+(trash.length>1?' ('+trash.length+')':'')}const l=$('#libUndo');if(l)l.disabled=!trash.length}
 function deleteItems(list,quiet){list=list.filter(it=>S.items.includes(it));if(!list.length)return;
   const rec=list.map(it=>({it,i:S.items.indexOf(it)})).sort((a,b)=>a.i-b.i);
-  list.forEach(it=>{clearTimeout(saveTimers[it.id]);delete saveTimers[it.id];deletedItemIds.add(it.id);S.items.splice(S.items.indexOf(it),1);dbDel(it.id)});
+  list.forEach(it=>{clearTimeout(saveTimers[it.id]);delete saveTimers[it.id];deletedItemIds.add(it.id);S.items.splice(S.items.indexOf(it),1)});
+  /* 10.4.3: an item not opened this session exists here only as its library card, so keep its stored data until Undo delete can no longer bring it back */
+  rec.forEach(r=>{const id=r.it.id,lazy=r.it._lazy;r.done=idOp104(id,async()=>{const snap=lazy?(await dbSnap104(id).catch(()=>null))||r.it._snap104||null:null;await dbDel(id);return snap})});
   trash.push(rec);while(trash.length>20)trash.shift().forEach(r=>{if(r.it.url)URL.revokeObjectURL(r.it.url)});
   if(S.cur&&(list.includes(S.cur)||list.includes(S.cur.guide)))openItem(S.items.find(i=>i.kind!=='text')||null);else renderTray();
   syncUndoDel();if(!quiet)toast(`Deleted ${list.length} item${list.length>1?'s':''}. Press Undo delete to bring ${list.length>1?'them':'it'} back.`,6000)}
-function undoDelete(){const rec=trash.pop();if(!rec)return;for(const r of rec){deletedItemIds.delete(r.it.id);S.items.splice(Math.min(r.i,S.items.length),0,r.it);persist(r.it)}
-  renderTray();syncUndoDel();toast(`Restored ${rec.length} item${rec.length>1?'s':''}`)}
+function undoDelete(){const rec=trash.pop();if(!rec)return;for(const r of rec)S.items.splice(Math.min(r.i,S.items.length),0,r.it)
+  renderTray();syncUndoDel();toast(`Restored ${rec.length} item${rec.length>1?'s':''}`);
+  /* 10.4.4: write each item back once its deletion has finished, in order with any later delete of the same item; unopened items get their stored data back as it was */
+  Promise.all(rec.map(r=>idOp104(r.it.id,async()=>{const snap=await r.done.catch(()=>null);if(!S.items.includes(r.it)){r.it._snap104=snap;return}deletedItemIds.delete(r.it.id);r.it._snap104=null;if(snap&&r.it._lazy)await dbRestore104(snap);else persist(r.it)}))).catch(storageError)}
+/* 10.4.4: storage steps for one item (delete, undo delete, opening) run one after another */
+const idOps104=new Map();function idOp104(id,fn){const p=(idOps104.get(id)||Promise.resolve()).catch(()=>{}).then(fn);const q=p.catch(()=>{});idOps104.set(id,q);q.then(()=>{if(idOps104.get(id)===q)idOps104.delete(id)});return p}
+async function dbSnap104(id){const db=await idb();return new Promise((resolve,reject)=>{const t=db.transaction(['items','catalog']),out={};t.objectStore('items').get(id).onsuccess=e=>out.item=e.target.result;t.objectStore('catalog').get(id).onsuccess=e=>out.cat=e.target.result;t.oncomplete=()=>resolve(out.item?out:null);t.onerror=()=>reject(t.error)})}
+async function dbRestore104(snap){const db=await idb();await new Promise((resolve,reject)=>{const t=db.transaction(['items','catalog'],'readwrite');t.objectStore('items').put(snap.item);if(snap.cat)t.objectStore('catalog').put(snap.cat);t.oncomplete=resolve;t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||Error('Restore was interrupted'))})}
 function removeItem(it){const i=S.items.indexOf(it);if(i<0)return;S.items.splice(i,1);dbDel(it.id);if(it.url)URL.revokeObjectURL(it.url);if(S.cur===it)openItem(S.items.find(i=>i.kind!=='text')||null);else renderTray()}
 // 8.07: effect sliders and colour pickers fire on every move; keep one undo step per burst of changes.
 let fxSnapT=0;function fxSnap(){if(Date.now()-fxSnapT>800)snap();fxSnapT=Date.now()}
@@ -469,7 +481,9 @@ function layoutStage(){
   if(it&&it.kind==='image'){const p=padFor(S.fx)+picMargin();cvW=S.ws?S.ws.sw:it.base.width+p*2;cvH=S.ws?S.ws.sh:it.base.height+p*2;cvK=0;applyZoom();}
 }
 let cvW=300,cvH=150,cvK=1;
-function backing94(z){const m=Math.max(cvW,cvH);return m>16000?Math.min(1,Math.max(16000/m,z*(devicePixelRatio||1))):1}
+function backing94(z){const m=Math.max(cvW,cvH);if(m>16000)return Math.min(1,Math.max(16000/m,z*(devicePixelRatio||1)));
+  /* 10.4.3: draw at zoom x display scale so the picture, outlines, handles and labels stay sharp when zoomed in (was always 1, then stretched); capped at 32 MP */
+  const want=z*(devicePixelRatio||1);if(want<=1)return 1;return Math.max(1,Math.min(want,16384/m,Math.sqrt(32e6/(cvW*cvH))))}
 function scale(){
   if(S.zoom!=='fit')return +S.zoom;
   const r=stage.getBoundingClientRect();
@@ -490,13 +504,13 @@ function render(){
   const it=S.cur; status(); if(it&&it.kind==='guide'){drawPage();return} if(!it||it.kind!=='image')return;
   ctx.setTransform(cvK||1,0,0,cvK||1,0,0);
   // 9.4: on very large canvases only the visible part (plus a margin) is redrawn; scrolling redraws the rest
-  const big=cvW*cvH>12e6;let clip=null;if(big){const r=cv.getBoundingClientRect(),sr=stage.getBoundingClientRect(),z=r.width/cvW||1,m=300;const x0=Math.max(0,Math.floor((sr.left-r.left)/z-m)),y0=Math.max(0,Math.floor((sr.top-r.top)/z-m)),x1=Math.min(cvW,Math.ceil((sr.right-r.left)/z+m)),y1=Math.min(cvH,Math.ceil((sr.bottom-r.top)/z+m));if(x1>x0&&y1>y0)clip=[x0,y0,x1-x0,y1-y0]}
-  if(clip){ctx.save();ctx.beginPath();ctx.rect(...clip);ctx.clip();ctx.clearRect(...clip)}else ctx.clearRect(0,0,cvW,cvH);
+  const big=cv.width*cv.height>12e6;let clip=null;if(big){const r=cv.getBoundingClientRect(),sr=stage.getBoundingClientRect(),z=r.width/cvW||1,m=300;const x0=Math.max(0,Math.floor((sr.left-r.left)/z-m)),y0=Math.max(0,Math.floor((sr.top-r.top)/z-m)),x1=Math.min(cvW,Math.ceil((sr.right-r.left)/z+m)),y1=Math.min(cvH,Math.ceil((sr.bottom-r.top)/z+m));if(x1>x0&&y1>y0)clip=[x0,y0,x1-x0,y1-y0]}
+  if(clip){ctx.save();ctx.beginPath();ctx.rect(...clip);ctx.clip();ctx.clearRect(...clip)}else{ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,cv.width,cv.height);ctx.restore()}
   const p0=padFor(S.fx)+(S.ws?0:picMargin());
   if(S.ws){ctx.save();ctx.translate(S.ws.ox-p0,S.ws.oy-p0);drawComposite(ctx,it,p0,true);ctx.restore()}else drawComposite(ctx,it,p0,true);
   if(clip)ctx.restore();
 }
-let scrollRender94=0;stage.addEventListener('scroll',()=>{if(cvW*cvH>12e6&&!scrollRender94)scrollRender94=requestAnimationFrame(()=>{scrollRender94=0;render()})},{passive:true});
+let scrollRender94=0;stage.addEventListener('scroll',()=>{if(cv.width*cv.height>12e6&&!scrollRender94)scrollRender94=requestAnimationFrame(()=>{scrollRender94=0;render()})},{passive:true});
 function roundRectPath(c,x,y,w,h,r){r=Math.max(0,Math.min(r,w/2,h/2));c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
 function edgePath(c,x,y,w,h,e){const d=+e.depth||10,step=Math.max(6,Math.round(d*1.4));let sd=((w*31+h*17)|0)>>>0;const rnd=()=>{sd=(sd*1664525+1013904223)>>>0;return sd/4294967296};
   const off=i=>e.style==='zigzag'?(i%2?d:0):e.style==='wave'?(Math.sin(i*.9)+1)/2*d:rnd()*d;
@@ -640,7 +654,11 @@ function drawArrow(c,s){const st=s.style||'solid',len=Math.hypot(s.x2-s.x1,s.y2-
   const bx=s.x2-Math.cos(a)*hl*.85,by=s.y2-Math.sin(a)*hl*.85;dash();c.beginPath();c.moveTo(s.x1,s.y1);c.lineTo(bx,by);c.stroke();head(s.x2,s.y2,a,false)}
 const IMGS={};let imgsN94=0;
 function pruneImgs94(){const keep=new Set(),add=a=>(a||[]).forEach(s=>{if(s&&typeof s.src==='string')keep.add(s.src)});for(const it of S.items){if(it._lazy)continue;add(it.shapes);add(it.pageShapes);(it.undo||[]).forEach(u=>add(u.shapes||u.page));(it.redo||[]).forEach(u=>add(u.shapes||u.page));(it.steps||[]).forEach(st=>{if(st){add(st.shapes);(st.undo||[]).forEach(u=>add(u.shapes));(st.redo||[]).forEach(u=>add(u.shapes))}})}for(const k of Object.keys(IMGS))if(!keep.has(k))delete IMGS[k];imgsN94=Object.keys(IMGS).length}
-function imgFor(src){let i=IMGS[src];if(!i){if(++imgsN94>80)setTimeout(pruneImgs94);i=new Image();i.onload=()=>render();i.src=src;IMGS[src]=i}return i}
+function imgFor(src){let i=IMGS[src];if(!i){if(++imgsN94>80)setTimeout(pruneImgs94);i=new Image();i.onload=()=>{render();thumbImgLoaded104()};i.onerror=()=>thumbImgLoaded104();i.src=src;IMGS[src]=i}return i}
+/* 10.4.3: a thumbnail drawn before its picture layers finished loading is redrawn (and its library copy corrected) once they load */
+let thumbImgT104=0;function thumbImgLoaded104(){clearTimeout(thumbImgT104);thumbImgT104=setTimeout(()=>{let any=false;for(const it of S.items){const key=it.id;if(!it._thumbWait104)continue;const im=it.kind==='guide'?it.steps[0]:it;if(picsPending104(im))continue;it._thumbWait104=false;any=true;thumbCache.delete(key);it._catalogThumb=null;if(it._thumbStored104){it._thumbStored104=false;fixCatalogThumb104(it).catch(()=>{})}}if(any)renderTray()},60)}
+function picsPending104(im){return !!(im&&(im.shapes||[]).some(s=>s&&s.t==='img'&&typeof s.src==='string'&&!(IMGS[s.src]&&IMGS[s.src].complete)))}
+async function fixCatalogThumb104(it){if(it._lazy||deletedItemIds.has(it.id))return;const thumb=thumbSrc(it,192);if(!thumb||it._thumbWait104)return;const db=await idb();await new Promise((resolve,reject)=>{const t=db.transaction('catalog','readwrite'),st=t.objectStore('catalog'),q=st.get(it.id);q.onsuccess=()=>{if(q.result){q.result.thumb=thumb;st.put(q.result)}};t.oncomplete=resolve;t.onerror=()=>reject(t.error)})}
 function stepLabel(n,seq){if(seq==='A'||seq==='a'){let t='',k=n;while(k>0){k--;t=String.fromCharCode(65+k%26)+t;k=Math.floor(k/26)}return seq==='a'?t.toLowerCase():t}
   if(seq==='I'){const m=[[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];let t='',k=n;for(const [v,r] of m)while(k>=v){t+=r;k-=v}return t}return String(n)}
 function shapesOf(it){return it.kind==='guide'?(it.pageShapes=it.pageShapes||[]):it.shapes}
@@ -964,7 +982,7 @@ async function save(fmtArg){const it=S.cur;if(!it)return;commitText();saveTarget
     toast('Saving your edited video'+lenT+'… Cancel is in Export.',9000);
     (async()=>{try{const o=await ctl97.renderBlob(fmt==='mp4'?'mp4':'webm');if(!o){toast('Save cancelled. Nothing was written.',5000);return}const b2=fmt==='mp4'?o.mp4:(o.webm||o.mp4);if(!b2){toast('MP4 could not be made here. Choose WebM.',6000);return}saveTarget9=tgt;saveOwner9=own;saveBlob(b2,fileName(fmt),'Saved the edited video'+lenT+' to')}catch(e){toast('Could not save: '+(e.message||e),6000)}})();return}
   let b=fmt==='mp4'?it.mp4:it.webm;if(b&&fmt!=='mp4'&&window.WebmFix)b=await WebmFix.ensure(b);if(!b){toast(fmt==='mp4'?'This recording was made without MP4. Choose WebM, or record again in this version to get both.':'This recording only has MP4. Choose MP4.',6000);return}saveBlob(b,fileName(fmt));return}
-  if(it.kind==='audio'){const tgt=saveTarget9,own=saveOwner9;saveTarget9=null;saveOwner9=null;const af=fmt==='mp3'||fmt==='m4a'?fmt:'wav';toast(af==='m4a'?'Making the M4A… it takes as long as the audio, so keep this window open.':af==='mp3'?'Making the MP3…':'Mixing the audio…',af==='m4a'?9000:3000);try{const b=await AEdit.renderAs(it,af);saveTarget9=tgt;saveOwner9=own;await saveBlob(b,fileName(af),'Saved the audio ('+AEdit.fmt(it.dur||0)+') to')}catch(e){toast('Could not save the audio: '+(e.message||e),6000)}return}
+  if(it.kind==='audio'){const tgt=saveTarget9,own=saveOwner9;saveTarget9=null;saveOwner9=null;const af=fmt==='mp3'||fmt==='m4a'?fmt:'wav';toast(af==='m4a'?'Making the M4A…':af==='mp3'?'Making the MP3…':'Mixing the audio…',af==='m4a'?9000:3000);try{const b=await AEdit.renderAs(it,af);saveTarget9=tgt;saveOwner9=own;await saveBlob(b,fileName(af),'Saved the audio ('+AEdit.fmt(it.dur||0)+') to')}catch(e){toast('Could not save the audio: '+(e.message||e),6000)}return}
   if(fmt==='saveit')return saveSaveit(it.guide&&false?it.guide:it);
   if(it.kind==='guide'){if(fmt==='docx')return exportDocx(it);if(fmt==='pdf')return exportPdf(it);if(fmt==='jpg')return exportGuideJpg(it);if(fmt==='png'){const pc=renderPageCanvas(it,2);pc.canvas.toBlob(b=>saveBlob(b,safeName(it.title)+'.png'),'image/png');return}return}
   const c=exportCanvas();
@@ -1214,15 +1232,18 @@ function importFile(f){
 }
 $('#openBtn').onclick=()=>$('#file').click();
 $('#file').onchange=e=>{const gid=e.target.dataset.guide;delete e.target.dataset.guide;const g=gid&&S.items.find(x=>x.id===gid);
-  if(g){[...e.target.files].filter(f=>f.type.startsWith('image/')).forEach(f=>{const img=new Image();img.onload=()=>{makeStep(g,canvasFrom(img));persist(g);if(S.cur===g){renderGuide();renderGuideProps($('#props'),g)}renderTray()};img.src=URL.createObjectURL(f)})}
-  else [...e.target.files].forEach(importFile);e.target.value=''};
+  if(g){inOrder105([...e.target.files].filter(f=>f.type.startsWith('image/')),img=>{makeStep(g,canvasFrom(img));persist(g);if(S.cur===g){renderGuide();renderGuideProps($('#props'),g)}renderTray()})}
+  else importFiles105([...e.target.files]);e.target.value=''};
+/* 10.4.5: several pictures load at the same time but are added in the order they were chosen (before, whichever loaded first came first, so guide steps could be out of order) */
+function inOrder105(files,add){let chain=Promise.resolve();for(const f of files){const u=URL.createObjectURL(f),ready=new Promise(res=>{const img=new Image();img.onload=()=>res(img);img.onerror=()=>res(null);img.src=u});chain=chain.then(()=>ready).then(img=>{try{if(img)add(img,f);else toast('That image could not be opened.')}finally{URL.revokeObjectURL(u)}})}return chain.catch(actionError)}
+function importFiles105(files){const pics=files.filter(f=>f.type.startsWith('image/')&&!/\.saveit(\.json)?$/i.test(f.name));files.filter(f=>!pics.includes(f)).forEach(importFile);return inOrder105(pics,(img,f)=>addImage(canvasFrom(img),f.name.replace(/\.\w+$/,'')))}
 document.addEventListener('paste',e=>{if(editing||textTarget(e.target))return;const fs=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean);if(fs.length){e.preventDefault();pasteFiles11(fs)}});
 // 10.3.11: Ctrl+V does what right-click > Paste does. With a screenshot open, pasted pictures go on top of it as layers; with
 // nothing open, in the Library window, or for video/audio files they are added to the library as before.
-async function pasteFiles11(fs){const it=S.cur;if(it?.kind==='image'&&!it.guide&&!$('#libModal')&&fs.every(f=>/^image\//.test(f.type))){try{let n=0;for(const f of fs)await pasteImageLayer(await pictureUrl88(f),n++,fs.length>1);if(fs.length>1)toast(`Added ${fs.length} pictures. Drag to move; use the handles to resize. Ctrl+Z undoes.`,5000)}catch(err){actionError(err)}return}fs.forEach(importFile);toast('Pasted into library')}
+async function pasteFiles11(fs){const it=S.cur;if(it?.kind==='image'&&!it.guide&&!$('#libModal')&&fs.every(f=>/^image\//.test(f.type))){try{let n=0;for(const f of fs)await pasteImageLayer(await pictureUrl88(f),n++,fs.length>1);if(fs.length>1)toast(`Added ${fs.length} pictures. Drag to move; use the handles to resize. Ctrl+Z undoes.`,5000)}catch(err){actionError(err)}return}importFiles105(fs);toast('Pasted into library')}
 stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('dragging')});
 stage.addEventListener('dragleave',e=>{if(e.target===stage||!stage.contains(e.relatedTarget))stage.classList.remove('dragging')});
-stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('dragging');[...e.dataTransfer.files].forEach(importFile)});
+stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('dragging');importFiles105([...e.dataTransfer.files])});
 $('#newGuideBtn').onclick=()=>{const g=newGuide();openItem(g);persist(g)};
 $('#newBtn').onclick=()=>{const c=document.createElement('canvas');c.width=1280;c.height=720;const g=c.getContext('2d');g.fillStyle='#ffffff';g.fillRect(0,0,c.width,c.height);addImage(c,nameStamp(),{flat:true})};
 
@@ -1757,7 +1778,7 @@ function libBatch(move){const l=libChosen();if(!l.length)return;if($('#libBatch'
   m.innerHTML=`<div class="box" role="dialog" aria-label="${move?'Move':'Save'} items" style="width:min(480px,100%)"><h2>${move?'Move':'Save'} ${l.length} item${l.length>1?'s':''}</h2><p class="hint">${move?'Files are saved to the folder you pick, then removed from the library. You can still use Undo delete in this session.':'Files are saved to the folder you pick. Each file is named by its date and time.'}</p>
    ${Object.keys(groups).filter(k=>groups[k].length).map(k=>`<div class="row" style="margin:8px 0"><span style="width:120px">${LBL[k]} (${groups[k].length})</span><select data-g="${k}">${OPT[k].map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></div>`).join('')}
    <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" data-x>Cancel</button><button class="btn pri" data-go>${move?'Move to folder…':'Save to folder…'}</button></div></div>`;
-  document.body.appendChild(m);
+  document.body.appendChild(m);/* 10.4.5: Esc closes this dialog like the others */m.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();m.remove()}});(m.querySelector('select')||m.querySelector('[data-go]')).focus();
   m.onclick=async e=>{if(e.target===m||e.target.closest('[data-x]')){m.remove();return}
     if(!e.target.closest('[data-go]'))return;const fm={};m.querySelectorAll('[data-g]').forEach(s=>fm[s.dataset.g]=s.value);m.remove();
     toast('Preparing files…',2500);const files=[],used=new Set(),skipped=[],keep=S.cur;
@@ -2287,7 +2308,7 @@ function stored33(k,def){try{return JSON.parse(localStorage.getItem('saveit33.'+
 function store33(k,v){try{localStorage.setItem('saveit33.'+k,JSON.stringify(v))}catch(_){throw Error('Settings storage is full. Export your library and remove unused custom stamps.')}}
 const baseOpen33=openItem;openItem=function(it){const ticket=++openRequest;if(!it?._lazy)return baseOpen33(it);document.querySelector('#status').textContent='Opening capture…';return hydrate(it).then(()=>{if(ticket===openRequest&&S.items.includes(it))baseOpen33(it)}).catch(storageError)};
 const baseChanged33=changed;changed=function(){if(S.cur){thumbCache.delete(S.cur.id);S.cur._catalogThumb=null}baseChanged33();document.body.dataset.catalogCount=S.items.length};
-thumbSrc=function(it,w){if(it._lazy)return it._catalogThumb||'';const key=it.guide?it.guide.id:it.id;if(thumbCache.has(key))return thumbCache.get(key);let src=it.thumb||it._catalogThumb||'';const im=it.kind==='guide'?it.steps[0]:it;if(im?.base){try{src=thumbDraw07(im,192,.75)}catch(e){console.error(e)}}thumbCache.set(key,src);it._catalogThumb=src;return src};
+thumbSrc=function(it,w){if(it._lazy)return it._catalogThumb||'';const key=it.guide?it.guide.id:it.id;if(thumbCache.has(key))return thumbCache.get(key);let src=it.thumb||it._catalogThumb||'';const im=it.kind==='guide'?it.steps[0]:it;if(im?.base){try{src=thumbDraw07(im,192,.75)}catch(e){console.error(e)}}/* 10.4.3: don't keep a thumbnail whose picture layers are still loading */const owner=it.guide||it;if(picsPending104(im)){owner._thumbWait104=true;return src}/* 10.4.3: a guide shown before its steps exist has no picture yet; keep asking instead of caching the empty one */if(!src)return src;owner._thumbWait104=false;thumbCache.set(key,src);it._catalogThumb=src;return src};
 function fastTray(){const T=$('#thumbs');T.innerHTML='';const chosen=[...S.items.filter(i=>i.pinned&&!i.hiddenRecent).slice(0,16),...S.items.filter(i=>!i.pinned&&!i.hiddenRecent).slice(0,40)];if(S.cur&&!S.cur.hiddenRecent&&!S.cur.guide&&!chosen.includes(S.cur))chosen.push(S.cur);for(const it of chosen){const cell=document.createElement('div');cell.className='tcell';const b=document.createElement('div');b.className='thumb'+(it.pinned?' pinned':'');b.tabIndex=0;b.dataset.itemId=it.id;if(it.kind==='audio'){b.draggable=true;b.ondragstart=e=>{e.dataTransfer.setData('application/x-saveit-audio',it.id);e.dataTransfer.setData('text/plain',it.id);e.dataTransfer.effectAllowed='copy'}}b.setAttribute('role','button');b.setAttribute('aria-label',itemName(it));b.setAttribute('aria-current',it===S.cur);const src=thumbSrc(it);if(src)b.style.backgroundImage=`url(${src})`;b.innerHTML=`<span class="tag">${it.pinned?'PIN · ':''}${it.kind.toUpperCase()}</span><button class="x" aria-label="Close ${escH(itemName(it))} from recent">✕</button>`;b.onclick=e=>{if(e.target.closest('.x'))closeRecent33(it);else openItem(it)};b.onkeydown=e=>{if(e.key==='Enter')openItem(it);if(e.key==='Delete')deleteItems([it])};const name=document.createElement('div');name.className='tn';name.textContent=itemName(it);cell.append(b,name);T.append(cell)}if(!chosen.length)T.innerHTML='<p class="hint">Capture, paste or open an image to begin.</p>';document.body.dataset.catalogCount=S.items.length;if($('#libModal'))renderLib()}
 const oldLibPaste33=libPaste;libPaste=async()=>{await Promise.all(libClip.map(id=>S.items.find(i=>i.id===id)).filter(Boolean).map(hydrate));oldLibPaste33()};
 const oldLibBatch33=libBatch;libBatch=async move=>{await Promise.all(libChosen().map(hydrate));return oldLibBatch33(move)};
@@ -2767,7 +2788,7 @@ window.imageTabDown9=function(e,x,y){const it=S.cur;
 const isRot=k=>k==='left'||k==='right';
 async function picXform9(s,kind){const im=imgFor(s.src);await readyShapes([s]);const w=im.naturalWidth,h=im.naturalHeight,c=document.createElement('canvas');c.width=isRot(kind)?h:w;c.height=isRot(kind)?w:h;const g=c.getContext('2d');
   if(kind==='right'){g.translate(h,0);g.rotate(Math.PI/2)}else if(kind==='left'){g.translate(0,w);g.rotate(-Math.PI/2)}else if(kind==='horizontal'){g.translate(w,0);g.scale(-1,1)}else{g.translate(0,h);g.scale(1,-1)}
-  g.drawImage(im,0,0);const u=c.toDataURL('image/png');await readyShapes([{t:'img',src:u}]);s.src=u}
+  g.drawImage(im,0,0);/* 10.4.5: encode in the background so the window does not freeze on big pictures */const u=await new Promise((res,rej)=>c.toBlob(b=>{if(!b){res(c.toDataURL('image/png'));return}const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(b)},'image/png'));await readyShapes([{t:'img',src:u}]);s.src=u}
 function around9(kind,cx,cy){return kind==='right'?(x,y)=>[cx-(y-cy),cy+(x-cx)]:kind==='left'?(x,y)=>[cx+(y-cy),cy-(x-cx)]:kind==='horizontal'?(x,y)=>[2*cx-x,y]:(x,y)=>[x,2*cy-y]}
 async function xformShape9(s,f,kind){
   if(rotated103(s)&&!ROT9.includes(s.t)){const P=pivot103(s),[nx,ny]=f(P.x,P.y);
@@ -2789,10 +2810,13 @@ transformImage=async function(kind){const it=S.cur;if(it?.kind!=='image')return;
     S.rz=null;render();renderProps();changed();return}
   const src=it.base,W=src.width,H=src.height,c=document.createElement('canvas');c.width=isRot(kind)?H:W;c.height=isRot(kind)?W:H;if(src._blank)c._blank=true;const g=c.getContext('2d');
   if(kind==='right'){g.translate(H,0);g.rotate(Math.PI/2)}else if(kind==='left'){g.translate(0,W);g.rotate(-Math.PI/2)}else if(kind==='horizontal'){g.translate(W,0);g.scale(-1,1)}else if(kind==='vertical'){g.translate(0,H);g.scale(1,-1)}else if(kind==='half'){return transformImage0(kind)}else return;
-  g.drawImage(src,0,0);snap();
+  g.drawImage(src,0,0);
   const f=kind==='right'?(x,y)=>[H-y,x]:kind==='left'?(x,y)=>[y,W-x]:kind==='horizontal'?(x,y)=>[W-x,y]:(x,y)=>[x,H-y];
-  for(const s of it.shapes)await xformShape9(s,f,kind);
-  it.base=c;finishEdit()};
+  /* 10.4.5: turn copies of the marks and layers first, then swap everything in at once (no half-turned picture on screen) */
+  const ns=it.shapes.map(clone);for(const s of ns)await xformShape9(s,f,kind);
+  snap();it.shapes=ns;it.base=c;finishEdit()};
+/* 10.4.5: rotate/flip run one after another, so quick clicks can't mix two of them up */
+{const tx105=transformImage;let q105=Promise.resolve();transformImage=function(kind){const r=q105.then(()=>tx105(kind));q105=r.catch(()=>{});return r}}
 rotate=()=>transformImage('right');
 
 // opening the Image tab keeps what was selected, so Rotate and Flip act on it

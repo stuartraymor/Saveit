@@ -92,3 +92,11 @@ What changed:
   - live-scroll, window-capture and paste-layer passed when run again by themselves (paste-layer is unreliable in 10.4.1 too).
   - Same as 10.4.1, not caused by this version: the step guide save-folder check, one OCR picture in native-ocr1112 (that test still improved from 3.45% to 2.63%), and the audio 11.3–11.6 tests, which need their own source copy. These are listed in tests/known-failures.json.
   - Not run properly, because of test setup and not Saveit: native-smoke, layer-media-smoke, record-controls and the two video journeys (they need their own runtime copy inside their evidence folder).
+
+## Release record (2026-11-21)
+- Published at https://github.com/stuartraymor/Saveit/releases/tag/v10.4.2 from main commit f4f39f0. It is a normal release (not a draft or pre-release) and GitHub's "latest".
+- Assets: Saveit-10.4.2.zip (776,569 bytes, SHA-256 5f9aafd083a8e074e8889ce3e414db2762a95d969d3eeafaaf713471981600d2), .zip.sig (checked against the key in app/updater.js), .sha256, and Saveit-Setup.exe (859,136 bytes).
+- The zip's app folder matches the tested app and the app installed on this PC, file for file (ignoring line endings). The main commit changes exactly the 17 files of this release; each keeps the line endings it has on main.
+- Saveit-Setup.exe: tests/setup-ui-test.ps1 passed all 11 checks, installing into a scratch folder.
+- Real update from GitHub: a scratch copy of 10.4.1 clicked Check for Updates, then Install Update (download and verify), then Install and restart. update.log: "result: ok - Saveit was updated to version 10.4.2 and is running." The updated app folder is identical to the tested one.
+- Website (GitHub Pages, docs/ on main) rebuilt from f4f39f0; the learn page shows the Save to library step. The one-click link redirects to v10.4.2.
