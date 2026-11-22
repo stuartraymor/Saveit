@@ -21,8 +21,8 @@ function sanitize(html, fromOutside) {
       const n = a.name.toLowerCase(), v = a.value.trim();
       if (n.startsWith('on') || n === 'srcset' || n === 'formaction' || n === 'xmlns' || n.includes(':')) x.removeAttribute(a.name);
       else if ((n === 'href' || n === 'src') && /^\s*(javascript|vbscript|data:text)/i.test(v)) x.removeAttribute(a.name);
-      else if (n === 'class') { const keep = v.split(/\s+/).filter(c => c === 'pgbreak'); keep.length ? x.setAttribute('class', keep.join(' ')) : x.removeAttribute('class'); }
-      else if (n === 'id' || n === 'contenteditable' && !x.classList.contains('pgbreak') || n === 'data-pick' || n === 'tabindex') x.removeAttribute(a.name);
+      else if (n === 'class') { const keep = v.split(/\s+/).filter(c => c === 'pgbreak' || c === 'cols' || c === 'colbreak'); keep.length ? x.setAttribute('class', keep.join(' ')) : x.removeAttribute('class'); }
+      else if (n === 'id' || n === 'contenteditable' && !x.classList.contains('pgbreak') && !x.classList.contains('colbreak') || n === 'data-pick' || n === 'tabindex') x.removeAttribute(a.name);
     }
     if (x.tagName === 'INPUT' && x.type !== 'checkbox') x.remove();
     if (x.style) { x.style.removeProperty('position'); x.style.removeProperty('z-index'); if (fromOutside) { x.style.removeProperty('color'); x.style.removeProperty('background'); x.style.removeProperty('background-color'); x.style.removeProperty('font-family'); x.style.removeProperty('white-space'); } }
@@ -52,14 +52,34 @@ function fillHist(list) {
   const h = $('hist'); h.innerHTML = list.map(g => `<option value="${esc(g.key)}">${esc(new Date(g.created).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))} · ${g.libId ? '★ ' : ''}${esc(g.name && g.name !== 'Grabbed text' && g.name !== 'New page' ? g.name : (g.preview || g.name || '(empty)'))}</option>`).join('');
   if (entry) h.value = entry.key; h.closest('label').hidden = list.length < 2;
 }
-function showPic() { const has = isGrab(); $('picBtn').hidden = !has; $('grab').hidden = !has; $('pic').hidden = !has || !picWanted; $('picBtn').setAttribute('aria-pressed', has && picWanted); }
+// 10.5.3: Grab text is always there (it used to appear only on pages that began as a grab). A grab started from this window
+// shows its picture, and the text read from it, beside the page; the page itself is left as it is.
+const sideSrc = () => (entry && (entry.sideSrc || entry.src)) || '';
+const sideText = () => !entry ? '' : entry.sideSrc || entry.sideLoading || entry.sideEmpty ? (entry.sideText || '') : (entry.src ? entry.grabText || '' : '');
+function showPic() { const has = !!sideSrc(); $('picBtn').hidden = !has; $('pic').hidden = !has || !picWanted; $('picBtn').setAttribute('aria-pressed', has && picWanted); }
+function fillSide() {
+  const src = sideSrc(), t = sideText(), busy = !!(entry && entry.sideLoading), none = !!(entry && entry.sideEmpty);
+  if (src) { if ($('picImg').src !== src) $('picImg').src = src; } else $('picImg').removeAttribute('src');
+  $('gt').hidden = !src || !(t || busy || none); $('gtText').value = t; $('gtText').placeholder = busy ? '' : 'No text was found in that area.';
+  $('gtState').textContent = busy ? 'Reading text…' : none ? 'No text found' : '';
+  for (const id of ['gtCopy', 'gtInsert']) $(id).disabled = busy || !t.trim(); $('gtInsPic').disabled = !src;
+}
+window.te.onSide(d => {
+  if (!entry || !d || d.key !== entry.key) return;
+  Object.assign(entry, { sideSrc: d.src || entry.sideSrc || '', sideText: d.text || '', sideLoading: !!d.loading, sideEmpty: !!d.empty });
+  picWanted = true; $('picImg').classList.remove('full'); fillSide(); showPic(); document.body.dataset.side = d.loading ? 'loading' : 'ready';
+});
+function sidePick() { const b = $('gtText'), a = b.selectionStart, z = b.selectionEnd; return z > a ? b.value.slice(a, z) : b.value; }
+$('gtCopy').onclick = async () => { const t = sidePick(); if (!t.trim()) return; try { await window.te.copy(t, ''); toast('Grabbed text copied. Paste it anywhere.'); } catch (e) { toast('Copy failed: ' + errMsg(e)); } };
+$('gtInsert').onclick = () => { const t = sidePick(); if (!t.trim()) return; if (!keptRange || !doc.contains(keptRange.startContainer)) { doc.focus(); caretToEnd(); saveSel(); } insertHtml(t.includes('\n') ? textToHtml(t) : esc(t)); toast('Text added to the page'); };
+$('gtInsPic').onclick = async () => { const src = sideSrc(); if (!src) return; try { const blob = await (await fetch(src)).blob(); if (!keptRange || !doc.contains(keptRange.startContainer)) { doc.focus(); caretToEnd(); saveSel(); } await insertImageFiles([new File([blob], 'Grabbed picture.png', { type: blob.type || 'image/png' })]); } catch (e) { toast('Could not add the picture: ' + errMsg(e), 5000); } };
 const PAGE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>';
 function brand() { $('brandName').textContent = isGrab() ? 'Grab Text' : 'Page'; $('brandIcon').innerHTML = isGrab() ? 'T' : PAGE_ICON; document.title = ($('name').value || (isGrab() ? 'Grabbed text' : 'Page')) + ' · Saveit'; }
 function load(d) {
   if (!d || !d.entry) return; hideImgSel(); entry = d.entry; dirty = !!entry.dirty; $('name').value = entry.name || 'Page';
   doc.innerHTML = entry.html ? sanitize(entry.html) : textToHtml(entry.text); $('loading').hidden = !entry.loading; doc.contentEditable = entry.loading ? 'false' : 'true';
   const b = $('banner'); b.hidden = !entry.empty; b.textContent = entry.empty ? 'No text was found in that area. Try Grab again with a tighter box around clear text, or type it in yourself.' : '';
-  if (entry.src) { if ($('picImg').src !== entry.src) $('picImg').src = entry.src; } else $('picImg').removeAttribute('src'); $('picImg').classList.remove('full');
+  $('picImg').classList.remove('full'); fillSide();
   showPic(); brand(); fillHist(d.list || []); counts(); stateLabel(); closeFind(true);
   if (!entry.loading) { doc.focus(); if (isGrab() && !entry.libId) selectAll(); else caretToEnd(); }
   document.body.dataset.state = entry.loading ? 'loading' : 'ready';
@@ -179,6 +199,7 @@ async function editLink(existing) {
 $('insHr').onclick = () => insertHtml('<hr><div><br></div>');
 $('insBreak').onclick = () => pageBreak();
 function pageBreak() { insertHtml('<div class="pgbreak" contenteditable="false"></div><div><br></div>'); }
+$('insColBreak').onclick = () => columnBreak();
 $('insDate').onclick = () => { const d = new Date(); menu($('insDate'), [[d.toLocaleDateString(undefined, { dateStyle: 'long' })], [d.toLocaleDateString(undefined, { dateStyle: 'full' })], [d.toLocaleDateString()], [d.toISOString().slice(0, 10)], [d.toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' })], [d.toLocaleTimeString(undefined, { timeStyle: 'short' })]].map(r => [r[0], () => { restoreSel(); document.execCommand('insertText', false, r[0]); changed(); }])); };
 const SYMBOLS = '© ® ™ € £ ¥ ¢ ° ± × ÷ ≈ ≠ ≤ ≥ ∞ √ ½ ¼ ¾ → ← ↑ ↓ ↔ • … — – § ¶ † ✓ ✗ ★ ☆ ♥ ☐ ☑ µ Ω π Δ α β'.split(' ');
 $('insSym').onclick = () => { saveSel(); const g = document.createElement('div'); g.className = 'grid sym'; g.style.gridTemplateColumns = 'repeat(8,30px)'; for (const c of SYMBOLS) { const b = document.createElement('button'); b.textContent = c; b.onmousedown = e => e.preventDefault(); b.onclick = () => { closeMenus(); restoreSel(); document.execCommand('insertText', false, c); changed(); }; g.append(b); } popup($('insSym'), g); };
@@ -189,19 +210,76 @@ doc.addEventListener('click', e => {
 });
 
 // ---------- page setup ----------
-const PAGE_SIZES = { letter: [8.5, 11], a4: [8.27, 11.69], legal: [8.5, 14] };
-function pageSetup() { let p = {}; try { p = JSON.parse(localStorage.getItem('saveit-page') || '{}'); } catch (_) {} return { size: PAGE_SIZES[p.size] ? p.size : 'letter', orientation: p.orientation === 'landscape' ? 'landscape' : 'portrait', margin: [0.5, 1, 1.5].includes(+p.margin) ? +p.margin : 1 }; }
+const PAGE_SIZES = { letter: [8.5, 11], a4: [8.27, 11.69], legal: [8.5, 14], executive: [7.25, 10.5], tabloid: [11, 17], a3: [11.69, 16.54], a5: [5.83, 8.27] };
+const okMargin = m => Number.isFinite(m) && m >= 0.25 && m <= 3; // 10.5.3: any margin from 0.25 to 3 in (was three fixed choices)
+function pageSetup() { let p = {}; try { p = JSON.parse(localStorage.getItem('saveit-page') || '{}'); } catch (_) {} return { size: PAGE_SIZES[p.size] ? p.size : 'letter', orientation: p.orientation === 'landscape' ? 'landscape' : 'portrait', margin: okMargin(+p.margin) ? Math.round(+p.margin * 100) / 100 : 1 }; }
 function pageDims(p) { const [w, h] = PAGE_SIZES[p.size]; return p.orientation === 'landscape' ? { w: h, h: w } : { w, h }; }
 function applyPage(p) {
   p = p || pageSetup(); const d = pageDims(p);
   doc.style.width = Math.round(d.w * 96) + 'px'; doc.style.padding = Math.round(p.margin * 96) + 'px'; doc.style.minHeight = Math.round(d.h * 96) + 'px';
-  $('pagecss').textContent = `@page{size:${{ letter: 'letter', a4: 'A4', legal: 'legal' }[p.size]} ${p.orientation};margin:${p.margin}in}`;
-  $('pgSize').value = p.size; $('pgOrient').value = p.orientation; $('pgMargin').value = String(p.margin); counts();
+  $('pagecss').textContent = `@page{size:${d.w}in ${d.h}in;margin:${p.margin}in}`;
+  $('pgSize').value = p.size; $('pgOrient').value = p.orientation;
+  { const sel = $('pgMargin'); sel.querySelectorAll('[data-own]').forEach(o => o.remove()); if (![...sel.options].some(o => +o.value === p.margin)) { const o = document.createElement('option'); o.value = String(p.margin); o.textContent = `Custom (${p.margin} in)`; o.dataset.own = '1'; sel.insertBefore(o, sel.querySelector('[value=custom]')); } sel.value = String(p.margin); }
+  counts();
 }
 function setPage(ch) { const p = Object.assign(pageSetup(), ch); try { localStorage.setItem('saveit-page', JSON.stringify(p)); } catch (_) {} applyPage(p); }
 $('pgSize').onchange = e => setPage({ size: e.target.value });
 $('pgOrient').onchange = e => setPage({ orientation: e.target.value });
-$('pgMargin').onchange = e => setPage({ margin: +e.target.value });
+$('pgMargin').onchange = async e => {
+  if (e.target.value !== 'custom') { setPage({ margin: +e.target.value }); return; }
+  const cur = pageSetup(), v = await ask('Custom margins', [{ id: 'm', label: 'Margin on every side, in inches (0.25 to 3)', value: String(cur.margin) }], 'Apply');
+  const m = v ? parseFloat(String(v.m).replace(',', '.')) : NaN;
+  if (v && !okMargin(m)) toast('Type a margin between 0.25 and 3 inches.', 4000);
+  setPage({ margin: okMargin(m) ? Math.round(m * 100) / 100 : cur.margin });
+};
+
+// ---------- columns (10.5.3) ----------
+// Text is set in columns by a wrapper around the paragraphs it applies to: the whole page, or only the paragraphs that were
+// selected (a section, like Word's). Columns fill from the left and balance, and save to Word, PDF and web pages.
+const colsAt = n => { for (; n && n !== doc; n = n.parentNode) if (n.nodeType === 1 && n.classList.contains('cols')) return n; return null; };
+const colInfo = el => ({ n: Math.max(1, parseInt(el.style.columnCount) || 1), gap: parseFloat(el.style.columnGap) || 0.5, line: !!el.style.columnRuleStyle && el.style.columnRuleStyle !== 'none' });
+function colStyle(el, o) { el.style.columnCount = String(o.n); el.style.columnGap = o.gap + 'in'; el.style.columnRule = o.line ? '1px solid #8a9199' : ''; }
+function topChild(n, off, end) { if (n === doc) return doc.childNodes[end ? Math.max(0, off - 1) : Math.min(off, doc.childNodes.length - 1)] || null; while (n && n.parentNode !== doc) n = n.parentNode; return n; }
+// Pasted or inserted text can arrive as one plain box holding all the paragraphs; columns work on the paragraphs themselves.
+function flattenTop() { for (let i = 0; i < 4; i++) { const only = doc.children.length === 1 && [...doc.childNodes].every(n => n.nodeType === 1 || !n.data.trim()) ? doc.firstElementChild : null; if (!only || only.tagName !== 'DIV' || only.className || only.getAttribute('style') || ![...only.children].some(k => /^(DIV|P|H[1-6]|UL|OL|TABLE|BLOCKQUOTE|PRE)$/.test(k.tagName))) return; only.replaceWith(...only.childNodes); } }
+function setColumns(o, whole) {
+  restoreSel(); flattenTop(); const s = getSelection(), r = s.rangeCount && doc.contains(s.anchorNode) ? s.getRangeAt(0) : null, cur = r && colsAt(r.startContainer);
+  o = { n: Math.max(1, Math.min(8, Math.round(o.n) || 1)), gap: Math.max(0.1, Math.min(2, +o.gap || 0.5)), line: !!o.line };
+  const unwrap = el => el.replaceWith(...el.childNodes), make = () => { const w = document.createElement('div'); w.className = 'cols'; colStyle(w, o); return w; };
+  let a = r && !r.collapsed ? topChild(r.startContainer, r.startOffset, false) : null, b = a ? topChild(r.endContainer, r.endOffset, true) : null;
+  if (a && b && a === doc.firstChild && b === doc.lastChild) { whole = true; }
+  if (cur && !whole) { if (o.n <= 1) unwrap(cur); else colStyle(cur, o); }
+  else if (a && b && !whole) {
+    if (o.n <= 1) { for (let n = a; n; n = n === b ? null : n.nextSibling) if (n.nodeType === 1 && n.classList.contains('cols')) { const nx = n === b ? null : n.nextSibling; unwrap(n); if (!nx) break; } }
+    else {
+      const list = []; for (let n = a; n; n = n.nextSibling) { list.push(n); if (n === b) break; }
+      const w = make(); a.before(w);
+      for (const n of list) { if (n.nodeType === 1 && n.classList.contains('cols')) { w.append(...n.childNodes); n.remove(); } else if (n.nodeType === 3) { const d = document.createElement('div'); d.textContent = n.data; n.remove(); if (d.textContent.trim()) w.append(d); } else w.append(n); }
+      if (!w.nextSibling) { const d = document.createElement('div'); d.innerHTML = '<br>'; w.after(d); } // room to type after the columns
+    }
+  } else {
+    doc.querySelectorAll('.cols').forEach(unwrap);
+    if (o.n > 1) { const w = make(); w.append(...doc.childNodes); if (!w.firstChild) w.innerHTML = '<div><br></div>'; doc.append(w); const rr = document.createRange(); rr.selectNodeContents(w); rr.collapse(false); s.removeAllRanges(); s.addRange(rr); saveSel(); }
+  }
+  if (o.n <= 1) doc.querySelectorAll('.colbreak').forEach(x => { if (!colsAt(x)) x.remove(); });
+  changed(); posImgSel();
+}
+function columnBreak() {
+  restoreSel(); const s = getSelection();
+  if (!s.rangeCount || !colsAt(s.getRangeAt(0).startContainer)) { toast('A column break works in text set in columns. Choose Layout > Columns first.', 4500); return; }
+  insertHtml('<div class="colbreak" contenteditable="false"></div><div><br></div>');
+}
+$('colsBtn').onclick = () => {
+  saveSel(); const cur = keptRange && doc.contains(keptRange.startContainer) ? colsAt(keptRange.startContainer) : null, picked = !!keptRange && !keptRange.collapsed && doc.contains(keptRange.startContainer);
+  const all = doc.children.length === 1 && doc.firstElementChild.classList.contains('cols'), i = cur ? colInfo(cur) : { n: 1, gap: 0.5, line: false };
+  const where = cur ? (all ? 'the whole page' : 'this part of the page') : picked ? 'the selected text' : 'the whole page';
+  const row = (label, n) => [(i.n === n ? '✓ ' : '') + label, () => setColumns({ ...i, n })];
+  menu($('colsBtn'), [{ head: 'Columns for ' + where }, row('One', 1), row('Two', 2), row('Three', 3), row('Four', 4), null,
+    [(i.line ? '✓ ' : '') + 'Line between columns', i.n > 1 ? () => setColumns({ ...i, line: !i.line }) : null],
+    ['More columns…', async () => { const v = await ask('Columns', [{ id: 'n', label: 'Number of columns (1 to 8)', value: String(i.n > 1 ? i.n : 2) }, { id: 'gap', label: 'Space between columns, in inches', value: String(i.gap) }], 'Apply'); if (v) setColumns({ n: parseInt(v.n) || 1, gap: parseFloat(String(v.gap).replace(',', '.')) || 0.5, line: i.line }); }],
+    null, ['Insert column break', () => columnBreak(), 'Ctrl+Shift+Enter'],
+    ...(cur && !all ? [['Use these columns for the whole page', () => setColumns(i, true)]] : [])]);
+};
 $('wrap').onclick = () => { const on = $('wrap').getAttribute('aria-pressed') !== 'true'; $('wrap').setAttribute('aria-pressed', on); doc.classList.toggle('nowrap', !on); };
 const zoomF = () => parseFloat(doc.style.zoom) || 1;
 function setZoom(z) { z = Math.max(0.25, Math.min(3, z)); doc.style.zoom = z; const o = [...$('zoom').options]; let opt = o.find(x => Math.abs(+x.value - z) < 0.001); if (!opt) { opt = document.createElement('option'); opt.value = String(z); opt.textContent = Math.round(z * 100) + '%'; $('zoom').querySelectorAll('[data-fit]').forEach(x => x.remove()); opt.dataset.fit = '1'; $('zoom').append(opt); } $('zoom').value = opt.value; posImgSel(); }
@@ -468,7 +546,7 @@ doc.addEventListener('keydown', e => {
     if (!e.shiftKey) { document.execCommand('insertText', false, '\t'); changed(); }
     return;
   }
-  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveSel(); pageBreak(); return; }
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveSel(); if (e.shiftKey) columnBreak(); else pageBreak(); return; }
   if (selImg && !cropBox && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) { const img = selImg; hideImgSel(); const r = document.createRange(); e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? r.setStartBefore(img) : r.setStartAfter(img); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); e.preventDefault(); }
 });
 addEventListener('keydown', e => {
@@ -484,7 +562,7 @@ addEventListener('keydown', e => {
   else if (c && k === 'n') { e.preventDefault(); newPage(); }
   else if (c && k === 'o') { e.preventDefault(); openFile(); }
   else if (c && k === 'k') { e.preventDefault(); editLink(); }
-  else if (c && k === 'g' && isGrab()) { e.preventDefault(); window.te.grab(); }
+  else if (c && k === 'g') { e.preventDefault(); grabText(); }
   else if (c && !e.shiftKey && k === 'e') { e.preventDefault(); ex('justifyCenter'); }
   else if (c && !e.shiftKey && k === 'l') { e.preventDefault(); ex('justifyLeft'); }
   else if (c && !e.shiftKey && k === 'r') { e.preventDefault(); ex('justifyRight'); }
@@ -521,7 +599,7 @@ async function saveFile(fmt) {
   const name = $('name').value.trim() || (isGrab() ? 'Grabbed text' : 'Page'); let data = null;
   try {
     if (fmt === 'docx') data = await docxBytes();
-    else if (fmt === 'html') { const p = pageSetup(), d = pageDims(p); data = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)}</title><style>@page{size:${p.size === 'a4' ? 'A4' : p.size} ${p.orientation};margin:${p.margin}in}body{font:11pt/1.45 "Segoe UI",Calibri,sans-serif;white-space:pre-wrap;max-width:${Math.round((d.w - 2 * p.margin) * 96)}px;margin:30px auto;color:#111}table{border-collapse:collapse;white-space:normal}td,th{border:1px solid #b9c0c7;padding:3px 8px;vertical-align:top}img{max-width:100%}h1{font-size:20pt}h2{font-size:16pt}h3{font-size:13pt}blockquote{margin:.3em 0 .3em 1.2em;padding-left:10px;border-left:3px solid #c5cbd1;color:#444}pre{font:10pt/1.4 Consolas,monospace;background:#f3f4f6;padding:6px 8px}ul,ol{white-space:normal}li{white-space:pre-wrap}.pgbreak{break-after:page}</style></head><body>${cleanHtml()}</body></html>`; }
+    else if (fmt === 'html') { const p = pageSetup(), d = pageDims(p); data = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)}</title><style>@page{size:${d.w}in ${d.h}in;margin:${p.margin}in}body{font:11pt/1.45 "Segoe UI",Calibri,sans-serif;white-space:pre-wrap;max-width:${Math.round((d.w - 2 * p.margin) * 96)}px;margin:30px auto;color:#111}table{border-collapse:collapse;white-space:normal}td,th{border:1px solid #b9c0c7;padding:3px 8px;vertical-align:top}img{max-width:100%}h1{font-size:20pt}h2{font-size:16pt}h3{font-size:13pt}blockquote{margin:.3em 0 .3em 1.2em;padding-left:10px;border-left:3px solid #c5cbd1;color:#444}pre{font:10pt/1.4 Consolas,monospace;background:#f3f4f6;padding:6px 8px}ul,ol{white-space:normal}li{white-space:pre-wrap}.pgbreak{break-after:page}.colbreak{break-after:column}</style></head><body>${cleanHtml()}</body></html>`; }
     else if (fmt === 'txt') data = plain();
     if (fmt === 'pdf') { hideImgSel(); closeFind(true); }
     const p = await window.te.saveFile(name, fmt, data, pageSetup()); if (p) toast('Saved ' + p.split(/[\\/]/).pop(), 4000);
@@ -553,7 +631,8 @@ $('closePage').onclick = async () => {
   const d = await window.te.forget(entry.key); if (d && d.entry) load(d); else { entry = null; await window.te.newPage({ name: 'New page' }); }
 };
 $('editor').onclick = () => window.te.editor();
-$('grab').onclick = () => window.te.grab();
+function grabText() { saveSel(); syncNow(); window.te.grab(); }
+$('grab').onclick = grabText;
 $('picBtn').onclick = () => { picWanted = !picWanted; showPic(); };
 $('picImg').onclick = () => $('picImg').classList.toggle('full');
 $('hist').onchange = async e => { syncNow(); const d = await window.te.pick(e.target.value); if (d) load(d); };

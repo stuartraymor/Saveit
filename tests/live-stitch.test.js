@@ -74,7 +74,7 @@ function run(name, path, o = {}, PH = 5200, VH = 600) {
   const t0 = Date.now();
   for (const y of path) { const f = frame(P, PH, y, VH, o); st.add(f); yMax = Math.max(yMax, y); }
   const ms = (Date.now() - t0) / path.length;
-  check(name, P, PH, st.result(), path[0], yMax, VH, o);
+  check(name, P, PH, st.result(), Math.min(...path), yMax, VH, o); // 10.5.3: content above the starting view is kept too
   return { st, ms };
 }
 const ramp = (from, to, step) => { const a = []; for (let y = from; step > 0 ? y <= to : y >= to; y += step) a.push(y); if (a[a.length - 1] !== to) a.push(to); return a; };
@@ -101,8 +101,22 @@ run('E2 sticky header, re-drawn text (scaling noise)', ramp(0, 2000, 110), { hea
   const r = st.add(frame(Q, 4000, 700, 500)); assert.strictEqual(r.state, 'lost', 'unrelated frame should be lost, got ' + r.state);
   for (const y of ramp(900, 1500, 150)) st.add(frame(P, 4000, y, 500));
   check('unrelated frame in the middle is ignored', P, 4000, st.result(), 0, 1500, 500); }
-// Scrolling up past the starting point adds nothing above it
+// 10.5.3: scrolling up past the starting point puts the content above it in front of the picture (it used to be
+// dropped, and a capture that began with an upward scroll said "Can't line this up" until the page came back down)
 run('scrolled above the start point', [800, 600, 300, 0, 400, 900, 1300]);
+run('U1 started part-way down, scrolled up only', ramp(2400, 0, -130));
+run('U2 up to the top, then down past the start', [...ramp(1500, 0, -140), ...ramp(0, 3000, 170)]);
+run('U3 down, up above the start, down again, up again', [...ramp(1200, 2000, 160), ...ramp(2000, 500, -190), ...ramp(500, 2600, 210), ...ramp(2600, 0, -230)]);
+run('U4 up first with a sticky header and a fixed footer', [...ramp(2000, 300, -120), ...ramp(300, 2500, 150)], { header: true, footer: true });
+run('U5 up first, re-drawn text (scaling noise)', ramp(1800, 200, -110), { header: true, noise: 2 });
+{ const p = [3600]; let y = 3600; const steps = [7, 40, 300, 13, 420, 90, 3, 250, 480, 61]; for (let i = 0; y > 0; i++) { y = Math.max(0, y - steps[i % steps.length]); p.push(y); } run('U6 variable scroll distances upward', p); }
+run('U7 fast alternating direction changes', [1500, 1700, 1400, 1900, 1200, 2100, 1000, 2300, 800, 2500, 600]);
+// every state reported while scrolling up is "adding", never "lost"
+{ const P = makePage(4000, 77), st = new LiveStitcher(), seen = []; for (const y of ramp(2000, 400, -160)) seen.push(st.add(frame(P, 4000, y, 500)).state);
+  assert.deepStrictEqual([...new Set(seen.slice(1))], ['collecting'], 'states while scrolling up: ' + seen.join(',')); console.log('pass U8 scrolling up reports new content, not "lost"'); }
+// the height limit also holds when the picture grows upward, and the rows nearest the picture are the ones kept
+{ const P = makePage(9000, 4), st = new LiveStitcher({ maxHeight: 2000 }); for (const y of ramp(8000, 0, -200)) st.add(frame(P, 9000, y, 500));
+  const r = st.result(); assert.strictEqual(r.h, 2000); assert.strictEqual(st.state, 'full'); check('U9 height limit when growing upward', P, 9000, r, 6500, 8000, 500); }
 // No movement at all: the first frame is returned unchanged
 { const P = makePage(2000, 3), st = new LiveStitcher(); for (let i = 0; i < 4; i++) st.add(frame(P, 2000, 0, 400)); assert.strictEqual(st.result().h, 400); console.log('pass no scrolling returns the visible area'); }
 // Height limit: stops growing at the limit and says so
@@ -119,7 +133,7 @@ function runPtr(name, path, cys, o = {}, PH = 5200, VH = 600, finalClean = true)
   const P = makePage(PH, name.length * 131), st = new LiveStitcher(); let yMax = 0;
   path.forEach((y, k) => { const cy = cys(k); const f = frame(P, PH, y, VH, o); st.add(cy == null ? f : withPointer(f, cy), cy == null ? {} : avoidAt(cy)); yMax = Math.max(yMax, y); });
   if (finalClean) st.add(frame(P, PH, path[path.length - 1], VH, o));
-  if (finalClean) { if (!o.allowDirty) assert.strictEqual(st.dirtyRows, 0, name + ': rows still show the pointer: ' + st.dirtyRows); check(name, P, PH, st.result(), path[0], yMax, VH, o); }
+  if (finalClean) { if (!o.allowDirty) assert.strictEqual(st.dirtyRows, 0, name + ': rows still show the pointer: ' + st.dirtyRows); check(name, P, PH, st.result(), Math.min(...path), yMax, VH, o); }
   return st;
 }
 runPtr('P1 pointer resting over the page while scrolling', ramp(0, 2400, 120), () => 300, { header: true, footer: true });
@@ -127,6 +141,7 @@ runPtr('P2 pointer over the sticky header at the start', ramp(0, 2000, 140), k =
 runPtr('P3 pointer over the footer, then moved', ramp(0, 1800, 110), k => k < 6 ? 575 : 330, { footer: true });
 runPtr('P4 pointer moving around before the page moves', [0, 0, 0, 0, ...ramp(0, 1500, 150)], k => [100, 250, 400, 520][k] ?? 300);
 runPtr('P5 pointer near the bottom where new rows arrive', ramp(0, 2200, 100), () => 560);
+runPtr('P8 up from part-way down with the pointer moving', [...ramp(2200, 300, -150), ...ramp(300, 2600, 180)], k => 200 + (k * 47) % 380, { header: true });
 runPtr('P6 down, up and down with the pointer moving', [...ramp(0, 1500, 140), ...ramp(1500, 200, -200), ...ramp(200, 2600, 160)], k => 200 + (k * 47) % 380, { header: true });
 { const P = makePage(2000, 3), st = new LiveStitcher(); for (const cy of [50, 200, 350]) st.add(withPointer(frame(P, 2000, 0, 400), cy), avoidAt(cy)); assert(st.dirtyRows > 0); st.add(frame(P, 2000, 0, 400)); assert.strictEqual(st.dirtyRows, 0); check('P7 no scrolling, pointer moved, clean last frame', P, 2000, st.result(), 0, 0, 400); }
 // A picture that only changes from left to right sits at the bottom of the first view. After a tiny first scroll

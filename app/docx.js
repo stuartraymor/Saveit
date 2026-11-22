@@ -46,7 +46,7 @@
   const hex = c => { const m = String(c || '').match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+))?/); if (!m) return null; if (m[4] !== undefined && +m[4] === 0) return null; return [m[1], m[2], m[3]].map(n => (+n).toString(16).padStart(2, '0')).join('').toUpperCase(); };
   const TW = px => Math.round(px * 15), EMU = px => Math.round(px * 9525);
   const BLOCK = new Set(['DIV', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE', 'UL', 'OL', 'LI', 'TABLE', 'HR', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'FIGURE', 'CENTER']);
-  const PAGES = { letter: [8.5, 11], a4: [8.27, 11.69], legal: [8.5, 14] };
+  const PAGES = { letter: [8.5, 11], a4: [8.27, 11.69], legal: [8.5, 14], executive: [7.25, 10.5], tabloid: [11, 17], a3: [11.69, 16.54], a5: [5.83, 8.27] };
   const BULLETS = ['•', '◦', '▪'];
   const ORDERED = { decimal: 'decimal', 'lower-alpha': 'lowerLetter', 'lower-latin': 'lowerLetter', 'upper-alpha': 'upperLetter', 'upper-latin': 'upperLetter', 'lower-roman': 'lowerRoman', 'upper-roman': 'upperRoman' };
   const BULLET_TYPE = { disc: 0, circle: 1, square: 2 };
@@ -118,6 +118,7 @@
         if (t === 'IMG') { acc.runs.push(await drawing(c)); continue; }
         if (t === 'SCRIPT' || t === 'STYLE') continue;
         if (c.classList.contains('pgbreak')) { acc.runs.push('<w:r><w:br w:type="page"/></w:r>'); continue; }
+        if (c.classList.contains('colbreak')) { acc.runs.push('<w:r><w:br w:type="column"/></w:r>'); continue; }
         if (t === 'A' && /^(https?:|mailto:)/i.test(c.getAttribute('href') || '')) {
           const id = rel('hyperlink', c.getAttribute('href'), true), sub = { runs: [] }; await inlines(c, pre, sub);
           acc.runs.push(`<w:hyperlink r:id="${id}">${sub.runs.join('')}</w:hyperlink>`); continue;
@@ -155,11 +156,12 @@
       let pending = [];
       const flush = async () => { if (!pending.length) return; if (pending.every(n => n.nodeType === 3 && !n.data.trim())) { pending = []; return; } // loose inline content becomes a paragraph with the parent's styles
         const acc = { runs: [] }; for (const n of pending) { if (n.nodeType === 3) acc.runs.push(textRuns(n.data, runProps(n.parentElement), ctx.pre)); else { const sub = { runs: [] }; const wrap = { childNodes: [n] }; await inlines(wrap, ctx.pre, sub); acc.runs.push(...sub.runs); } }
-        pending = []; if (acc.runs.join('').trim() || ctx.keepEmpty) outArr.push(`<w:p>${paraProps(node, ctx.numPr || '')}${acc.runs.join('')}</w:p>`); };
+        pending = []; if (acc.runs.join('').trim() || ctx.keepEmpty) outArr.push(`<w:p>${paraProps(ctx.host || node, ctx.numPr || '')}${acc.runs.join('')}</w:p>`); };
       for (const c of node.childNodes) {
         if (c.nodeType === 1 && (BLOCK.has(c.tagName) || c.classList.contains('pgbreak'))) {
           await flush(); const t = c.tagName;
           if (c.classList.contains('pgbreak')) { outArr.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>'); continue; }
+          if (c.classList.contains('colbreak')) { outArr.push('<w:p><w:r><w:br w:type="column"/></w:r></w:p>'); continue; }
           if (t === 'HR') { outArr.push('<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="8" w:space="1" w:color="A0A6AD"/></w:pBdr><w:spacing w:before="120" w:after="120"/></w:pPr></w:p>'); continue; }
           if (t === 'TABLE') { outArr.push(await table(c)); continue; }
           if (t === 'UL' || t === 'OL') { const id = ctx.listId && ctx.depth >= 0 ? ctx.listId : listNum(c); const depth = (ctx.depth ?? -1) + 1;
@@ -198,11 +200,27 @@
       }
       o.push('</w:tbl><w:p/>'); return o.join('');
     }
-    await blocks(root, out, {});
-    if (!out.length) out.push('<w:p/>');
     const [pw, ph] = PAGES[opts.size] || PAGES.letter, land = opts.orientation === 'landscape', m = TW((opts.margin ?? 1) * 96);
     const W = Math.round((land ? ph : pw) * 1440), H = Math.round((land ? pw : ph) * 1440);
-    const sect = `<w:sectPr><w:pgSz w:w="${W}" w:h="${H}"${land ? ' w:orient="landscape"' : ''}/><w:pgMar w:top="${m}" w:right="${m}" w:bottom="${m}" w:left="${m}" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>`;
+    // 10.5.3: a section's settings sit in its last paragraph (Word's rule); the last section's sit at the end of the body.
+    const sectPr = (cols, cont) => `<w:sectPr>${cont ? '<w:type w:val="continuous"/>' : ''}<w:pgSz w:w="${W}" w:h="${H}"${land ? ' w:orient="landscape"' : ''}/><w:pgMar w:top="${m}" w:right="${m}" w:bottom="${m}" w:left="${m}" w:header="720" w:footer="720" w:gutter="0"/>${cols && cols.n > 1 ? `<w:cols w:num="${cols.n}" w:space="${Math.round(cols.gap * 1440)}"${cols.line ? ' w:sep="1"' : ''}/>` : '<w:cols w:space="720"/>'}</w:sectPr>`;
+    const colsOf = el => { const cs = getComputedStyle(el), n = parseInt(cs.columnCount) || 1; return n > 1 ? { n: Math.min(45, n), gap: Math.max(0, (parseFloat(cs.columnGap) || 48) / 96), line: cs.columnRuleStyle !== 'none' && parseFloat(cs.columnRuleWidth) > 0 } : null; };
+    const segs = []; { let loose = null;
+      for (const c of root.childNodes) { if (c.nodeType === 1 && c.classList.contains('cols') && colsOf(c)) { loose = null; segs.push({ cols: colsOf(c), node: c }); } else { if (!loose) { loose = { cols: null, node: { childNodes: [], tagName: 'DIV' } }; segs.push(loose); } loose.node.childNodes.push(c); } } }
+    const real = []; // sections that have something in them
+    for (const sg of segs) { const part = []; await blocks(sg.node, part, sg.node === root || sg.cols ? {} : { host: root }); if (part.length) real.push({ cols: sg.cols, part }); }
+    real.forEach((sg, i) => {
+      if (i < real.length - 1) { // close this section in its last paragraph
+        const sp = sectPr(sg.cols, i > 0), last = sg.part.length - 1, p = sg.part[last];
+        if (/<\/w:tbl><w:p\/>$/.test(p)) sg.part[last] = p.replace(/<w:p\/>$/, `<w:p><w:pPr>${sp}</w:pPr></w:p>`);
+        else if (p.startsWith('<w:p><w:pPr>')) sg.part[last] = p.replace('</w:pPr>', sp + '</w:pPr>');
+        else if (p.startsWith('<w:p>')) sg.part[last] = '<w:p><w:pPr>' + sp + '</w:pPr>' + p.slice(5);
+        else sg.part.push(`<w:p><w:pPr>${sp}</w:pPr></w:p>`);
+      }
+      out.push(...sg.part);
+    });
+    if (!out.length) out.push('<w:p/>');
+    const sect = sectPr(real.length ? real[real.length - 1].cols : null, real.length > 1);
     const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
     const document_ = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${NS}><w:body>${out.join('')}${sect}</w:body></w:document>`;
     const lvl = (i, n) => n.ordered
@@ -265,7 +283,7 @@
       for (const c of r.children) {
         if (c.localName === 't') t += e(c.textContent);
         else if (c.localName === 'tab') t += '\t';
-        else if (c.localName === 'br') t += att(c, 'type') === 'page' ? '<span class="pgbreak" contenteditable="false"></span>' : '<br>';
+        else if (c.localName === 'br') t += att(c, 'type') === 'page' ? '<span class="pgbreak" contenteditable="false"></span>' : att(c, 'type') === 'column' ? '<span class="colbreak" contenteditable="false"></span>' : '<br>';
         else if (c.localName === 'drawing' || c.localName === 'pict') {
           const blip = c.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'blip')[0]; if (!blip) continue;
           const src = await imgSrc(blip.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'embed')); if (!src) continue;
@@ -328,9 +346,18 @@
     }
     const body = doc.getElementsByTagNameNS(W, 'body')[0]; if (!body) throw Error('The Word document is empty or damaged.');
     const sect = kid(body, 'sectPr'), pg = kid(sect, 'pgSz'), mar = kid(sect, 'pgMar'), page = {};
-    if (pg) { const w = +att(pg, 'w'), hgt = +att(pg, 'h'); page.orientation = w > hgt ? 'landscape' : 'portrait'; const s = Math.min(w, hgt) / 1440, l = Math.max(w, hgt) / 1440; page.size = Math.abs(s - 8.27) < .1 ? 'a4' : Math.abs(l - 14) < .1 ? 'legal' : 'letter'; }
-    if (mar) { const m = +att(mar, 'left') / 1440; page.margin = m < .75 ? 0.5 : m > 1.25 ? 1.5 : 1; }
-    return { html: await bodyHtml(body), page };
+    if (pg) { const w = +att(pg, 'w'), hgt = +att(pg, 'h'); page.orientation = w > hgt ? 'landscape' : 'portrait'; const s = Math.min(w, hgt) / 1440, l = Math.max(w, hgt) / 1440;
+      let best = 'letter', bd = 1e9; for (const k in PAGES) { const d = Math.abs(PAGES[k][0] - s) + Math.abs(PAGES[k][1] - l); if (d < bd) { bd = d; best = k; } } page.size = best; }
+    if (mar) { const m = +att(mar, 'left') / 1440; if (m > 0) page.margin = Math.max(0.25, Math.min(3, Math.round(m * 20) / 20)); }
+    // 10.5.3: sections. A paragraph that carries section settings ends its section; text in a section with two or more
+    // columns comes back set in columns.
+    const colsCss = sp => { const c = kid(sp, 'cols'), n = Math.min(8, +att(c, 'num') || 1); if (n < 2) return ''; const gap = +att(c, 'space'); return `column-count:${n};column-gap:${(gap > 0 ? gap / 1440 : 0.5).toFixed(2)}in${on(c) && att(c, 'sep') && !/^(0|false|off)$/i.test(att(c, 'sep')) ? ';column-rule:1px solid #8a9199' : ''}`; };
+    const parts = []; let run = [];
+    for (const c of body.children) { if (c.localName === 'sectPr') continue; run.push(c); const sp = c.localName === 'p' ? kid(kid(c, 'pPr'), 'sectPr') : null; if (sp) { parts.push({ kids: run, css: colsCss(sp) }); run = []; } }
+    if (run.length || !parts.length) parts.push({ kids: run, css: sect ? colsCss(sect) : '' });
+    let html = '';
+    for (const p of parts) { const h = await bodyHtml({ children: p.kids }); html += p.css && h ? `<div class="cols" style="${p.css}">${h}</div>` : h; }
+    return { html, page };
   }
   window.SaveitDocx = { toDocx, fromDocx, zip, unzip, crc32 };
 })();

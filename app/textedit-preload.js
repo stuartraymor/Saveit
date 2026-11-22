@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('te', {
   onLoad: fn => ipcRenderer.on('te-load', (e, d) => fn(d)),
+  // 10.5.3: a Grab Text started from this window arrives beside the page instead of replacing it
+  onSide: fn => ipcRenderer.on('te-side', (e, d) => fn(d)),
   onContext: fn => ipcRenderer.on('te-context', (e, d) => fn(d)),
   update: o => ipcRenderer.send('te-update', o),
   pick: key => ipcRenderer.invoke('te-pick', key),

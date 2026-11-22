@@ -108,7 +108,10 @@ ipcMain.handle('print-image',async(e,url)=>{mainSender33(e);if(typeof url!=='str
 function transposeFrame(f){const data=Buffer.alloc(f.w*f.h*4);for(let y=0;y<f.h;y++)for(let x=0;x<f.w;x++){const a=(y*f.w+x)*4,b=(x*f.h+y)*4;data[b]=f.data[a];data[b+1]=f.data[a+1];data[b+2]=f.data[a+2];data[b+3]=f.data[a+3]}return{data,w:f.h,h:f.w}}
 // Closing the window flushes pending library saves first, then hides to the tray (or quits when Quit was chosen).
 let quitPending=null;
-function requestQuit(){if(!win||win.isDestroyed()||quitPending){app.isQuitting=true;app.quit();return}quitPending=setTimeout(()=>{quitPending=null;showWindow()},5000);win.webContents.send('review-before-close')}
+function requestQuit(){
+  // 10.5.3: Quit during a recording or Step Capture closed Saveit and lost the take; it now asks you to stop first
+  if((recording||steps)&&win&&!win.isDestroyed()){const what=recording?'A recording is running. Stop it first, then quit Saveit.':'Step Capture is running. Stop it first, then quit Saveit.';try{if(tray&&process.platform==='win32')tray.displayBalloon({iconType:'warning',title:'Saveit is still capturing',content:what});else dialog.showMessageBox({type:'warning',message:'Saveit is still capturing',detail:what,buttons:['OK']})}catch(_){}return}
+  if(!win||win.isDestroyed()||quitPending){app.isQuitting=true;app.quit();return}quitPending=setTimeout(()=>{quitPending=null;showWindow()},5000);win.webContents.send('review-before-close')}
 ipcMain.on('review-close-ready',e=>{if(!win||e.sender!==win.webContents)return;if(quitPending){clearTimeout(quitPending);quitPending=null;app.isQuitting=true;app.quit();return}
   win.hide();
   if (!trayTipShown && tray && process.platform === 'win32') {
@@ -147,7 +150,8 @@ function openRegionReader104(display, rect) {
     k: phys.width / rect.w,
     grab() {
       if (dead) return Promise.reject(new Error('The scrolling capture helper stopped.'));
-      return new Promise((resolve, reject) => { waiting = { resolve, reject }; child.stdin.write(`${phys.x} ${phys.y} ${phys.width} ${phys.height}\n`); });
+      return new Promise((resolve, reject) => { const late = setTimeout(() => fail(new Error('The screen could not be read in time.')), 4000);
+        waiting = { resolve: v => { clearTimeout(late); resolve(v); }, reject: e => { clearTimeout(late); reject(e); } }; child.stdin.write(`${phys.x} ${phys.y} ${phys.width} ${phys.height}\n`); });
     },
     close() { dead = true; try { child.stdin.end('q\n'); } catch (_) {} setTimeout(() => { try { child.kill(); } catch (_) {} }, 1500); }
   };
@@ -160,13 +164,31 @@ async function liveScroll104(display, rect, horizontal) {
   const bx = Math.round(Math.max(wa.x + 8, Math.min(rx + rect.w - BW, wa.x + wa.width - BW - 8)));
   let by = Math.round(ry + rect.h + 10);
   if (by + BH > wa.y + wa.height - 4) { by = Math.round(ry - BH - 10); if (by < wa.y + 4) by = wa.y + wa.height - BH - 8; }
-  const bar = new BrowserWindow({ x: bx, y: by, width: BW, height: BH, frame: false, resizable: false, minimizable: false, maximizable: false, skipTaskbar: true, alwaysOnTop: true, show: false, transparent: false, backgroundColor: '#16181a', title: 'Saveit Scrolling Capture', webPreferences: { preload: asset('manual-preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+  const bar = new BrowserWindow({ x: bx, y: by, width: BW, height: BH, frame: false, resizable: false, minimizable: false, maximizable: false, skipTaskbar: true, alwaysOnTop: true, show: false, transparent: false, hasShadow: false, thickFrame: false, roundedCorners: false /* 10.5.3: its shadow fell on the bottom rows of the area and was captured */, backgroundColor: '#16181a', title: 'Saveit Scrolling Capture', webPreferences: { preload: asset('manual-preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
   bar.setAlwaysOnTop(true, 'screen-saver');
   try { bar.setContentProtection(true); } catch (_) {}
   const overlaps = !(bx >= rx + rect.w || bx + BW <= rx || by >= ry + rect.h || by + BH <= ry);
+  // 10.5.3: the selected area keeps a dashed outline for the whole capture (the selection screen's outline used to vanish as
+  // soon as it closed, leaving nothing to show what was being captured). It is one click-through window just outside the
+  // area, left out of screen reads, so it is never in the picture and never in the way of scrolling.
+  const GAP = 4, frame = new BrowserWindow({ x: Math.round(rx - GAP), y: Math.round(ry - GAP), width: Math.round(rect.w + GAP * 2), height: Math.round(rect.h + GAP * 2), frame: false, transparent: true, backgroundColor: '#00000000', alwaysOnTop: true, skipTaskbar: true, focusable: false, resizable: false, movable: false, hasShadow: false, show: false, thickFrame: false, title: 'Saveit Scrolling Area', webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+  frame.setIgnoreMouseEvents(true);
+  try { frame.setContentProtection(true); } catch (_) {}
+  frame.setAlwaysOnTop(true, 'screen-saver');
+  frame.loadURL('data:text/html,' + encodeURIComponent('<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}div{position:fixed;inset:0;box-sizing:border-box;border:2px solid rgba(0,0,0,.5)}div+div{border:2px dashed #2db3a0}</style><div></div><div></div>'));
+  const frameBounds = { x: Math.round(rx - GAP), y: Math.round(ry - GAP), width: Math.round(rect.w + GAP * 2), height: Math.round(rect.h + GAP * 2) };
+  // no open animation (Windows would show it small and half see-through for a moment, and that got into the first look
+  // at the page), and the first look waits until the outline is really up
+  const noAnim = w => { try { const r = fastScreenReader(), h = w.getNativeWindowHandle(); if (r && r.noTransition) r.noTransition(h.length >= 8 ? h.readBigUInt64LE(0).toString() : h.readUInt32LE(0).toString()); } catch (_) {} };
+  noAnim(frame); noAnim(bar);
+  const frameUp = new Promise(res => { frame.once('ready-to-show', () => { if (!frame.isDestroyed()) { frame.setBounds(frameBounds); frame.showInactive(); } setTimeout(res, 220); }); setTimeout(res, 1500); });
+  // other windows that are always on top (and Windows itself, when the page under it takes the keyboard) can push the
+  // outline behind; it is put back on top while the capture runs
+  const frameTop = setInterval(() => { try { if (frame.isDestroyed()) return; if (!frame.isVisible()) frame.showInactive(); frame.setAlwaysOnTop(true, 'screen-saver'); frame.moveTop(); if (!bar.isDestroyed()) bar.moveTop(); } catch (_) {} }, 700);
   await bar.loadFile(asset('manual.html'));
   let reader = openRegionReader104(display, rect);
   bar.showInactive();
+  await frameUp;
   return new Promise(resolve => {
     let done = false, busy = false, timer = null, session;
     const status = s => { if (!bar.isDestroyed()) bar.webContents.send('manual-status', s); };
@@ -203,10 +225,11 @@ async function liveScroll104(display, rect, horizontal) {
     const finish = img => {
       if (done) return; done = true; clearTimeout(timer); ipcMain.removeListener('manual-command', command);
       if (reader) reader.close();
+      clearInterval(frameTop); if (!frame.isDestroyed()) frame.destroy();
       if (!bar.isDestroyed()) bar.destroy();
       if (liveScrollSession === session) liveScrollSession = null;
       lastScrollNote = !img ? '' : st.state === 'full' ? 'Scrolling capture reached the maximum length. The part captured so far is shown.'
-        : !st.N ? 'The page did not scroll, so only the visible part was captured. Scroll inside the selected area before clicking Capture.' : '';
+        : !st.N ? 'The page did not scroll, so only the visible part was captured. Scroll inside the outlined area (up or down) before clicking Capture.' : '';
       resolve(img);
     };
     const command = (e, cmd) => {
@@ -442,10 +465,13 @@ function overlayWindow(d, file, payload) {
     let settled = false, ov; const full = payload && payload._full; if (full) delete payload._full;
     if (file === 'overlay.html' && spareOverlay && !spareOverlay.win.isDestroyed() && spareOverlay.key === overlayKey(d)) { ov = spareOverlay.win; spareOverlay = null; }
     else ov = newOverlay(d, file);
-    const finish = r => { if (settled) return; settled = true; ipcMain.removeAllListeners('overlay-done'); if (!ov.isDestroyed()) ov.destroy(); resolve(r);
+    const finish = r => { if (settled) return; settled = true; ipcMain.removeListener('overlay-done', onDone); if (!ov.isDestroyed()) ov.destroy(); resolve(r);
       if (file === 'overlay.html') setTimeout(() => { try { prepareOverlay(activeDisplay()); } catch (_) {} }, 1500); };
-    ipcMain.on('overlay-done', (e, r) => finish(r));
+    // 10.5.3: only this window's own answer ends it (any selection window's answer used to end every open one)
+    const onDone = (e, r) => { if (!ov.isDestroyed() && e.sender === ov.webContents) finish(r); };
+    ipcMain.on('overlay-done', onDone);
     ov.on('closed', () => finish(null));
+    ov.webContents.on('render-process-gone', () => finish(null));
     // 10.4.2: the region selector says when the frozen screen is drawn, and only then appears (no blank frame, and it takes
     // the mouse at once); other overlays, or a selector that does not answer within 600 ms, appear straight away.
     ov.loaded.then(() => { if (settled || ov.isDestroyed()) return;
@@ -475,7 +501,7 @@ async function listWindowSources(size) {
 // On Windows, request a still image at the physical DWM frame size. Video
 // capture rounds odd dimensions down to even numbers before the canvas sees them.
 async function grabWindow(id) {
-  if (process.platform === 'win32') return require('./window-capture.js').captureWindow(desktopCapturer, id);
+  if (process.platform === 'win32') return require('./window-capture.js').captureWindow((data, size) => nativeImage.createFromBitmap(data, size), id);
   const capture = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
   try {
     await capture.loadFile(asset('window-frame.html'));
@@ -547,12 +573,12 @@ async function doCapture(mode, delay = 0, opts = {}, pre = null) {
   beginCaptureUI();
   if (win) win.hide();
   const regionish = mode === 'region' || mode === 'text' || mode === 'scroll' || (mode === 'screen' && opts.confirm);
-  const early = !pre && !delay && regionish ? earlyOverlay(activeDisplay()) : null;
+  const d0 = activeDisplay(), early = !pre && !delay && regionish ? earlyOverlay(d0) : null;
   await sleep((vanished.length ? CAPTURE_HIDE_MS : wasVisible ? 200 : widgetWasUp ? 80 : 20) + delay * 1000);
   dimEarlyOverlay(early);
   for (const w of vanished) { try { if (!w.isDestroyed()) w.setOpacity(1); } catch (_) {} }
   try {
-    const d = pre ? displayById(pre.did) : activeDisplay();
+    const d = pre ? displayById(pre.did) : early ? d0 : activeDisplay();
     const cur = screen.getCursorScreenPoint();
     const img = await grabDisplay(d);
     const kk = img.getSize().width / d.bounds.width;
@@ -588,7 +614,10 @@ async function doCapture(mode, delay = 0, opts = {}, pre = null) {
       }
       break;
     }
-    if(!opts.quiet)showWindow();
+    // 10.5.3: Grab Text ends in the Page window. The editor used to be brought to the front here with the screenshot, which
+    // looked like an ordinary capture; now the editor comes back (when it or the widget was in use) without taking the front.
+    if (mode === 'text') { const had = reopenWidget || wasVisible; reopenWidget = false; closeWidget(); if (had && win && !win.isDestroyed()) win.showInactive(); }
+    else if(!opts.quiet)showWindow(); else restoreUI(false);
     const note = mode === 'scroll' ? lastScrollNote : ''; lastScrollNote = '';
     return { region:lastRegion, url: out.toDataURL(), cursor, settings, area: mode, note };
   } catch (err) {
@@ -599,11 +628,18 @@ async function doCapture(mode, delay = 0, opts = {}, pre = null) {
 }
 
 // 10.4.2: the Grab Text window stays out of screenshots like the editor, and comes back afterwards
-ipcMain.handle('capture', async (e, mode, delay, opts, pre) => { const teUp = textWin.hideForCapture(); try { if (teUp) await sleep(30); return await doCapture(mode, delay, opts || {}, pre || null); } finally { if (teUp) textWin.restore(); } });
+// 10.5.3: one capture at a time. A second request while the selection screen or the window picker is open (the hotkey
+// pressed twice, a double click on Capture) used to open a second selection screen on top of the first and both ended
+// with the same answer; it is now ignored, also while a recording area is being chosen, during a scrolling capture and
+// during Step Capture (the capture hotkeys used to open a selection screen whose clicks became steps).
+let capturing = false;
+ipcMain.handle('capture', async (e, mode, delay, opts, pre) => { if (capturing || steps) return null; capturing = true; const teUp = textWin.hideForCapture(); try { if (teUp) await sleep(30); return await doCapture(mode, delay, opts || {}, pre || null); } finally { capturing = false; if (teUp) textWin.restore(); } });
 
 // ---------- recording ----------
 let pendingSource = null, recWins = [];
-ipcMain.handle('prepare-record', async (e, area, delay = 0, opts = {}, pre = null) => {
+ipcMain.handle('prepare-record', async (e, area, delay, opts, pre) => { if (capturing || steps) return null; capturing = true; try { return await prepareRecord(area, delay, opts, pre); } finally { capturing = false; } });
+async function prepareRecord(area, delay = 0, opts = {}, pre = null) {
+  opts = opts || {};
   const wasVisible = win && win.isVisible() && !win.isMinimized();
   beginCaptureUI();
   if (win) win.hide();
@@ -638,7 +674,7 @@ ipcMain.handle('prepare-record', async (e, area, delay = 0, opts = {}, pre = nul
   } catch (err) { pendingSource = null; showWindow(); throw err; }
   if (delay > 0) await countdownWindow(d, rect, delay);
   return { rect, display: { x: d.bounds.x, y: d.bounds.y, w: d.bounds.width, h: d.bounds.height }, settings };
-});
+}
 
 function countdownWindow(d, rect, secs) {
   return new Promise(resolve => {
@@ -656,7 +692,8 @@ function closeRecWins() { for (const w of recWins) if (!w.isDestroyed()) w.destr
 ipcMain.on('rec-ui', (e, on, info, extra) => {
   closeRecWins();
   if (!on) { showWindow(); return; }
-  const d = activeDisplay();
+  const at = info && info.w ? info : info && info.display && info.display.w ? info.display : null;
+  const d = at ? screen.getDisplayMatching({ x: Math.round(at.x), y: Math.round(at.y), width: Math.max(1, Math.round(at.w)), height: Math.max(1, Math.round(at.h || 1)) }) : activeDisplay();
   // 9.9: audio recording: only the small recording bar (timer, a live bar per track, Pause, Stop), centred at the top.
   if (extra && extra.audio) {
     if (win) win.hide();
@@ -781,13 +818,13 @@ async function takeStep(seq) {
     win.webContents.send('step-shot', { seq: seq || null, url: img.toDataURL(), click: { x: Math.round((pt.x - d.bounds.x) * k), y: Math.round((pt.y - d.bounds.y) * k) }, k });
     stepsBarState();
   } catch (_) { }
-  steps.busy = false;
+  if (steps) steps.busy = false; // Stop can arrive while the screenshot is being taken
 }
 
 function stopSteps() {
   if (!steps) return;
   try { if (steps.helper) steps.helper.kill(); } catch (_) { }
-  try { globalShortcut.unregister('F9'); } catch (_) { }
+  try { if (steps.f9) globalShortcut.unregister('F9'); } catch (_) { }
   if (steps.bar && !steps.bar.isDestroyed()) steps.bar.destroy();
   steps = null;
   showWindow();
@@ -796,6 +833,8 @@ function stopSteps() {
 
 ipcMain.handle('steps-start', async (e, delay = 0) => {
   if (steps) return true;
+  if (capturing) return false;
+  beginCaptureUI();
   win.hide();
   await sleep(300 + delay * 1000);
   const d = activeDisplay();
@@ -807,7 +846,8 @@ ipcMain.handle('steps-start', async (e, delay = 0) => {
   bar.loadFile(asset('steps.html'));
   bar.once('ready-to-show', () => { bar.showInactive(); stepsBarState(); });
   steps.bar = bar;
-  try { globalShortcut.register('F9', () => takeStep()); } catch (_) { }
+  // 10.5.3: F9 is taken for the steps only when nothing else of Saveit's has it (a preset's F9 hotkey was removed afterwards)
+  try { if (!globalShortcut.isRegistered('F9')) steps.f9 = globalShortcut.register('F9', () => takeStep()); } catch (_) { }
   if (process.platform === 'win32') {
     try {
       // 10.0.10: native hook + UI Automation helper (saveit-steps.exe in the app folder); the old PowerShell watcher if it is missing
@@ -963,6 +1003,7 @@ ipcMain.on('recording', (e, on) => { recording = !!on; buildTrayMenu(); });
 
 function send(mode) {
   if (!win) return;
+  if (steps || capturing) return; // 10.5.3: not while a selection screen, a scrolling capture or Step Capture is running
   if ((mode === 'window' || mode === 'video') && !recording) showWindow();
   win.webContents.send('hotkey', mode);
 }

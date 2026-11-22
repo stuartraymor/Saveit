@@ -49,6 +49,10 @@ select,input[type=text],input[type=search],input[type=url]{background:var(--pane
 .page img{max-width:100%;vertical-align:bottom}
 .page .pgbreak{display:block;height:0;border-top:1px dashed #9aa1a8;margin:14px 0;position:relative;user-select:none}
 .page .pgbreak::after{content:"Page break";position:absolute;left:50%;top:-8px;transform:translateX(-50%);background:#fff;color:#7a828a;font:11px "Segoe UI",sans-serif;padding:0 6px}
+/* 10.5.3: text set in columns (Layout > Columns) and column breaks */
+.page .cols{column-gap:.5in;margin:0}
+.page .colbreak{display:block;height:0;border-top:1px dotted #9aa1a8;margin:10px 0;position:relative;user-select:none;break-after:column}
+.page .colbreak::after{content:"Column break";position:absolute;left:50%;top:-8px;transform:translateX(-50%);background:#fff;color:#7a828a;font:11px "Segoe UI",sans-serif;padding:0 6px;white-space:nowrap}
 #doc ::selection{background:#b8e6df}
 #doc mark.hit{background:#ffe27a;color:inherit}
 #doc.dropping{outline:2px dashed var(--acc);outline-offset:4px}
@@ -71,7 +75,13 @@ select,input[type=text],input[type=search],input[type=url]{background:var(--pane
 #imgsize{position:absolute;right:0;top:calc(100% + 4px);background:rgba(20,22,24,.85);color:#fff;font-size:11px;padding:1px 6px;border-radius:4px;pointer-events:none}
 .pic{width:38%;max-width:520px;min-width:200px;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column}
 .pic h3{margin:0;padding:8px 10px;font-size:12px;color:var(--dim);font-weight:600;display:flex;align-items:center;gap:6px}
-.pic .imgbox{flex:1;overflow:auto;padding:6px 10px 10px}
+.pic .imgbox{flex:1 1 55%;min-height:70px;overflow:auto;padding:6px 10px 10px}
+/* 10.5.3: the text read from the picture, under it, ready to copy or put into the page */
+.pic .gt{flex:1 1 45%;min-height:150px;display:flex;flex-direction:column;gap:6px;padding:0 10px 10px;border-top:1px solid var(--line)}
+.pic .gt h3{padding:8px 0 0}
+.pic .gt textarea{flex:1;min-height:60px;resize:none;background:#fff;color:#111;border:1px solid var(--line);border-radius:6px;padding:8px;font:12px/1.45 "Segoe UI",system-ui,sans-serif;white-space:pre-wrap;outline-offset:1px}
+.pic .gt .row{display:flex;gap:6px;flex-wrap:wrap}
+.pic .gt .row button{height:28px;padding:3px 9px;font-size:12px}
 .pic img{max-width:100%;display:block;image-rendering:auto;border:1px solid var(--line);background:#fff;cursor:zoom-in}
 .pic img.full{max-width:none;cursor:zoom-out}
 .status{display:flex;align-items:center;gap:12px;padding:5px 10px;border-top:1px solid var(--line);background:var(--panel);color:var(--dim);font-size:12px;flex-wrap:wrap}
@@ -114,6 +124,7 @@ svg{width:15px;height:15px}
   .main,.docwrap{display:block;overflow:visible;padding:0;background:#fff}
   #doc{box-shadow:none;margin:0;padding:0!important;width:auto!important;min-height:0!important;zoom:1!important;border-radius:0}
   #doc .pgbreak{break-after:page;border:0;margin:0}#doc .pgbreak::after{display:none}
+  #doc .colbreak{border:0;margin:0}#doc .colbreak::after{display:none}
   #doc mark.hit{background:none}
 }
 </style><style id="pagecss"></style></head>
@@ -128,8 +139,8 @@ svg{width:15px;height:15px}
   <button id="print" title="Print (Ctrl+P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>Print</button>
   <button id="copyAll" title="Copy all the text (Ctrl+Shift+C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>Copy all</button>
   <span class="sp"></span>
-  <button id="grab" title="Grab text from another area of the screen (Ctrl+G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M9 9h6M12 9v7"/></svg>Grab again</button>
-  <button id="picBtn" aria-pressed="true" title="Show the picture the text was read from, to check it">Picture</button>
+  <button id="grab" title="Grab text from an area of the screen. The picture and the text read from it appear beside this page (Ctrl+G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M9 9h6M12 9v7"/></svg>Grab text</button>
+  <button id="picBtn" aria-pressed="true" title="Show or hide the picture the text was read from, and the grabbed text">Picture</button>
   <button id="editor" title="Bring the Saveit editor forward">Editor</button>
 </div>
 <div class="tabs" role="tablist" aria-label="Ribbon">
@@ -177,6 +188,7 @@ svg{width:15px;height:15px}
   <span class="sep"></span>
   <button class="lbl" id="insHr" title="Insert a horizontal line"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"/></svg>Line</button>
   <button class="lbl" id="insBreak" title="Start a new page here when printed or saved (Ctrl+Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v5h12V3M6 21v-5h12v5M3 12h3M9 12h2M13 12h2M18 12h3"/></svg>Page break</button>
+  <button class="lbl" id="insColBreak" title="Continue in the next column (Ctrl+Shift+Enter). For text set in columns."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v16M20 4v16M12 3v3M12 9v2M12 14v2M12 19v2"/></svg>Column break</button>
   <span class="sep"></span>
   <button class="lbl" id="insDate" title="Insert today's date">Date ▾</button>
   <button class="lbl" id="insSym" title="Insert a symbol">Ω Symbol ▾</button>
@@ -184,9 +196,10 @@ svg{width:15px;height:15px}
   <input type="file" id="picFile" accept="image/*" multiple hidden>
 </div>
 <div class="fmt" role="toolbar" aria-label="Layout" data-panel="layout" hidden>
-  <label class="f">Page size <select id="pgSize"><option value="letter">Letter (8.5 × 11 in)</option><option value="a4">A4 (210 × 297 mm)</option><option value="legal">Legal (8.5 × 14 in)</option></select></label>
+  <label class="f">Page size <select id="pgSize"><option value="letter">Letter (8.5 × 11 in)</option><option value="a4">A4 (210 × 297 mm)</option><option value="legal">Legal (8.5 × 14 in)</option><option value="executive">Executive (7.25 × 10.5 in)</option><option value="tabloid">Tabloid (11 × 17 in)</option><option value="a3">A3 (297 × 420 mm)</option><option value="a5">A5 (148 × 210 mm)</option></select></label>
   <label class="f">Orientation <select id="pgOrient"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
-  <label class="f">Margins <select id="pgMargin"><option value="0.5">Narrow (0.5 in)</option><option value="1">Normal (1 in)</option><option value="1.5">Wide (1.5 in)</option></select></label>
+  <label class="f">Margins <select id="pgMargin"><option value="0.5">Narrow (0.5 in)</option><option value="0.75">Moderate (0.75 in)</option><option value="1">Normal (1 in)</option><option value="1.5">Wide (1.5 in)</option><option value="custom">Custom…</option></select></label>
+  <button class="lbl" id="colsBtn" title="Set the text in one, two or more columns. Select text first to change only that part."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h6M4 9h6M4 13h6M4 17h6M14 5h6M14 9h6M14 13h6M14 17h6"/></svg>Columns ▾</button>
   <span class="sep"></span>
   <button id="wrap" aria-pressed="true" title="Wrap long lines">Wrap</button>
   <label class="f">Zoom <select id="zoom" aria-label="Zoom" title="Zoom (Ctrl+mouse wheel)"><option value="0.5">50%</option><option value="0.75">75%</option><option value="0.9">90%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option></select></label>
@@ -215,7 +228,9 @@ svg{width:15px;height:15px}
       <span class="h" data-h="nw"></span><span class="h" data-h="n"></span><span class="h" data-h="ne"></span><span class="h" data-h="e"></span><span class="h" data-h="se"></span><span class="h" data-h="s"></span><span class="h" data-h="sw"></span><span class="h" data-h="w"></span>
       <div id="imgbar"></div><span id="imgsize" hidden></span></div>
   </div>
-  <div class="pic" id="pic" hidden><h3>Picture the text was read from <span class="sp"></span><span style="font-weight:400">click to zoom</span></h3><div class="imgbox"><img id="picImg" alt="The grabbed area"></div></div>
+  <div class="pic" id="pic" hidden><h3>Picture the text was read from <span class="sp"></span><span style="font-weight:400">click to zoom</span></h3><div class="imgbox"><img id="picImg" alt="The grabbed area"></div>
+    <div class="gt" id="gt" hidden><h3>Grabbed text <span class="sp"></span><span id="gtState" style="font-weight:400"></span></h3><textarea id="gtText" aria-label="Grabbed text" spellcheck="false"></textarea>
+      <div class="row"><button id="gtCopy" title="Copy the grabbed text (or the part you selected in the box)">Copy text</button><button class="pri" id="gtInsert" title="Put the grabbed text (or the part you selected in the box) into the page where the cursor is">Insert into page</button><button id="gtInsPic" title="Put the picture into the page where the cursor is">Insert picture</button></div></div></div>
   <div class="loading" id="loading" hidden><span>Reading text…</span></div>
 </div>
 <div class="status">

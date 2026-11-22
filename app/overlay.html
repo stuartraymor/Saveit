@@ -74,13 +74,14 @@ function size(){W=innerWidth;H=innerHeight;dpr=devicePixelRatio||1;c.width=W*dpr
 addEventListener('resize',size);
 let vmode='image',sent=false,dimA=.45;
 let fxl=[];const fxUi=FXUI.stack($('fxRow'),l=>{fxl=l;draw()});
-function collect(){return{fx:fxl.map(e=>({id:e.id,p:{...e.p}})),mode:vmode,area:$('area').value,cursor:$('oCur').checked,clip:$('oClip').checked,sys:$('oSys').checked,mic:$('oMic').checked,cam:$('oCam').checked}}
+const noFx=()=>vmode==='video'||['text','scroll'].includes($('area').value);
+function collect(){return{fx:noFx()?[]:fxl.map(e=>({id:e.id,p:{...e.p}})),mode:vmode,area:$('area').value,cursor:$('oCur').checked,clip:$('oClip').checked,sys:$('oSys').checked,mic:$('oMic').checked,cam:$('oCam').checked}}
 function labels(){const v=vmode==='video',a=$('area').value;
   $('mImg').setAttribute('aria-pressed',!v);$('mVid').setAttribute('aria-pressed',v);$('vidOpts').hidden=!v;$('imgOpts').hidden=v;
   for(const val of ['steps','text','scroll']){const o=$('area').querySelector('option[value="'+val+'"]');o.hidden=o.disabled=v}
   if(v&&['steps','text','scroll'].includes(a))$('area').value='region';
-  const a2=$('area').value;$('fxRow').hidden=v||a2==='text';$('ok').textContent=a2==='text'?'Grab text':(v?'Record':'Capture');$('ok').classList.toggle('rec',v);
-  if(state==='drag')tip.innerHTML=v?'Drag the area to <b>record</b> · <b>Click</b> for the whole screen · <b>Esc</b> to cancel':(a2==='text'?'Drag around the <b>text</b> to grab · <b>Esc</b> to cancel':'Drag to select an area · <b>Click</b> for the whole screen · <b>Esc</b> to cancel')}
+  const a2=$('area').value;$('fxRow').hidden=noFx();$('ok').textContent=a2==='text'?'Grab text':a2==='scroll'?'Start scrolling':(v?'Record':'Capture');$('ok').title=a2==='scroll'?'Close this screen and start the scrolling capture of the selected area':'';$('ok').classList.toggle('rec',v);
+  if(state==='drag')tip.innerHTML=v?'Drag the area to <b>record</b> · <b>Click</b> for the whole screen · <b>Esc</b> to cancel':(a2==='text'?'Drag around the <b>text</b> to grab · <b>Esc</b> to cancel':a2==='scroll'?'Drag around the part of the page that <b>scrolls</b> · <b>Esc</b> to cancel':'Drag to select an area · <b>Click</b> for the whole screen · <b>Esc</b> to cancel');draw()}
 // 10.5.2: the selector first shows the frozen screen exactly as the screen looked; once it is up, the dimming and the bar
 // fade in quickly (90 ms)
 // 10.5.2: the window is put up while the frozen screen is still on its way (it is transparent, so the real screen shows
@@ -139,7 +140,7 @@ function strokeB(f,r,b,inside,style){g.save();g.strokeStyle=f.borderColor;
   g.restore()}
 // Live preview of the chosen effects on the area you have selected
 let fxGuide=null;
-function fxPreview(r){fxGuide=null;if(vmode==='video'||!fxl.length||r.w<2||r.h<2)return;const k=K(),f0=FXAPPLYALL(FXBLANK(),fxl),E=f0.edge,inside=f0.bPlace==='inside',bs=f0.bStyle||'solid',b=(+f0.border||0)/k,ob=inside?0:b;
+function fxPreview(r){fxGuide=null;if(noFx()||!fxl.length||r.w<2||r.h<2)return;const k=K(),f0=FXAPPLYALL(FXBLANK(),fxl),E=f0.edge,inside=f0.bPlace==='inside',bs=f0.bStyle||'solid',b=(+f0.border||0)/k,ob=inside?0:b;
   const f={...f0,radius:(+f0.radius||0)/k,radii:f0.radii?f0.radii.map(v=>(+v||0)/k):null};
   g.save();
   // the parts of the selection a rounded corner or torn edge cuts away are dimmed like the rest of the screen
@@ -158,7 +159,7 @@ function fxPreview(r){fxGuide=null;if(vmode==='video'||!fxl.length||r.w<2||r.h<2
   const R=f.radii||[f.radius,f.radius,f.radius,f.radius];if(!E&&R.some(v=>v>0))fxGuide=()=>{g.save();g.lineWidth=1.5;g.setLineDash([3,3]);cornerP(r.x+.75,r.y+.75,r.w-1.5,r.h-1.5,f,0);g.strokeStyle='rgba(0,0,0,.8)';g.stroke();g.lineDashOffset=3;g.strokeStyle='#ffffff';g.stroke();g.restore()}}
 function draw(){if(!ready){if(visOn){g.clearRect(0,0,W,H);g.fillStyle=`rgba(0,0,0,${dimA})`;const r=start?norm(start,cur):null;g.beginPath();g.rect(0,0,W,H);if(r&&r.w>1&&r.h>1){g.rect(r.x,r.y,r.w,r.h);g.fill('evenodd');g.strokeStyle='#2db3a0';g.lineWidth=1.5;g.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1)}else g.fill()}return}g.clearRect(0,0,W,H);g.drawImage(img,0,0,W,H);g.fillStyle=`rgba(0,0,0,${dimA})`;
   const r=state==='adjust'?sel:(start?norm(start,cur):null);
-  if(r&&r.w>1&&r.h>1){g.beginPath();g.rect(0,0,W,H);g.rect(r.x,r.y,r.w,r.h);g.fill('evenodd');fxPreview(r);
+  if(r&&r.w>1&&r.h>1){g.beginPath();g.rect(0,0,W,H);g.rect(r.x,r.y,r.w,r.h);g.fill('evenodd');try{fxPreview(r)}catch(e){fxGuide=null;console.error(e)}g.setTransform(dpr,0,0,dpr,0,0);g.globalAlpha=1;g.filter='none';g.shadowColor='transparent';g.setLineDash([]);
     g.strokeStyle='#2db3a0';g.lineWidth=1.5;if(state==='adjust'&&isFull()){g.lineWidth=3;g.setLineDash([10,7]);g.strokeRect(4,4,W-8,H-8);g.setLineDash([])}else g.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1);if(fxGuide)fxGuide();
     const k=K(),label=`${Math.round(r.w*k)} × ${Math.round(r.h*k)}`;g.font='600 12px "Cascadia Mono",Consolas,monospace';const tw=g.measureText(label).width+14;let ly=r.y-26;if(ly<4)ly=r.y+6;
     g.fillStyle='rgba(22,24,26,.92)';g.fillRect(r.x,ly,tw,22);g.fillStyle='#e8eaec';g.fillText(label,r.x+7,ly+15);
@@ -188,7 +189,7 @@ addEventListener('mousemove',e=>{const p={x:e.clientX,y:e.clientY};cur=p;
   else c.style.cursor='crosshair';
   draw()});
 addEventListener('mouseup',e=>{if(act){act=null;c.style.cursor='move';draw();return}if(!start)return;const r=norm(start,cur);start=null;
-  sel=(r.w<4||r.h<4)?{x:0,y:0,w:W,h:H}:r;if(sel.w>=W-1&&sel.h>=H-1&&$('area').value!=='text')$('area').value='screen';state='adjust';tip.style.display='none';draw();$('ok').focus()});
+  sel=(r.w<4||r.h<4)?{x:0,y:0,w:W,h:H}:r;if(sel.w>=W-1&&sel.h>=H-1&&!['text','scroll'].includes($('area').value))$('area').value='screen';state='adjust';tip.style.display='none';draw();$('ok').focus()});
 c.addEventListener('dblclick',e=>{if(state==='adjust'&&inside({x:e.clientX,y:e.clientY}))finish()});
 addEventListener('keydown',e=>{if((e.target.tagName==='INPUT'||e.target.tagName==='SELECT')&&e.key!=='Escape'&&e.key!=='Enter')return;if(e.target.tagName==='SELECT'&&e.key==='Enter')return;
   if(e.key==='Escape')cancel();

@@ -1,9 +1,10 @@
 // 10.3.10: live scrolling capture. The person scrolls the page themselves; Saveit keeps looking at the
-// selected area and adds only content that appears BELOW everything captured so far.
+// selected area and adds content that appears below, or (10.5.3) above, everything captured so far.
 //
 // How a frame is placed: every frame is matched against the whole picture assembled so far (not only the
-// previous frame), so scrolling back up, or down again through content already captured, finds its place
-// and adds nothing. Only rows below the bottom of the picture are ever appended.
+// previous frame), so scrolling back through content already captured finds its place and adds nothing.
+// Rows below the bottom of the picture are appended; rows above its top are put in front. (Until 10.5.3 only
+// rows below were kept, so starting part-way down a page and scrolling up gave "Can't line this up".)
 //
 // Fixed parts: when the page first moves, rows that stayed in the same place at the top (a sticky header,
 // browser toolbar) and at the bottom (a fixed footer, status bar) are kept apart. The header comes once at
@@ -47,6 +48,9 @@ class LiveStitcher {
     this.header = null; this.footer = null;
     this.N = 0;                          // rows in the stitched moving band
     this.cap = 0; this.hs = null; this.ss = null; this.inf = null; this.chunks = [];
+    // Pixel rows are stored in the order they arrive; slot[r] says where band row r is kept, so putting rows in
+    // front of the picture moves a few numbers instead of the whole picture.
+    this.slot = null; this.slots = 0;
     this.pos = 0;                        // where the current frame's band top sits in the stitched band
     this.state = 'initial';              // initial | collecting | revisiting | lost | full
     this.frames = 0; this.accepted = 0;
@@ -59,13 +63,14 @@ class LiveStitcher {
   grow(n) {
     if (this.N + n <= this.cap) return;
     let cap = Math.max(1024, this.cap * 2); while (cap < this.N + n) cap *= 2;
-    const hs = new Int32Array(cap), ss = new Uint8Array(cap * SAMPLES * 3), inf = new Uint8Array(cap), dirty = new Uint8Array(cap);
-    if (this.hs) { hs.set(this.hs.subarray(0, this.N)); ss.set(this.ss.subarray(0, this.N * SAMPLES * 3)); inf.set(this.inf.subarray(0, this.N)); dirty.set(this.dirty.subarray(0, this.N)); }
-    this.hs = hs; this.ss = ss; this.inf = inf; this.dirty = dirty; this.cap = cap;
+    const hs = new Int32Array(cap), ss = new Uint8Array(cap * SAMPLES * 3), inf = new Uint8Array(cap), dirty = new Uint8Array(cap), slot = new Int32Array(cap);
+    if (this.hs) { hs.set(this.hs.subarray(0, this.N)); ss.set(this.ss.subarray(0, this.N * SAMPLES * 3)); inf.set(this.inf.subarray(0, this.N)); dirty.set(this.dirty.subarray(0, this.N)); slot.set(this.slot.subarray(0, this.N)); }
+    this.hs = hs; this.ss = ss; this.inf = inf; this.dirty = dirty; this.slot = slot; this.cap = cap;
   }
   putRow(r, f, y, info, ir, dirty = 0) {
     this.dirty[r] = dirty ? 1 : 0;
-    const stride = this.w * 4, c = r >> 9, k = r & (CHUNK - 1);
+    let at = this.slot[r]; if (at < 0) at = this.slot[r] = this.slots++;
+    const stride = this.w * 4, c = at >> 9, k = at & (CHUNK - 1);
     while (this.chunks.length <= c) this.chunks.push(Buffer.alloc(CHUNK * stride));
     const src = f.data, off = y * stride;
     if (src.copy) src.copy(this.chunks[c], k * stride, off, off + stride); else this.chunks[c].set(src.subarray(off, off + stride), k * stride);
@@ -75,11 +80,21 @@ class LiveStitcher {
     const add = Math.min(info.n - from, this.maxHeight - this.top - this.bot - this.N);
     if (add <= 0) return 0;
     this.grow(add);
-    for (let i = 0; i < add; i++) { const y = this.top + from + i; this.putRow(this.N + i, f, y, info, from + i, inAv(av, y)); }
+    for (let i = 0; i < add; i++) { const y = this.top + from + i; this.slot[this.N + i] = -1; this.putRow(this.N + i, f, y, info, from + i, inAv(av, y)); }
+    this.N += add; return add;
+  }
+  prepend(f, info, count, av) { // band rows 0..count of this frame go above the picture (the ones nearest to it first)
+    const add = Math.min(count, this.maxHeight - this.top - this.bot - this.N);
+    if (add <= 0) return 0;
+    this.grow(add);
+    const N = this.N, S3 = SAMPLES * 3, skip = count - add;
+    this.hs.copyWithin(add, 0, N); this.ss.copyWithin(add * S3, 0, N * S3); this.inf.copyWithin(add, 0, N); this.dirty.copyWithin(add, 0, N); this.slot.copyWithin(add, 0, N);
+    for (let i = 0; i < add; i++) { const y = this.top + skip + i; this.slot[i] = -1; this.putRow(i, f, y, info, skip + i, inAv(av, y)); }
     this.N += add; return add;
   }
   // ---- matching ----
-  // Where does this band (n rows) sit in the stitched band? Returns {p, score} or null.
+  // Where does this band (n rows) sit in the stitched band? Returns {p, score} or null. p is negative when the
+  // band reaches above the top of the picture (the page was scrolled up past where the capture began).
   // Only offsets with enough overlap and enough rows that carry content are considered; ties go to the
   // offset closest to the previous position (repeating content such as identical list rows).
   locate(info, near) {
@@ -89,18 +104,18 @@ class LiveStitcher {
     const scan = (lo, hi) => {
       let best = null;
       for (let p = lo; p <= hi; p++) {
-        const ov = Math.min(n, N - p); if (ov < minOv) continue;
+        const r0 = p < 0 ? -p : 0, ov = Math.min(n, N - p); if (ov - r0 < minOv) continue;
         let used = 0, miss = 0; const allow = Math.ceil(rows.length * 0.2);
-        for (let j = 0; j < rows.length; j++) { const r = rows[j]; if (r >= ov) break; used++; if (this.hs[p + r] !== info.hs[r]) { if (++miss > allow && miss > used * 0.2) break; } }
+        for (let j = 0; j < rows.length; j++) { const r = rows[j]; if (r < r0) continue; if (r >= ov) break; used++; if (this.hs[p + r] !== info.hs[r]) { if (++miss > allow && miss > used * 0.2) break; } }
         if (used < 6) continue;
         const score = (used - miss) / used;
         if (!best || score > best.score + 1e-9 || (score > best.score - 0.003 && Math.abs(p - near) < Math.abs(best.p - near))) best = { p, score, used };
       }
       return best;
     };
-    const lo = Math.max(0, near - 2 * n), hi = Math.max(0, N - minOv);
+    const LO = minOv - n, lo = Math.max(LO, near - 2 * n), hi = Math.max(0, N - minOv);
     let best = scan(lo, Math.min(hi, near + 2 * n));
-    if ((!best || best.score < 0.9) && (lo > 0 || near + 2 * n < hi)) { const b2 = scan(0, hi); if (b2 && (!best || b2.score > best.score)) best = b2; }
+    if ((!best || best.score < 0.9) && (lo > LO || near + 2 * n < hi)) { const b2 = scan(LO, hi); if (b2 && (!best || b2.score > best.score)) best = b2; }
     if (best && best.score >= 0.9) {
       // one doubtful match far from where the page was must not move the picture
       if (Math.abs(best.p - near) > 1.5 * n && (best.score < 0.97 || best.used < 20)) return null;
@@ -113,12 +128,12 @@ class LiveStitcher {
   locateFuzzy(info, near, rows) {
     const n = info.n, N = this.N, minOv = Math.max(16, Math.floor(n * 0.04));
     const pick = (step) => rows.filter((_, i) => i % step === 0);
-    const lo = Math.max(0, near - 2 * n), hi = Math.min(Math.max(0, N - minOv), near + 2 * n);
-    const cost = (p, list) => { const ds = []; const ov = Math.min(n, N - p); for (const r of list) { if (r >= ov) break; ds.push(rowDiff(this.ss, p + r, info.ss, r)); } if (ds.length < 6 && list !== rows) return cost(p, rows); if (ds.length < 6) return 1e9; /* short overlap: every row with ink is used */ ds.sort((a, b) => a - b); const k = Math.max(1, Math.floor(ds.length * 0.85)); let t = 0; for (let i = 0; i < k; i++) t += ds[i]; return t / k; };
+    const lo = Math.max(minOv - n, near - 2 * n), hi = Math.min(Math.max(0, N - minOv), near + 2 * n);
+    const cost = (p, list) => { const ds = []; const r0 = p < 0 ? -p : 0, ov = Math.min(n, N - p); for (const r of list) { if (r < r0) continue; if (r >= ov) break; ds.push(rowDiff(this.ss, p + r, info.ss, r)); } if (ds.length < 6 && list !== rows) return cost(p, rows); if (ds.length < 6) return 1e9; /* short overlap: every row with ink is used */ ds.sort((a, b) => a - b); const k = Math.max(1, Math.floor(ds.length * 0.85)); let t = 0; for (let i = 0; i < k; i++) t += ds[i]; return t / k; };
     const coarse = pick(Math.max(1, Math.floor(rows.length / 60)));
-    let best = -1, bd = 1e9;
-    for (let p = lo; p <= hi; p++) { const ov = Math.min(n, N - p); if (ov < minOv) continue; const d = cost(p, coarse); if (d < bd - 1e-9 || (d < bd + 0.05 && Math.abs(p - near) < Math.abs(best - near))) { bd = d; best = p; } }
-    if (best < 0) return null;
+    let best = lo, bd = 1e9;
+    for (let p = lo; p <= hi; p++) { const ov = Math.min(n, N - p) - (p < 0 ? -p : 0); if (ov < minOv) continue; const d = cost(p, coarse); if (d < bd - 1e-9 || (d < bd + 0.05 && Math.abs(p - near) < Math.abs(best - near))) { bd = d; best = p; } }
+    if (bd >= 1e9) return null;
     let fb = 1e9, fp = best;
     for (let p = Math.max(lo, best - 3); p <= Math.min(hi, best + 3); p++) { const d = cost(p, rows); if (d < fb) { fb = d; fp = p; } }
     if (fb >= 6) return null;
@@ -151,16 +166,21 @@ class LiveStitcher {
     const m = this.locate(info, this.pos);
     if (!m) return this.out('lost', 0);
     if (m.blank) return this.out('blank', 0);
-    this.last = full; this.accepted++; this.pos = m.p;
-    this.clean(f, info, m.p, av); this.fixHeader(f, av);
-    const below = m.p + info.n - this.N;
+    this.last = full; this.accepted++;
+    // rows of this view that lie above the top of the picture go in front of it
+    let p = m.p, up = 0;
+    if (p < 0) { up = this.prepend(f, info, -p, av); p += up; if (up) this.keepHeader(f, av); }
+    this.pos = p;
+    if (p < 0) return this.out('full', up);
+    this.clean(f, info, p, av); this.fixHeader(f, av);
+    const below = p + info.n - this.N;
     let added = 0;
     if (below > 0) {
       added = this.append(f, info, info.n - below, av);
-      if (added < below) { this.keepFooter(f, av); return this.out('full', added); }
+      if (added < below) { this.keepFooter(f, av); return this.out('full', added + up); }
     }
-    if (m.p + info.n >= this.N) { this.refresh(f, info, m.p, added, av); this.keepFooter(f, av); return this.out(added ? 'collecting' : 'revisiting', added); }
-    return this.out('revisiting', 0);
+    if (p + info.n >= this.N) { this.refresh(f, info, p, added, av); this.keepFooter(f, av); return this.out(added || up ? 'collecting' : 'revisiting', added + up); }
+    return this.out(up ? 'collecting' : 'revisiting', up);
   }
   // First movement: find fixed rows, then stitch the moving band of the first two frames.
   start(f, full, av) {
@@ -190,28 +210,39 @@ class LiveStitcher {
     // footer is kept only if at least one of its rows with some ink is proven fixed: unchanged in place, and not
     // matching the content d rows further down (d = the scroll distance found for this layout). A bar with no ink at
     // all cannot be told apart from plain content in one movement and is treated as fixed.
-    const proven = (y0, y1, d) => { for (let y = y0; y < y1; y++) if (y + d < h && (A.inf[y] || full.inf[y]) && !inAv(av, y) && !inAv(fav, y) && !inAv(fav, y + d) && near(A, y, full, y) && !near(A, y + d, full, y)) return true; return false; };
+    // (When the page moved up instead, d is negative: the content of row y came from row y + d of the first view, and where
+    // that is off the top, the first view's row y is looked for at row y - d of this one.)
+    const proven = (y0, y1, d) => { for (let y = y0; y < y1; y++) { if (!(A.inf[y] || full.inf[y]) || inAv(av, y) || inAv(fav, y) || !near(A, y, full, y)) continue;
+      const a = y + d, b = y - d;
+      if (a >= 0 && a < h) { if (!inAv(fav, a) && !near(A, a, full, y)) return true; }
+      else if (d < 0 && b < h && !inAv(av, b) && !near(A, y, full, b)) return true; }
+      return false; };
     for (let ti = 0; ti < tries.length; ti++) {
       const [t, bo] = tries[ti];
       const firstBand = sliceInfo(this.first.info, t, h - bo), band = sliceInfo(full, t, h - bo);
       const probe = new LiveStitcher({ maxHeight: this.maxHeight }); probe.w = this.w; probe.h = h; probe.top = t; probe.bot = bo;
       probe.N = 0; probe.append(this.first.f, firstBand, 0, fav);
       const m = probe.locate(band, 0);
-      if (!m || m.blank || m.p <= 0) continue;
+      if (!m || m.blank || m.p === 0) continue;
       if (!tries[ti].refined) {
         const plain = (y0, y1) => { for (let y = y0; y < y1; y++) if ((A.inf[y] || full.inf[y]) && !inAv(av, y) && !inAv(fav, y)) return false; return true; }; // a plain bar stays fixed
         const t2 = t && !proven(0, t, m.p) && !plain(0, t) ? 0 : t, b2 = bo && !proven(h - bo, h, m.p) && !plain(h - bo, h) ? 0 : bo;
         if (t2 !== t || b2 !== bo) { const r = [t2, b2]; r.refined = true; tries.splice(ti + 1, 0, r); continue; }
       }
       // adopt this layout
-      Object.assign(this, { top: t, bot: bo, N: probe.N, cap: probe.cap, hs: probe.hs, ss: probe.ss, inf: probe.inf, dirty: probe.dirty, chunks: probe.chunks });
+      Object.assign(this, { top: t, bot: bo, N: probe.N, cap: probe.cap, hs: probe.hs, ss: probe.ss, inf: probe.inf, dirty: probe.dirty, chunks: probe.chunks, slot: probe.slot, slots: probe.slots });
       this.header = t ? copyRows(this.first.f, 0, t) : null; this.headerDirty = !!t && overlaps(fav, 0, t);
       if (bo && !overlaps(fav, h - bo, h)) this.footer = copyRows(this.first.f, h - bo, h);
-      this.pos = m.p; this.last = full; this.accepted++;
-      this.clean(f, band, m.p, av); this.fixHeader(f, av);
-      const below = m.p + band.n - this.N, added = below > 0 ? this.append(f, band, band.n - below, av) : 0;
-      this.keepFooter(f, av);
-      return this.out(added < below ? 'full' : 'collecting', added);
+      this.last = full; this.accepted++;
+      // the page moved up first: the rows that came into view go above the first view, whose footer stays the footer
+      let p = m.p, up = 0;
+      if (p < 0) { up = this.prepend(f, band, -p, av); p += up; if (up) this.keepHeader(f, av); }
+      this.pos = p;
+      if (p < 0) { this.keepFooter(this.first.f, fav); return this.out('full', up); }
+      this.clean(f, band, p, av); this.fixHeader(f, av);
+      const below = p + band.n - this.N, added = below > 0 ? this.append(f, band, band.n - below, av) : 0;
+      this.keepFooter(up ? this.first.f : f, up ? fav : av);
+      return this.out(added < below ? 'full' : 'collecting', added + up);
     }
     // nothing moved in a way we can line up (an animation, a blinking caret, a page that jumped too far)
     return this.out('lost', 0);
@@ -220,13 +251,20 @@ class LiveStitcher {
   // for the part of the picture that is on screen right now, but only rows that are not fresh appends.
   refresh(f, info, p, added, av) {
     const end = info.n - added;
-    for (let r = Math.floor(info.n * 0.25); r < end; r++) { const R = p + r; if (R >= this.N - added) break; if (this.hs[R] !== info.hs[r] && !this.inf[R] && info.inf[r] && !inAv(av, this.top + r)) this.putRow(R, f, this.top + r, info, r); }
+    for (let r = Math.floor(info.n * 0.25); r < end; r++) { const R = p + r; if (R < 0) continue; if (R >= this.N - added) break; if (this.hs[R] !== info.hs[r] && !this.inf[R] && info.inf[r] && !inAv(av, this.top + r)) this.putRow(R, f, this.top + r, info, r); }
   }
   // replace rows captured under the pointer, now that this frame shows them without it
   clean(f, info, p, av) {
     for (let r = 0; r < info.n; r++) { const R = p + r; if (R < 0) continue; if (R >= this.N) break; if (this.dirty[R] && !inAv(av, this.top + r)) this.putRow(R, f, this.top + r, info, r); }
   }
-  fixHeader(f, av) { if (this.headerDirty && !overlaps(av, 0, this.top)) { this.header = copyRows(f, 0, this.top); this.headerDirty = false; } }
+  fixHeader(f, av) { if (this.headerDirty && !overlaps(av, 0, this.top) && (!this.grewUp || this.pos === 0)) { this.header = copyRows(f, 0, this.top); this.headerDirty = false; } }
+  // The picture grew upward: the fixed rows at the top are taken from the view that is now the top of the picture (plain
+  // rows just under a real header count as fixed, and they belong to the top of the page, not to where the capture began).
+  keepHeader(f, av) {
+    this.grewUp = true; if (!this.top) return;
+    const d = overlaps(av, 0, this.top);
+    if (!d || !this.header) { this.header = copyRows(f, 0, this.top); this.headerDirty = d; }
+  }
   keepFooter(f, av) {
     if (!this.bot) { this.footer = null; return; }
     const d = overlaps(av, f.h - this.bot, f.h);
@@ -246,7 +284,7 @@ class LiveStitcher {
     const stride = this.w * 4, H = this.top + this.N + this.bot, out = Buffer.alloc(stride * H);
     let o = 0;
     if (this.header) { this.header.copy(out, 0); o = this.header.length; }
-    for (let r = 0; r < this.N; r += CHUNK) { const n = Math.min(CHUNK, this.N - r); this.chunks[r >> 9].copy(out, o, 0, n * stride); o += n * stride; }
+    for (let r = 0; r < this.N; r++) { const at = this.slot[r], k = at & (CHUNK - 1); this.chunks[at >> 9].copy(out, o, k * stride, (k + 1) * stride); o += stride; }
     if (this.footer) this.footer.copy(out, o);
     return { data: out, w: this.w, h: H };
   }

@@ -12,12 +12,14 @@ module.exports = function textWindow({ ipcMain, BrowserWindow, Menu, clipboard, 
     clearTimeout(draftT); draftT = null;
     try {
       const list = grabs.filter(g => !g.loading && ((g.text || '').trim() || /<img/i.test(g.html || ''))).slice(0, 40)
-        .map(g => ({ key: g.key, name: g.name, text: g.text, html: g.html, src: g.src && g.src.length < 8e6 ? g.src : null, libId: g.libId || null, created: g.created, dirty: !!g.dirty }));
+        .map(g => ({ key: g.key, name: g.name, text: g.text, html: g.html, src: g.src && g.src.length < 8e6 ? g.src : null, libId: g.libId || null, created: g.created, dirty: !!g.dirty,
+          grabText: g.grabText || undefined, sideSrc: g.sideSrc && g.sideSrc.length < 8e6 ? g.sideSrc : undefined, sideText: g.sideSrc && g.sideSrc.length < 8e6 ? g.sideText || '' : undefined }));
       const f = draftsFile(), tmp = f + '.tmp'; fs.writeFileSync(tmp, JSON.stringify({ v: 1, pages: list })); fs.renameSync(tmp, f);
     } catch (_) {}
   }
   function readDrafts() {
-    try { const d = JSON.parse(fs.readFileSync(draftsFile(), 'utf8')); for (const g of (d.pages || []).slice(0, 40)) if (g && typeof g.key === 'string' && typeof g.html === 'string' && !grabs.some(x => x.key === g.key)) grabs.push({ key: g.key, name: String(g.name || 'Page'), text: String(g.text || ''), html: g.html, src: typeof g.src === 'string' ? g.src : null, libId: g.libId || null, created: +g.created || Date.now(), dirty: !!g.dirty }); } catch (_) {}
+    try { const d = JSON.parse(fs.readFileSync(draftsFile(), 'utf8')); for (const g of (d.pages || []).slice(0, 40)) if (g && typeof g.key === 'string' && typeof g.html === 'string' && !grabs.some(x => x.key === g.key)) grabs.push({ key: g.key, name: String(g.name || 'Page'), text: String(g.text || ''), html: g.html, src: typeof g.src === 'string' ? g.src : null, libId: g.libId || null, created: +g.created || Date.now(), dirty: !!g.dirty,
+      grabText: typeof g.grabText === 'string' ? g.grabText : undefined, sideSrc: typeof g.sideSrc === 'string' ? g.sideSrc : undefined, sideText: typeof g.sideText === 'string' ? g.sideText : undefined }); } catch (_) {}
   }
   const pending = new Map();      // library saves waiting for the editor's answer
   const fromTw = e => tw && !tw.isDestroyed() && e.sender === tw.webContents;
@@ -52,18 +54,35 @@ module.exports = function textWindow({ ipcMain, BrowserWindow, Menu, clipboard, 
   // Prepared hidden a few seconds after start, like the widget
   require('electron').app.whenReady().then(() => setTimeout(() => { if (!tw || tw.isDestroyed()) { try { make(); } catch (_) {} } }, 4000));
   // Open (or update) a grab. A grab with the same key or library id is updated in place.
+  // 10.5.3: a Grab Text started from the page window (its Grab text button) arrives beside the page that is open: the
+  // picture and the text read from it go into the side panel, and the page itself is not replaced or changed.
+  let sideFor = null, sideAt = 0;
+  function side(o) {
+    const g = grabs.find(x => x.key === (o.key || sideFor)) || null;
+    if (!g || !tw || tw.isDestroyed() || !loaded) return null;
+    if (o.src) g.sideSrc = o.src;
+    g.sideText = o.text || ''; g.sideLoading = !!o.loading; g.sideEmpty = !!o.empty;
+    if (!o.loading) { sideFor = null; keepDrafts(); }
+    wanted = true;
+    if (current !== g) { current = g; send(); }
+    tw.webContents.send('te-side', { key: g.key, src: g.sideSrc || '', text: g.sideText, loading: g.sideLoading, empty: g.sideEmpty });
+    if (tw.isMinimized()) tw.restore(); tw.show(); if (!o.loading) tw.focus();
+    return g.key;
+  }
   function open(o) {
     o = o || {};
+    if (o.side) { const k = side(o); if (k) return k; }
     let g = (o.key && grabs.find(x => x.key === o.key)) || (o.libId && grabs.find(x => x.libId === o.libId));
     if (!g) { g = { key: 'g' + Date.now() + '-' + (++seq), created: Date.now() }; grabs.unshift(g); if (grabs.length > 40) grabs.length = 40; }
     for (const k of ['name', 'text', 'html', 'src', 'libId']) if (o[k] !== undefined) g[k] = o[k];
+    if (g.src && !g.libId && !o.loading && typeof o.text === 'string' && o.text && g.grabText === undefined) g.grabText = o.text; // what was read, kept beside the page while the page is edited
     g.loading = !!o.loading; g.empty = !!o.empty; if (!g.name) g.name = 'Grabbed text'; if (o.dirty !== undefined) g.dirty = !!o.dirty; if (o.libId) g.dirty = false;
     keepDrafts();
     current = g; wanted = true;
     if (!tw || tw.isDestroyed()) make(); else if (loaded) { send(); if (tw.isMinimized()) tw.restore(); tw.show(); if (!o.loading) tw.focus(); }
     return g.key;
   }
-  ipcMain.handle('te-open', (e, o) => { if (!fromEditor(e)) throw Error('Unsupported request source'); return open({ key: str(o?.key, 80) || undefined, name: str(o?.name, 200) || undefined, text: o?.text == null ? undefined : str(o.text, 2e6), html: o?.html == null ? undefined : str(o.html, 6e7), src: o?.src == null ? undefined : str(o.src, 4e7), libId: str(o?.libId, 80) || undefined, loading: !!o?.loading, empty: !!o?.empty }); });
+  ipcMain.handle('te-open', (e, o) => { if (!fromEditor(e)) throw Error('Unsupported request source'); return open({ key: str(o?.key, 80) || undefined, name: str(o?.name, 200) || undefined, text: o?.text == null ? undefined : str(o.text, 2e6), html: o?.html == null ? undefined : str(o.html, 6e7), src: o?.src == null ? undefined : str(o.src, 4e7), libId: str(o?.libId, 80) || undefined, loading: !!o?.loading, empty: !!o?.empty, side: !!o?.side }); });
   // 10.4.10: New page and Open file from the page window itself
   ipcMain.handle('te-new', (e, o) => { if (!fromTw(e)) throw Error('Unsupported request source'); return open({ name: str(o?.name, 200) || 'New page', text: str(o?.text, 2e6), html: str(o?.html, 6e7), dirty: !!o?.dirty }); });
   ipcMain.handle('te-open-file', async e => {
@@ -109,7 +128,7 @@ module.exports = function textWindow({ ipcMain, BrowserWindow, Menu, clipboard, 
     if (r.canceled || !r.filePath) return null;
     let out;
     if (ext === 'pdf') {
-      const p = page || {}, size = { letter: 'Letter', a4: 'A4', legal: 'Legal' }[p.size] || 'Letter', m = Math.max(0, Math.min(2, +p.margin || 1));
+      const p = page || {}, size = { letter: 'Letter', a4: 'A4', legal: 'Legal', tabloid: 'Tabloid', a3: 'A3', a5: 'A5', executive: p.orientation === 'landscape' ? { width: 10.5, height: 7.25 } : { width: 7.25, height: 10.5 } }[p.size] || 'Letter', m = Math.max(0, Math.min(3, +p.margin || 1));
       out = await tw.webContents.printToPDF({ pageSize: size, landscape: p.orientation === 'landscape', printBackground: true, margins: { top: m, bottom: m, left: m, right: m } });
     } else if (ext === 'docx') { if (!(data instanceof Uint8Array)) throw Error('Nothing to save.'); out = Buffer.from(data); }
     else if (ext === 'txt' || ext === 'md') out = '﻿' + str(data, 4e6).replace(/\r?\n/g, '\r\n');
@@ -119,7 +138,7 @@ module.exports = function textWindow({ ipcMain, BrowserWindow, Menu, clipboard, 
   });
   ipcMain.on('te-print', e => { if (fromTw(e)) tw.webContents.print({ silent: false, printBackground: false }); });
   ipcMain.on('te-editor', e => { if (fromTw(e)) showEditor(); });
-  ipcMain.on('te-grab', e => { if (!fromTw(e)) return; const w = editor(); if (w && !w.isDestroyed()) w.webContents.send('grab-text-now'); });
+  ipcMain.on('te-grab', e => { if (!fromTw(e)) return; const w = editor(); if (!w || w.isDestroyed()) return; sideFor = current ? current.key : null; sideAt = Date.now(); w.webContents.send('grab-text-now', { side: !!sideFor }); });
   return {
     open,
     // Captures leave Saveit's own windows out of the picture: hide this one too and bring it back afterwards.

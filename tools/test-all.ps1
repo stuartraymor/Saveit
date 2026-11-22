@@ -97,6 +97,9 @@ $T = @(
   @{ n='native-workflow-paste-layer';   k='native';    areas='library,editor' }
   @{ n='native-live-scroll';            k='native';    areas='capture' }
   @{ n='native-window-capture';         k='native';    areas='capture' }
+  @{ n='native-window-capture-1053';    k='native';    areas='capture'; quick=1 }
+  @{ n='native-scroll-1053';            k='native';    areas='capture'; quick=1 }
+  @{ n='native-page-1053';              k='native';    areas='grabtext,capture'; quick=1 }
   @{ n='native-callout1111';            k='nativeApp'; areas='editor' }
   @{ n='native-clipboard1110';          k='nativeApp'; areas='editor' }
   @{ n='native-stepguide';              k='nativeApp'; areas='library,editor' }
