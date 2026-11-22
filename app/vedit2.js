@@ -932,13 +932,7 @@ function mount(host,it,api){css();HK=api;
   document.addEventListener('keydown',key,true);
   function refreshAll(){refreshProps();caplist();ovui();offlineUi();R('canvas').value=['1920x1080','1280x720','854x480','1080x1080','1080x1920'].includes(e.W+'x'+e.H)?e.W+'x'+e.H:'auto';R('fi').checked=!!e.fadeIn;R('fo').checked=!!e.fadeOut;R('muteall').checked=!!e.muteVideo;R('ofps').value=e.fps?String(e.fps):'';showFx()}
   // 9.8: true when the timeline is anything other than the untouched recording, so Save renders the edit.
-  function isEdited(){const s0=rt.src.s0||{},dur=s0.dur||0,nz=v=>!!v&&v!=='none';if(e.clips.length!==1||e.aud.length||e.vfx.length||e.zooms.length||e.ovs.length||e.caps.some(c=>c.text)||e.fadeIn||e.fadeOut||e.muteVideo)return true;
-    if(s0.w&&s0.h&&(e.W!==s0.w||e.H!==s0.h))return true;if(e.fps)return true; // 10.1.7: a new Size alone needs rendering
-    const c=e.clips[0],src=e.srcs.find(s=>s.id===c.src);if(!src||!src.self||c.a>.05||(dur&&Math.abs(c.b-dur)>.05)||c.start>.01||(c.speed||1)!==1||(c.vol==null?1:c.vol)!==1||c.mute||c.afi||c.afo||(c.trans&&nz(c.trans.type)))return true;
-    if(c.crop&&(c.crop.l||c.crop.t||c.crop.r||c.crop.b))return true;if(c.fx&&JSON.stringify(Object.assign(defFx(),c.fx))!==JSON.stringify(defFx()))return true;
-    if(JSON.stringify(Object.assign(defFx(),e.master||{}))!==JSON.stringify(defFx()))return true;
-    const known=new Set(['id','src','a','b','start','speed','vol','mute','crop','trans','afi','afo','fx','name','peaks','lane','color']);for(const [k,v] of Object.entries(c))if(!known.has(k)&&v&&!(typeof v==='object'&&!Object.keys(v).length))return true;
-    return false}
+  function isEdited(){return projectEdited(e,rt.src.s0||{})}
   let lkLastT=-1;function ui(){if(!ready){return}if(!sel&&!crop&&playClip()!==lastPlayClip&&!host.contains(document.activeElement&&document.activeElement.matches('input,select')?document.activeElement:null))refreshProps();if(eng.t!==lkLastT&&!eng.playing){lkLastT=eng.t;lkFollow()}if(crop&&eng.playing)cropStop(true);const r=curRange();{const tt=`${fmt(eng.t)} / ${fmt(D())}`,te=R('time');if(te.textContent!==tt)te.textContent=tt}{const pb=q('[data-a="play"]'),sb=q('[data-a="playsel"]'),pt=eng.playing&&!playRange?'Pause':'Play',st=eng.playing&&playRange?'Pause':r?'Play '+r[2]:'Play selection';if(pb.textContent!==pt)pb.textContent=pt;if(sb.textContent!==st)sb.textContent=st;sb.disabled=!r&&!(eng.playing&&playRange)}
     // 10.1.8: redraw the timeline and overlay only while playing or when something may have changed (plus twice a second as a safety net)
     const now=performance.now(),sig=[eng.t,D(),zoom,tl.clientWidth,sel&&sel.type,inT,outT,hist.length,fut.length,otool,tab,pane].join('|');
@@ -979,13 +973,25 @@ function mount(host,it,api){css();HK=api;
       try{return await eng.exportRun((e.W&~1)||2,(e.H&~1)||2,p=>{fill.style.width=Math.round(p*100)+'%'},exp,{fmt})}finally{exp=null;bar.hidden=true;stopB.hidden=true;try{await eng.seek(0)}catch(_){}}},grab:()=>eng?eng.snapshot(e.W,e.H):null,getProject:()=>e,
     // 10.1.7: read-only view of editor state for the automated tests
     _dbg:{get sel(){return sel},select,get inT(){return inT},get outT(){return outT},get eng(){return eng},act,get hist(){return hist.length},get rt(){return rt},get ready(){return ready}}}}
+// 9.8: true when the timeline is anything other than the untouched recording, so Save renders the edit.
+// 10.5.5: outside the editor, so the Library can ask the same question about a video that is not open (s0 = the recording's size and length)
+function projectEdited(e,s0){const rt={src:{s0}};{const dur=s0.dur||0,nz=v=>!!v&&v!=='none';if(e.clips.length!==1||e.aud.length||e.vfx.length||e.zooms.length||e.ovs.length||e.caps.some(c=>c.text)||e.fadeIn||e.fadeOut||e.muteVideo)return true;
+    if(s0.w&&s0.h&&(e.W!==s0.w||e.H!==s0.h))return true;if(e.fps)return true; // 10.1.7: a new Size alone needs rendering
+    const c=e.clips[0],src=e.srcs.find(s=>s.id===c.src);if(!src||!src.self||c.a>.05||(dur&&Math.abs(c.b-dur)>.05)||c.start>.01||(c.speed||1)!==1||(c.vol==null?1:c.vol)!==1||c.mute||c.afi||c.afo||(c.trans&&nz(c.trans.type)))return true;
+    if(c.crop&&(c.crop.l||c.crop.t||c.crop.r||c.crop.b))return true;if(c.fx&&JSON.stringify(Object.assign(defFx(),c.fx))!==JSON.stringify(defFx()))return true;
+    if(JSON.stringify(Object.assign(defFx(),e.master||{}))!==JSON.stringify(defFx()))return true;
+    const known=new Set(['id','src','a','b','start','speed','vol','mute','crop','trans','afi','afo','fx','name','peaks','lane','color']);for(const [k,v] of Object.entries(c))if(!known.has(k)&&v&&!(typeof v==='object'&&!Object.keys(v).length))return true;
+    return false}}
 // Copy edited Library videos as they currently look/sound, without opening them in the destination editor.
 const needsMp4Render=item=>!!(item.webm&&/webm/i.test(item.blob?.type||''));
-async function copyClip(item,api,onProgress){const source=item.mp4||item.webm||item.blob;if(!item.edit&&!needsMp4Render(item))return source;const previousHK=HK,copyHK={...HK,...api};HK=copyHK;const urls=[],urlFor=blob=>{const u=URL.createObjectURL(blob);urls.push(u);return u};let engine=null;
+// 10.5.5: opts.fmt 'webm' gives a WebM; opts.onlyIfEdited returns null for a recording that was opened but not changed (the caller then saves the file as recorded)
+async function copyClip(item,api,onProgress,opts={}){const source=item.mp4||item.webm||item.blob,want=opts.fmt==='webm'?'webm':'mp4';if(!item.edit&&(opts.onlyIfEdited||!needsMp4Render(item)))return opts.onlyIfEdited?null:source;const previousHK=HK,copyHK={...HK,...api};HK=copyHK;const urls=[],urlFor=blob=>{const u=URL.createObjectURL(blob);urls.push(u);return u};let engine=null;
   try{const url=urlFor(item.blob),meta=await loadMeta(url),temp={...item,edit:item.edit?clone(item.edit):null},e=ensureProject(temp,meta),rt={src:{}};
     const used=new Set([...e.clips,...e.aud].map(c=>c.src));
     for(const s of e.srcs){if(!s.self&&!used.has(s.id))continue;let blob=s.self?item.blob:item._edBlobs?.[s.id];if(!blob&&s.itemId){const other=api.itemById(s.itemId);if(other){await api.hydrate(other);blob=other.blob}}if(!blob)throw Error('A source clip for this edited video could not be found.');const u=s.self?url:urlFor(blob),m=await loadMeta(u,s.kind==='audio');rt.src[s.id]={url:u,blob,dur:m.dur,w:m.w,h:m.h}}
-    engine=makeEngine({e,rt});const result=await engine.exportRun((e.W&~1)||2,(e.H&~1)||2,onProgress,{cancel:false},{fmt:'mp4'});return result.mp4||result.webm
+    engine=makeEngine({e,rt});
+    if(opts.onlyIfEdited){const self=e.srcs.find(x=>x.self),look=e.look&&(lookOf(e).layout!=='full'||lookOf(e).bg!=='black');if(!(projectEdited(e,(self&&rt.src[self.id])||{})||look||(engine.hasCam&&engine.hasCam())))return null}
+    const result=await engine.exportRun((e.W&~1)||2,(e.H&~1)||2,onProgress,{cancel:false},{fmt:want});return want==='webm'?(result.webm||result.mp4):(result.mp4||result.webm)
   }finally{engine?.destroy();urls.forEach(u=>URL.revokeObjectURL(u));if(HK===copyHK)HK=previousHK}}
 root.VEdit={mount,pack,copyClip,needsMp4Render,Core:{clipLen,clipEnd,total,ensureProject,makeEngine}};
 })(window);

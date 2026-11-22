@@ -1806,7 +1806,12 @@ function libBatch(move){const l=libChosen();if(!l.length)return;if($('#libBatch'
     renderLib()}}
 async function blobFor(it,fmt){await hydrate(it);
   if(it.kind==='text')return fmt==='html'?new Blob(['<!doctype html><html><head><meta charset="utf-8"><title>'+escH(it.name||'')+'</title></head><body style="white-space:pre-wrap;font:11pt/1.45 Segoe UI,Calibri,sans-serif">'+(it.html||escH(it.text||''))+'</body></html>'],{type:'text/html'}):new Blob(['\ufeff'+String(it.text||'').replace(/\r?\n/g,'\r\n')],{type:'text/plain'});
-  if(it.kind==='video')return fmt==='mp4'&&VEdit.needsMp4Render(it)?VEdit.copyClip(it,{newShape,drawShape,itemById:id=>S.items.find(x=>x.id===id),hydrate}):fmt==='mp4'?it.mp4:(window.WebmFix&&it.webm?await WebmFix.ensure(it.webm):it.webm);
+  // 10.5.5: an edited video is saved as it looks and sounds now. Library > Save… and Move out… used to write the recording
+  // as it was made (always for WebM, and for MP4 unless it had to be converted), and Move out then deleted the item with its edits.
+  if(it.kind==='video'){const api={newShape,drawShape,itemById:id=>S.items.find(x=>x.id===id),hydrate};
+    if(it.edit&&(fmt==='mp4'||fmt==='webm')){toast('Saving the edited video “'+itemName(it)+'”… this can take a while.',120000);let done;try{done=await VEdit.copyClip(it,api,null,{fmt,onlyIfEdited:true})}finally{document.querySelectorAll('.toast').forEach(e=>e.remove())}
+      if(done){if(fmt==='webm'&&!/webm/i.test(done.type||''))throw Error('This edited video could not be made as WebM here. Choose MP4.');return fmt==='webm'&&window.WebmFix?await WebmFix.ensure(done):done}}
+    return fmt==='mp4'&&VEdit.needsMp4Render(it)?VEdit.copyClip(it,api):fmt==='mp4'?it.mp4:(window.WebmFix&&it.webm?await WebmFix.ensure(it.webm):it.webm)}
   if(it.kind==='audio')return AEdit.renderAs(it,fmt);
   if(fmt==='saveit')return saveitBlob(it);
   if(it.kind==='guide'){if(fmt==='docx')return await exportDocx(it,true);if(fmt==='pdf')return await exportPdf(it,true);if(fmt==='pptx')return await pptx33(it,true);

@@ -73,6 +73,7 @@ $T = @(
   @{ n='update-ui-tests';               k='browser';   areas='update' }
   @{ n='video-editor-tests';            k='browser';   areas='video' }
   @{ n='video-flow-tests';              k='browser';   areas='video' }
+  @{ n='library-video-save-tests';     k='browser';   areas='video,library'; quick=1 }
   @{ n='video-annotation-tests';        k='browser';   areas='video' }
   @{ n='video-timeline-controls';       k='browser';   areas='video' }
   @{ n='video-recording-matrix';        k='browser';   areas='video' }
