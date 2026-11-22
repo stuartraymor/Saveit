@@ -27,3 +27,11 @@ On a 4K screenshot, Rotate and Flip froze the window for about a quarter of a se
 ## Not changed, and why
 - Screen capture, recording and the widget were again not tested. They use the real screen and mouse, and the screens were in use.
 - Memory sits at about 700 MB after opening 25 large screenshots again and again. It stays at that level and does not keep growing. Releasing pictures sooner did not lower it and made opening slower, so that change was not kept.
+
+## Release record (2026-11-21)
+- Published at https://github.com/stuartraymor/Saveit/releases/tag/v10.4.5 from main commit 5949f40. It is a normal release (not a draft or pre-release) and GitHub's "latest".
+- Assets: Saveit-10.4.5.zip (779,925 bytes, SHA-256 fa24698610aa75ad85d7ef86e0d4f6c34016b22ae112d3e6dd77d32bae7649d4), .zip.sig (checked against the key in app/updater.js), .sha256, and Saveit-Setup.exe (862,208 bytes).
+- The zip's app folder matches the tested app and the app installed on this PC, file for file (ignoring line endings). The main commit changes exactly the 13 files of this release; each keeps the line endings it has on main.
+- Saveit-Setup.exe: tests/setup-ui-test.ps1 passed all 11 checks, installing into a scratch folder.
+- Real update from GitHub: a scratch copy of 10.4.2 clicked Check for Updates, then Install Update (download and verify in 1.4 s), then Install and restart. update.log: "result: ok - Saveit was updated to version 10.4.5 and is running." (after 6 s). The updated app folder is identical to the tested one.
+- The one-click link redirects to v10.4.5.

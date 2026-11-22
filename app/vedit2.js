@@ -597,6 +597,8 @@ function mount(host,it,api){css();HK=api;
       else {add('Duplicate',()=>{if(ty==='ov')act.odup();else if(ty==='vfx')act.vfxdup();else{snap();const copy=clone(c);copy.id=newId(e,'i');e[SEL_LIST[ty]].push(copy);select(ty,copy);changed()}})}
       add(ty==='clip'?'Delete & close gap':'Delete',()=>act.del());if(ty==='clip')add('Delete (keep gap)',()=>act.delgap());
     }
+    // 10.4.6: Saveit says "Right-click the open timeline to paste or insert" after copying a clip, but this menu had neither
+    if(api.pasteMedia){const can=api.canPasteMedia?api.canPasteMedia():true;add('Paste at playhead',()=>api.pasteMedia('stack'),can);add('Insert at playhead',()=>api.pasteMedia('insert'),can)}
     add('Add video…',()=>act.addvid());add('Add audio…',()=>act.addaud());add('Add caption',()=>{showPane('video');setTab('caps');act.addcap()});add('Set In at playhead',()=>act.setin());add('Set Out at playhead',()=>act.setout());add('Reset In/Out range',()=>{inT=0;outT=D();syncRange()});add('Undo',()=>act.undo(),hist.length>0);add('Redo',()=>act.redo(),fut.length>0);
     if(!c)add('Reset video edit',()=>act.reset());
     const menu=document.createElement('div');contextMenu=menu;menu.className='vcontext';menu.setAttribute('role','menu');Object.assign(menu.style,{position:'fixed',zIndex:100000,background:'#20262c',color:'#fff',border:'1px solid #65717c',borderRadius:'8px',padding:'5px',boxShadow:'0 6px 24px #0008',minWidth:'210px',maxHeight:'85vh',overflowY:'auto'});
