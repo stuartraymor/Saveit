@@ -22,9 +22,9 @@ button.go{background:#e5483b;border-color:#e5483b;color:#fff}
 .seg{display:flex;border:1px solid #3a3f45;border-radius:8px;overflow:hidden}
 .seg button{border:0;border-radius:0;background:transparent;color:#b4bac0}
 .seg button[aria-pressed=true]{background:#2db3a0;color:#06211d}
-#hide{position:absolute;right:6px;bottom:6px;height:24px;padding:0 11px;border-radius:12px;border:0;background:#e5483b;color:#fff;font-size:12px;font-weight:700;line-height:24px}
+#hide{margin-left:auto;flex:none;height:24px;padding:0 11px;border-radius:12px;border:0;background:#e5483b;color:#fff;font-size:12px;font-weight:700;line-height:24px}
 #hide:hover:not(:disabled){background:#ff5a4c;border:0}
-.bar{position:relative;padding-right:74px}
+.bar{position:relative}
 [hidden]{display:none!important}
 </style></head>
 <body>
@@ -68,8 +68,8 @@ addEventListener('storage',e=>{if(e.key!=='saveit.cam')return;const id=CAMDRAW.l
 {const bar=$('bar'),col=document.createElement('div'),r1=document.createElement('div'),r2=document.createElement('div'),areaL=$('area').closest('label'),delayL=$('delay').closest('label'),curL=$('oCur').closest('label'),clipL=$('oClip').closest('label');
  col.className='optcol';r1.className='optrow';r2.className='optrow';col.append(r1,r2);bar.append(col);
  ab=AUDIOBAR.mount(()=>{push();setTimeout(resize,30)});const E=ab.els;
- const place=()=>{if(vmode==='audio'){r1.append(document.querySelector('.seg'),E.mic1,E.add,areaL,curL,clipL);r2.append(E.mic2,E.sys,delayL,$('imgOpts'),$('vidOpts'));setTimeout(resize,30);return}
-  r1.append(document.querySelector('.seg'),areaL,curL,clipL);if(vmode==='video'){r1.append(delayL);r2.append($('vidOpts'))}else r2.append($('imgOpts'),delayL);r2.append(vmode==='video'?$('imgOpts'):$('vidOpts'));r1.append(E.mic1,E.add);r2.append(E.mic2,E.sys)};
+ const place=()=>{if(vmode==='audio'){r1.append(document.querySelector('.seg'),E.mic1,E.add,areaL,curL,clipL);r2.append(E.mic2,E.sys,delayL,$('imgOpts'),$('vidOpts'),$('hide'));setTimeout(resize,30);return}
+  r1.append(document.querySelector('.seg'),areaL,curL,clipL);if(vmode==='video'){r1.append(delayL);r2.append($('vidOpts'))}else r2.append($('imgOpts'),delayL);r2.append(vmode==='video'?$('imgOpts'):$('vidOpts'));r1.append(E.mic1,E.add);r2.append(E.mic2,E.sys,$('hide'))};
  for(const b of [E.add,E.mic2.querySelector('.amic-x')])b.addEventListener('click',()=>setTimeout(resize,30));
  const labelsBefore=labels;labels=function(){labelsBefore();place()};place()}navigator.mediaDevices.addEventListener('devicechange',refreshDevices);
 $('ok').onclick=()=>window.widget.go(collect());$('ed').onclick=()=>window.widget.editor();$('hide').onclick=()=>window.widget.hide();
