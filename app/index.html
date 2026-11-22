@@ -1232,15 +1232,18 @@ function importFile(f){
 }
 $('#openBtn').onclick=()=>$('#file').click();
 $('#file').onchange=e=>{const gid=e.target.dataset.guide;delete e.target.dataset.guide;const g=gid&&S.items.find(x=>x.id===gid);
-  if(g){[...e.target.files].filter(f=>f.type.startsWith('image/')).forEach(f=>{const img=new Image();img.onload=()=>{makeStep(g,canvasFrom(img));persist(g);if(S.cur===g){renderGuide();renderGuideProps($('#props'),g)}renderTray()};img.src=URL.createObjectURL(f)})}
-  else [...e.target.files].forEach(importFile);e.target.value=''};
+  if(g){inOrder105([...e.target.files].filter(f=>f.type.startsWith('image/')),img=>{makeStep(g,canvasFrom(img));persist(g);if(S.cur===g){renderGuide();renderGuideProps($('#props'),g)}renderTray()})}
+  else importFiles105([...e.target.files]);e.target.value=''};
+/* 10.4.5: several pictures load at the same time but are added in the order they were chosen (before, whichever loaded first came first, so guide steps could be out of order) */
+function inOrder105(files,add){let chain=Promise.resolve();for(const f of files){const u=URL.createObjectURL(f),ready=new Promise(res=>{const img=new Image();img.onload=()=>res(img);img.onerror=()=>res(null);img.src=u});chain=chain.then(()=>ready).then(img=>{try{if(img)add(img,f);else toast('That image could not be opened.')}finally{URL.revokeObjectURL(u)}})}return chain.catch(actionError)}
+function importFiles105(files){const pics=files.filter(f=>f.type.startsWith('image/')&&!/\.saveit(\.json)?$/i.test(f.name));files.filter(f=>!pics.includes(f)).forEach(importFile);return inOrder105(pics,(img,f)=>addImage(canvasFrom(img),f.name.replace(/\.\w+$/,'')))}
 document.addEventListener('paste',e=>{if(editing||textTarget(e.target))return;const fs=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean);if(fs.length){e.preventDefault();pasteFiles11(fs)}});
 // 10.3.11: Ctrl+V does what right-click > Paste does. With a screenshot open, pasted pictures go on top of it as layers; with
 // nothing open, in the Library window, or for video/audio files they are added to the library as before.
-async function pasteFiles11(fs){const it=S.cur;if(it?.kind==='image'&&!it.guide&&!$('#libModal')&&fs.every(f=>/^image\//.test(f.type))){try{let n=0;for(const f of fs)await pasteImageLayer(await pictureUrl88(f),n++,fs.length>1);if(fs.length>1)toast(`Added ${fs.length} pictures. Drag to move; use the handles to resize. Ctrl+Z undoes.`,5000)}catch(err){actionError(err)}return}fs.forEach(importFile);toast('Pasted into library')}
+async function pasteFiles11(fs){const it=S.cur;if(it?.kind==='image'&&!it.guide&&!$('#libModal')&&fs.every(f=>/^image\//.test(f.type))){try{let n=0;for(const f of fs)await pasteImageLayer(await pictureUrl88(f),n++,fs.length>1);if(fs.length>1)toast(`Added ${fs.length} pictures. Drag to move; use the handles to resize. Ctrl+Z undoes.`,5000)}catch(err){actionError(err)}return}importFiles105(fs);toast('Pasted into library')}
 stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('dragging')});
 stage.addEventListener('dragleave',e=>{if(e.target===stage||!stage.contains(e.relatedTarget))stage.classList.remove('dragging')});
-stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('dragging');[...e.dataTransfer.files].forEach(importFile)});
+stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('dragging');importFiles105([...e.dataTransfer.files])});
 $('#newGuideBtn').onclick=()=>{const g=newGuide();openItem(g);persist(g)};
 $('#newBtn').onclick=()=>{const c=document.createElement('canvas');c.width=1280;c.height=720;const g=c.getContext('2d');g.fillStyle='#ffffff';g.fillRect(0,0,c.width,c.height);addImage(c,nameStamp(),{flat:true})};
 
@@ -1775,7 +1778,7 @@ function libBatch(move){const l=libChosen();if(!l.length)return;if($('#libBatch'
   m.innerHTML=`<div class="box" role="dialog" aria-label="${move?'Move':'Save'} items" style="width:min(480px,100%)"><h2>${move?'Move':'Save'} ${l.length} item${l.length>1?'s':''}</h2><p class="hint">${move?'Files are saved to the folder you pick, then removed from the library. You can still use Undo delete in this session.':'Files are saved to the folder you pick. Each file is named by its date and time.'}</p>
    ${Object.keys(groups).filter(k=>groups[k].length).map(k=>`<div class="row" style="margin:8px 0"><span style="width:120px">${LBL[k]} (${groups[k].length})</span><select data-g="${k}">${OPT[k].map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></div>`).join('')}
    <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" data-x>Cancel</button><button class="btn pri" data-go>${move?'Move to folder…':'Save to folder…'}</button></div></div>`;
-  document.body.appendChild(m);
+  document.body.appendChild(m);/* 10.4.5: Esc closes this dialog like the others */m.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();m.remove()}});(m.querySelector('select')||m.querySelector('[data-go]')).focus();
   m.onclick=async e=>{if(e.target===m||e.target.closest('[data-x]')){m.remove();return}
     if(!e.target.closest('[data-go]'))return;const fm={};m.querySelectorAll('[data-g]').forEach(s=>fm[s.dataset.g]=s.value);m.remove();
     toast('Preparing files…',2500);const files=[],used=new Set(),skipped=[],keep=S.cur;
@@ -2785,7 +2788,7 @@ window.imageTabDown9=function(e,x,y){const it=S.cur;
 const isRot=k=>k==='left'||k==='right';
 async function picXform9(s,kind){const im=imgFor(s.src);await readyShapes([s]);const w=im.naturalWidth,h=im.naturalHeight,c=document.createElement('canvas');c.width=isRot(kind)?h:w;c.height=isRot(kind)?w:h;const g=c.getContext('2d');
   if(kind==='right'){g.translate(h,0);g.rotate(Math.PI/2)}else if(kind==='left'){g.translate(0,w);g.rotate(-Math.PI/2)}else if(kind==='horizontal'){g.translate(w,0);g.scale(-1,1)}else{g.translate(0,h);g.scale(1,-1)}
-  g.drawImage(im,0,0);const u=c.toDataURL('image/png');await readyShapes([{t:'img',src:u}]);s.src=u}
+  g.drawImage(im,0,0);/* 10.4.5: encode in the background so the window does not freeze on big pictures */const u=await new Promise((res,rej)=>c.toBlob(b=>{if(!b){res(c.toDataURL('image/png'));return}const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(b)},'image/png'));await readyShapes([{t:'img',src:u}]);s.src=u}
 function around9(kind,cx,cy){return kind==='right'?(x,y)=>[cx-(y-cy),cy+(x-cx)]:kind==='left'?(x,y)=>[cx+(y-cy),cy-(x-cx)]:kind==='horizontal'?(x,y)=>[2*cx-x,y]:(x,y)=>[x,2*cy-y]}
 async function xformShape9(s,f,kind){
   if(rotated103(s)&&!ROT9.includes(s.t)){const P=pivot103(s),[nx,ny]=f(P.x,P.y);
@@ -2807,10 +2810,13 @@ transformImage=async function(kind){const it=S.cur;if(it?.kind!=='image')return;
     S.rz=null;render();renderProps();changed();return}
   const src=it.base,W=src.width,H=src.height,c=document.createElement('canvas');c.width=isRot(kind)?H:W;c.height=isRot(kind)?W:H;if(src._blank)c._blank=true;const g=c.getContext('2d');
   if(kind==='right'){g.translate(H,0);g.rotate(Math.PI/2)}else if(kind==='left'){g.translate(0,W);g.rotate(-Math.PI/2)}else if(kind==='horizontal'){g.translate(W,0);g.scale(-1,1)}else if(kind==='vertical'){g.translate(0,H);g.scale(1,-1)}else if(kind==='half'){return transformImage0(kind)}else return;
-  g.drawImage(src,0,0);snap();
+  g.drawImage(src,0,0);
   const f=kind==='right'?(x,y)=>[H-y,x]:kind==='left'?(x,y)=>[y,W-x]:kind==='horizontal'?(x,y)=>[W-x,y]:(x,y)=>[x,H-y];
-  for(const s of it.shapes)await xformShape9(s,f,kind);
-  it.base=c;finishEdit()};
+  /* 10.4.5: turn copies of the marks and layers first, then swap everything in at once (no half-turned picture on screen) */
+  const ns=it.shapes.map(clone);for(const s of ns)await xformShape9(s,f,kind);
+  snap();it.shapes=ns;it.base=c;finishEdit()};
+/* 10.4.5: rotate/flip run one after another, so quick clicks can't mix two of them up */
+{const tx105=transformImage;let q105=Promise.resolve();transformImage=function(kind){const r=q105.then(()=>tx105(kind));q105=r.catch(()=>{});return r}}
 rotate=()=>transformImage('right');
 
 // opening the Image tab keeps what was selected, so Rotate and Flip act on it
