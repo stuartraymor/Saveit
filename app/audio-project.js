@@ -35,7 +35,7 @@ function remove(p,ids,range,ripple=false,all=false){
   for(const t of p.tracks){const spans=all?global:merge(chosen.filter(c=>c.track===t.id));for(const c of p.clips.filter(c=>c.track===t.id))c.start-=spans.filter(s=>s[1]<=c.start+.000001).reduce((sum,s)=>sum+s[1]-s[0],0);for(const [a,b]of spans.slice().reverse()){const e={effects:t.effects};root.AudioTimeline.cutEffects(e,a,b);t.effects=e.effects}}
   if(all)for(const [a,b]of global.slice().reverse()){const e={effects:p.effects};root.AudioTimeline.cutEffects(e,a,b);p.effects=e.effects}p.length=Math.max(0,...p.clips.map(end));return true;
  }
- const tracks=affectedTracks(p,ids,range,all);let a,b;
+ const tracks=affectedTracks(p,ids,range,all);if(ripple)all=all||p.tracks.every(t=>tracks.has(t.id));let a,b;
  if(range){a=range.s;b=range.e}else{const clips=p.clips.filter(c=>ids.has(c.id));if(!clips.length)return false;a=Math.min(...clips.map(c=>c.start));b=Math.max(...clips.map(end))}
  if(b-a<.00001)return false;const out=[];
  for(const c of p.clips){if(!tracks.has(c.track)){out.push(c);continue}if(!range&&!ids.has(c.id)){if(ripple&&c.start>=b)c.start-=b-a;out.push(c);continue}
@@ -46,7 +46,8 @@ function remove(p,ids,range,ripple=false,all=false){
  p.clips=out;if(ripple){for(const t of p.tracks)if(tracks.has(t.id)){const e={effects:t.effects};root.AudioTimeline.cutEffects(e,a,b);t.effects=e.effects}if(all){p.length=Math.max(0,p.length-(b-a));const e={effects:p.effects};root.AudioTimeline.cutEffects(e,a,b);p.effects=e.effects}}
  return true;
 }
-function insertGap(p,at,amount,tracks,all=false){split(p,new Set(p.clips.filter(c=>tracks.has(c.track)).map(c=>c.id)),at);for(const c of p.clips)if(tracks.has(c.track)&&c.start>=at-.000001)c.start+=amount;for(const t of p.tracks)if(tracks.has(t.id))t.effects=root.AudioTimeline.insertEffects(t.effects,at,amount);if(all){p.effects=root.AudioTimeline.insertEffects(p.effects,at,amount);p.length+=amount}}
+// 10.4.6: when the chosen tracks are every track, whole-project effects move with the audio too (as with "All tracks")
+function insertGap(p,at,amount,tracks,all=false){all=all||p.tracks.every(t=>tracks.has(t.id));split(p,new Set(p.clips.filter(c=>tracks.has(c.track)).map(c=>c.id)),at);for(const c of p.clips)if(tracks.has(c.track)&&c.start>=at-.000001)c.start+=amount;for(const t of p.tracks)if(tracks.has(t.id))t.effects=root.AudioTimeline.insertEffects(t.effects,at,amount);if(all){p.effects=root.AudioTimeline.insertEffects(p.effects,at,amount);p.length+=amount}}
 function duplicate(p,ids){const selected=p.clips.filter(c=>ids.has(c.id));if(!selected.length)return[];const a=Math.min(...selected.map(c=>c.start)),b=Math.max(...selected.map(end));return selected.map(c=>{const n={...copy(c),id:id('clip'),start:c.start+b-a};n.effects=n.effects.map(f=>({...f,id:id('fx')}));p.clips.push(n);return n.id})}
 function owner(p,type,target){return type==='master'?p:type==='track'?p.tracks.find(t=>t.id===target):p.clips.find(c=>c.id===target)}
 function effect(type,start,stop){return{...root.AudioFX.defaults(type),id:id('fx'),type,start,end:stop,amount:type==='volume'?100:type==='echo'?35:type==='reverb'?30:100,delayMs:180,feedback:35,decay:.45,bypass:false}}

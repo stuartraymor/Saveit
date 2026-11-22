@@ -1,20 +1,6 @@
 {
   "note": "Failures that also happen in the last released version. tools/test-all.ps1 reports them as KNOWN; anything else is NEW. Recorded for 10.4.2 against 10.4.1 on 2026-11-20. Remove an entry when its test is fixed.",
   "suites": {
-    "layer-media-tests": {
-      "why": "Same 9 failures in 10.4.1 (media timeline context menus and effect persistence in the browser harness).",
-      "fails": [
-        "Audio middle insert creates a gap, shifts later source ranges and supp",
-        "Paste after earlier audio cuts preserves the edited content; repeated ",
-        "Audio region positions and inserted samples survive saving and reopeni",
-        "Stacked timed volume effects affect only their intervals and export th",
-        "Effect bars can move and resize; invalid times are rejected; undo rest",
-        "Mute, echo, reverb and fade effects are finite, time-bounded and stack",
-        "A selection becomes a reusable sound-effect Library clip without leavi",
-        "Effects survive persistence; deletion, trim and ripple insertion remap",
-        "Video context menu insertion from Recents and Library keeps the destin"
-      ]
-    },
     "video-editor-tests": {
       "why": "Needs ffmpeg on PATH for the independent annotation checks; same in 10.4.1.",
       "fails": [
