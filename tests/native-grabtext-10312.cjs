@@ -11,7 +11,7 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
   const idx = path.join(path.dirname(exe), 'resources', 'app', 'index.html'); let html = fs.readFileSync(idx, 'utf8'); const end = '})();\n})();\n</script>', crlf = html.includes('\r\n');
   html = html.replace(/\r\n/g, '\n'); if (!html.includes('window.__wf=')) { const at = html.lastIndexOf(end); if (at < 0) throw Error('probe point not found'); html = html.slice(0, at) + 'window.__wf={get cur(){return S.cur},get items(){return S.items},get tool(){return S.tool}};\n' + html.slice(at); }
   fs.writeFileSync(idx, crlf ? html.replace(/\n/g, '\r\n') : html);
-  const app = await _electron.launch({ executablePath: exe, env: { ...process.env, SAVEIT_REVIEW_DATA: path.join(out, 'profile') }, timeout: 30000 });
+  const app = await _electron.launch({ executablePath: exe, env: { ...process.env, SAVEIT_REVIEW_DATA: path.join(out, 'profile') }, timeout: 30000, bypassCSP: true /* 10.4.10: the page window has a strict CSP; Playwright's waitForFunction needs eval */ });
   let fails = 0; const lines = [], check = (name, ok, extra) => { const l = (ok ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : ''); console.log(l); lines.push(l); if (!ok) fails++; };
   const errors = [];
   try {
@@ -66,7 +66,7 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
     check('sidebar (box dragged with the mouse): the side column is read first, then the page, not mixed line by line',
       sl.join('|') === 'Dashboard|Projects|Reports|Welcome back, Taylor|You have 4 tasks due today|Next meeting: 2:30 PM', JSON.stringify(sl));
     // Join lines button
-    await tw.locator('#tools').click(); await tw.locator('.menu button', { hasText: 'Join lines into one paragraph' }).click();
+    await tw.locator('[data-tab=tools]').click(); await tw.locator('#tools').click(); await tw.locator('.menu button', { hasText: 'Join lines into one paragraph' }).click();
     check('Join lines makes one line', !(await tw.evaluate(() => plain())).includes('\n'));
     await closeText();
 

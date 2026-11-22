@@ -15,7 +15,7 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
   html = html.replace(/\r\n/g, '\n'); if (!html.includes('window.__wf=')) { const at = html.lastIndexOf(end); if (at < 0) throw Error('probe point not found'); html = html.slice(0, at) + 'window.__wf={get cur(){return S.cur},get items(){return S.items},get tool(){return S.tool}};\n' + html.slice(at); }
   if (!html.includes('window.__wfdb=')) { const at = html.lastIndexOf(end); html = html.slice(0, at) + 'window.__wfdb=id=>dbRead(id);\n' + html.slice(at); }
   fs.writeFileSync(idx, crlf ? html.replace(/\n/g, '\r\n') : html);
-  const app = await _electron.launch({ executablePath: exe, env: { ...process.env, SAVEIT_REVIEW_DATA: path.join(out, 'profile') }, timeout: 30000 });
+  const app = await _electron.launch({ executablePath: exe, env: { ...process.env, SAVEIT_REVIEW_DATA: path.join(out, 'profile') }, timeout: 30000, bypassCSP: true /* 10.4.10: the page window has a strict CSP; Playwright's waitForFunction needs eval */ });
   let fails = 0; const lines = [], check = (name, ok, extra) => { const l = (ok ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : ''); console.log(l); lines.push(l); if (!ok) fails++; };
   const errors = [];
   const wins = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(w => ({ url: w.webContents.getURL().split('/').pop(), visible: w.isVisible() })));
@@ -77,7 +77,7 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
     check('Ctrl+Z undoes the replacement', await (async () => { await tw.locator('#doc').click(); await tw.keyboard.press('Control+z'); return tw.evaluate(() => plain().includes('Desk lamp')); })());
     await tw.keyboard.press('Control+y');
     await tw.evaluate(() => getSelection().removeAllRanges());
-    await tw.locator('#table').click();
+    await tw.locator('[data-tab=tools]').click(); await tw.locator('#table').click(); // 10.4.10: on the Tools tab
     check('Table turns the columns into a table', await tw.evaluate(() => document.querySelectorAll('#doc table tr').length >= 3 && document.querySelectorAll('#doc table tr')[1].children.length === 3), await tw.evaluate(() => document.getElementById('doc').innerHTML.slice(0, 200)));
     await tw.locator('#copyAll').click(); await tw.waitForTimeout(300);
     const clip = await app.evaluate(({ clipboard }) => ({ text: clipboard.readText(), html: clipboard.readHTML() }));
@@ -86,7 +86,7 @@ const { _electron } = require('playwright'), fs = require('fs'), path = require(
     await tw.locator('#tools').click(); await tw.locator('.menu button', { hasText: 'UPPERCASE' }).click();
     check('Text tools > UPPERCASE works', await tw.evaluate(() => plain().includes('TABLE LAMP')));
     await tw.keyboard.press('Control+z');
-    check('counts show words and lines', /\d+ words · \d+ characters · \d+ lines/.test(await tw.locator('#counts').innerText()), await tw.locator('#counts').innerText());
+    check('counts show words, characters and pages', /\d+ words · \d+ characters · \d+ pages?/.test(await tw.locator('#counts').innerText()), await tw.locator('#counts').innerText());
 
     // 3. Save to library
     check('the window says the text is not saved yet', /not saved/i.test(await tw.locator('#state').innerText()));
