@@ -1,4 +1,4 @@
-SAVEIT 10.5.1 - WINDOWS SETUP
+SAVEIT 10.5.2 - WINDOWS SETUP
 ============================
 
 EASIEST WAY

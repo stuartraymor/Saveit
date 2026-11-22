@@ -365,6 +365,9 @@ function fastScreenReader() {
   child.stdout.on('data', b => { r.parts.push(b); r.got += b.length;
     while (r.queue.length && r.got >= r.queue[0].need) { const all = Buffer.concat(r.parts), q = r.queue.shift(); r.parts = [all.subarray(q.need)]; r.got -= q.need; q.resolve(Buffer.from(all.subarray(0, q.need))); } });
   r.read = (x, y, w, h) => new Promise((resolve, reject) => { if (r.dead) { reject(new Error('The screen reader stopped.')); return; } r.queue.push({ need: w * h * 4, resolve, reject }); child.stdin.write(`${x} ${y} ${w} ${h}\n`); });
+  // 10.5.2: turn off Windows' open animation for one of Saveit's windows (no answer comes back)
+  r.noTransition = hwnd => { if (!r.dead && hwnd) try { child.stdin.write(`nt ${hwnd}
+`); } catch (_) {} };
   r.stop = () => { r.dead = true; try { child.stdin.end('q\n'); } catch (_) {} setTimeout(() => { try { child.kill(); } catch (_) {} }, 1000); };
   screenReader = r; return r;
 }
@@ -375,7 +378,8 @@ async function grabDisplayFast(d, size) {
   if (!phys || Math.abs(phys.width - size.width) > 2 || Math.abs(phys.height - size.height) > 2) return null;
   let timer; const buf = await Promise.race([reader.read(phys.x, phys.y, phys.width, phys.height), new Promise((_, rej) => { timer = setTimeout(() => { reader.stop(); rej(new Error('timeout')); }, 3000); })]).finally(() => clearTimeout(timer));
   if (buf[3] !== 255) return null; // the helper answers with all zeros when Windows refused the read
-  return nativeImage.createFromBitmap(buf, { width: phys.width, height: phys.height });
+  // 10.5.2: the raw pixels are kept with the picture so the region selector gets them without another 33 MB copy at 4K
+  const img = nativeImage.createFromBitmap(buf, { width: phys.width, height: phys.height }); img._raw = buf; return img;
 }
 async function grabDisplay(d) {
   const sf = d.scaleFactor || 1;
@@ -389,14 +393,20 @@ async function grabDisplay(d) {
 
 // Full-screen overlay on one display (region selector or window picker). Resolves with whatever the page sends back.
 function newOverlay(d, file) {
+  // 10.5.2: the region selector's window is see-through until its page has drawn the frozen screen, so the first frame
+  // Windows shows is the real screen (which looks the same) instead of a black or white full-screen window
+  const clear = file === 'overlay.html';
   const ov = new BrowserWindow({
     x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height,
     frame: false, resizable: false, movable: false, minimizable: false, maximizable: false,
-    skipTaskbar: true, alwaysOnTop: true, show: false, backgroundColor: '#000000', enableLargerThanScreen: true, hasShadow: false,
+    skipTaskbar: true, alwaysOnTop: true, show: false, backgroundColor: clear ? '#00000000' : '#000000', transparent: clear, enableLargerThanScreen: true, hasShadow: false,
     webPreferences: { preload: asset('overlay-preload.js'), contextIsolation: true, backgroundThrottling: false }
   });
   ov.setAlwaysOnTop(true, 'screen-saver');
   ov.setBounds(d.bounds);
+  // 10.5.2: no zoom-in animation when it appears (Windows would otherwise also show it white for a moment on a 4K screen)
+  try { const r = fastScreenReader(), h = ov.getNativeWindowHandle(); if (r && r.noTransition) r.noTransition(h.length >= 8 ? h.readBigUInt64LE(0).toString() : h.readUInt32LE(0).toString()); } catch (_) {}
+  ov.clear = clear;
   ov.loaded = new Promise(res => ov.webContents.once('did-finish-load', res));
   ov.loadFile(asset(file));
   return ov;
@@ -404,6 +414,18 @@ function newOverlay(d, file) {
 // 10.4.0: one region selector is kept loaded (hidden) for the screen it was made for, so Capture shows it at once instead of
 // creating a window and loading the page first. Each one is used once; a fresh one is prepared shortly after.
 let spareOverlay = null;
+// 10.5.2: Windows takes a few hundred ms to put up a new 4K window. The spare region selector is put up while the editor
+// hides and the screen is grabbed, with nothing drawn and click-through (so it is invisible and in neither the screenshot
+// nor the way); it starts dimming and takes the mouse once it has the picture.
+function earlyOverlay(d) {
+  const o = spareOverlay; if (!o || o.win.isDestroyed() || o.key !== overlayKey(d)) return null;
+  try { o.win.setContentProtection(true); o.win.setIgnoreMouseEvents(true); o.win.showInactive(); } catch (_) { return null; }
+  return o.win;
+}
+// the selector is left out of screenshots (content protection), so it can start dimming as soon as the editor is gone,
+// while the screen is still being grabbed underneath it; it takes the mouse and keyboard from then on
+function dimEarlyOverlay(w) { try { if (!w || w.isDestroyed()) return; w.setIgnoreMouseEvents(false); w.focus(); w.webContents.send('visible'); w.dimmed = true; } catch (_) {} }
+function dropEarlyOverlay(w) { try { if (w && !w.isDestroyed() && spareOverlay && spareOverlay.win === w) w.hide(); } catch (_) {} }
 const overlayKey = d => [d.id, d.bounds.x, d.bounds.y, d.bounds.width, d.bounds.height, d.scaleFactor].join(',');
 function prepareOverlay(d) {
   if (!d) return;
@@ -417,7 +439,7 @@ app.whenReady().then(() => { const drop = () => { if (spareOverlay && !spareOver
   setTimeout(() => { try { prepareOverlay(activeDisplay()); } catch (_) {} try { fastScreenReader(); } catch (_) {} }, 1500); });
 function overlayWindow(d, file, payload) {
   return new Promise(resolve => {
-    let settled = false, ov;
+    let settled = false, ov; const full = payload && payload._full; if (full) delete payload._full;
     if (file === 'overlay.html' && spareOverlay && !spareOverlay.win.isDestroyed() && spareOverlay.key === overlayKey(d)) { ov = spareOverlay.win; spareOverlay = null; }
     else ov = newOverlay(d, file);
     const finish = r => { if (settled) return; settled = true; ipcMain.removeAllListeners('overlay-done'); if (!ov.isDestroyed()) ov.destroy(); resolve(r);
@@ -428,14 +450,21 @@ function overlayWindow(d, file, payload) {
     // the mouse at once); other overlays, or a selector that does not answer within 600 ms, appear straight away.
     ov.loaded.then(() => { if (settled || ov.isDestroyed()) return;
       let up = false; const show = () => { if (up || settled || ov.isDestroyed()) return; up = true; ipcMain.removeListener('overlay-shown', onShown);
-        // 10.5.1: shown fully transparent so Windows' open animation (zoom and fade) is invisible, then made opaque at once
-        try { ov.setOpacity(0); } catch (_) {} ov.show(); ov.focus(); setTimeout(() => { try { if (!ov.isDestroyed()) ov.setOpacity(1); } catch (_) {} }, 20); };
+        // 10.5.2: the window has its open animation turned off (newOverlay); the page fades its dimming in once it is up
+        try { ov.setIgnoreMouseEvents(false); } catch (_) {}
+        ov.show(); ov.focus();
+        if (file === 'overlay.html') ov.webContents.send('visible');
+        if (full) setTimeout(() => { try { if (!settled && !ov.isDestroyed()) ov.webContents.send('full', full()); } catch (_) {} }, 250); };
       const onShown = e => { if (!ov.isDestroyed() && e.sender === ov.webContents) show(); };
-      if (file === 'overlay.html') { ipcMain.on('overlay-shown', onShown); setTimeout(show, 600); ov.webContents.send('data', payload); } else { ov.webContents.send('data', payload); show(); } });
+      // 10.5.2: the see-through selector is put up and starts dimming straight away (the real screen behind it looks the same
+      // as the screenshot); the picture follows once the dimming has faded in, so the large transfer doesn't stall the fade
+      if (file === 'overlay.html' && ov.clear) { const dimmed = ov.dimmed; show(); setTimeout(() => { if (!settled && !ov.isDestroyed()) ov.webContents.send('data', payload); }, dimmed ? 0 : 90); }
+      else if (file === 'overlay.html') { ipcMain.on('overlay-shown', onShown); setTimeout(show, 600); ov.webContents.send('data', payload); } else { ov.webContents.send('data', payload); show(); } });
   });
 }
 // 10.4.0: the frozen screen goes to the region selector as raw pixels (BGRA), not as a PNG data URL
-const selectRegion = (d, img, opts, init) => { const s = img.getSize(); return overlayWindow(d, 'overlay.html', { raw: img.toBitmap(), w: s.width, h: s.height, opts: opts || {}, init: init || '' }); };
+const selectRegion = (d, img, opts, init) => { const s = img.getSize();
+  return overlayWindow(d, 'overlay.html', { opts: opts || {}, init: init || '', fullW: s.width, fullH: s.height, raw: img._raw || img.toBitmap(), w: s.width, h: s.height }); };
 const displayById = id => screen.getAllDisplays().find(x => x.id === id) || activeDisplay();
 
 async function listWindowSources(size) {
@@ -517,7 +546,10 @@ async function doCapture(mode, delay = 0, opts = {}, pre = null) {
   for (const w of [wasVisible ? win : null, widgetWasUp ? widgetWin : null]) if (w && !w.isDestroyed()) { try { w.setOpacity(0); vanished.push(w); } catch (_) {} }
   beginCaptureUI();
   if (win) win.hide();
+  const regionish = mode === 'region' || mode === 'text' || mode === 'scroll' || (mode === 'screen' && opts.confirm);
+  const early = !pre && !delay && regionish ? earlyOverlay(activeDisplay()) : null;
   await sleep((vanished.length ? CAPTURE_HIDE_MS : wasVisible ? 200 : widgetWasUp ? 80 : 20) + delay * 1000);
+  dimEarlyOverlay(early);
   for (const w of vanished) { try { if (!w.isDestroyed()) w.setOpacity(1); } catch (_) {} }
   try {
     const d = pre ? displayById(pre.did) : activeDisplay();
@@ -529,7 +561,7 @@ async function doCapture(mode, delay = 0, opts = {}, pre = null) {
     if (mode === 'screen' && opts.confirm && !pre) { mode = 'region'; init = 'full'; }
     for (let guard = 0; guard < 4; guard++) {
       if (mode === 'window') {
-        cursor = null;
+        cursor = null; dropEarlyOverlay(early);
         const id = await pickWindow(d);
         if (!id) { restoreUI(wasVisible); return null; }
         await sleep(150);
@@ -560,6 +592,7 @@ async function doCapture(mode, delay = 0, opts = {}, pre = null) {
     const note = mode === 'scroll' ? lastScrollNote : ''; lastScrollNote = '';
     return { region:lastRegion, url: out.toDataURL(), cursor, settings, area: mode, note };
   } catch (err) {
+    dropEarlyOverlay(early);
     showWindow();
     throw err;
   }

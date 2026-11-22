@@ -3,6 +3,8 @@
 // exactly w*h*4 bytes (BGRA, top row first) read from the screen with GDI, which gives the true pixels (no video
 // compression) and never includes the mouse pointer. It reads only the rectangle it is asked for, writes nothing
 // to disk, and exits when Saveit closes its input or sends "q".
+// 10.5.2: "nt <window handle>" turns off Windows' open/close animation for one of Saveit's own windows (the region
+// selector), so it appears at once instead of zooming in; it sends no answer.
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -17,6 +19,7 @@ internal static class RegionGrab {
     [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
     [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr obj);
     [DllImport("gdi32.dll")] static extern bool BitBlt(IntPtr dst, int x, int y, int w, int h, IntPtr src, int sx, int sy, int rop);
+    [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
     [DllImport("gdi32.dll")] static extern IntPtr CreateDIBSection(IntPtr dc, ref BitmapInfoHeader bmi, int usage, out IntPtr bits, IntPtr section, int offset);
     const int SRCCOPY = 0x00CC0020;
     static int Main() {
@@ -32,6 +35,8 @@ internal static class RegionGrab {
                 line = line.Trim();
                 if (line == "q") break;
                 string[] p = line.Split(' ');
+                long hw;
+                if (p.Length == 2 && p[0] == "nt") { if (long.TryParse(p[1], out hw) && hw > 0) { int on = 1; DwmSetWindowAttribute(new IntPtr(hw), 3, ref on, 4); } continue; } // DWMWA_TRANSITIONS_FORCEDISABLED
                 int x, y, w, h;
                 if (p.Length != 4 || !int.TryParse(p[0], out x) || !int.TryParse(p[1], out y) || !int.TryParse(p[2], out w) || !int.TryParse(p[3], out h) || w < 1 || h < 1 || w > 16384 || h > 16384) return 2;
                 if (w != cw || h != ch) {
