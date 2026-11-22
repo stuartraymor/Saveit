@@ -15,7 +15,7 @@ async function mp3(buf,k){if(!root.lamejs||!root.lamejs.Mp3Encoder)throw Error('
 const M4A_MIME='audio/mp4;codecs=mp4a.40.2';
 // 10.4.3: encode AAC directly (WebCodecs, the same encoder the video export uses) and write the .m4a, many times faster
 // than real time. The real-time recorder below stays as the fallback when this computer's encoder can't do it.
-async function m4aFast(buf,k){if(typeof AudioEncoder==='undefined'||typeof AudioData==='undefined'||!root.VExport||!root.VExport.mp4)return null;
+async function m4aFast(buf,k){if(typeof AudioEncoder==='undefined'||typeof AudioData==='undefined'||!root.VExport||!root.VExport.mp4||buf.numberOfChannels>2)return null;
   if(buf.sampleRate!==44100&&buf.sampleRate!==48000)buf=await resample(buf,48000);
   const ch=Math.min(2,buf.numberOfChannels),rate=buf.sampleRate,br=(k||kbps())*1000,cfg={codec:'mp4a.40.2',sampleRate:rate,numberOfChannels:ch,bitrate:br};
   try{if(!(await AudioEncoder.isConfigSupported(cfg)).supported)return null}catch(e){return null}
