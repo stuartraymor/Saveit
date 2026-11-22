@@ -231,7 +231,6 @@ details.more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size
     <label class="sel" id="sysWrap" hidden title="Record the sound your computer plays"><input type="checkbox" id="sysAudio" checked> System audio</label>
     <label class="sel" id="micWrap" hidden title="Record your microphone"><input type="checkbox" id="mic"> Microphone <select id="micPick" class="devsel" aria-label="Microphone device"></select></label>
     <label class="sel" id="camWrap" hidden title="Add your webcam to the recording"><input type="checkbox" id="camOn"> Webcam <select id="camPick" class="devsel" aria-label="Webcam device"></select><button type="button" class="btn camgear" id="camGear" title="Webcam settings: shape, size, position, border" aria-label="Webcam settings">⚙</button></label>
-    <label class="sel" id="fxWrap" title="Effect applied automatically to each new screenshot">Effect <select id="fxSel"></select><button class="btn" id="fxGear" title="Settings for this effect" aria-label="Effect settings" style="padding:5px 8px">⚙</button></label>
     <label class="sel">Delay
       <select id="delay"><option value="0">None</option><option value="3">3 s</option><option value="5">5 s</option><option value="10">10 s</option></select>
     </label>
@@ -292,7 +291,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size
 <script src="audio-editor.js"></script>
 <script src="third-party/lame.min.js"></script>
 <script src="audio-export.js"></script>
-<script src="fxui.js"></script>
+
 <script src="devices.js"></script>
 <script src="camdraw.js"></script>
 <script>
@@ -449,7 +448,7 @@ function redo(){const it=S.cur;if(!it||!it.redo||!it.redo.length)return;fxSnapT=
 
 // ---------- layout ----------
 let vid=null;
-function padFor(f){return (f.shadow?Math.max(36,(+f.shadowBlur||24)+14):0)+(f.bPlace==='inside'?0:(+f.border||0));}
+function padFor(f){return (f.shadow?Math.max(36,(+f.shadowBlur||24)+14+Math.max(0,Math.abs(+f.shadowX||0),Math.abs(f.shadowY!=null?+f.shadowY:8)-8)):0)+(f.bPlace==='inside'?0:(+f.border||0));}
 // Rounded rectangle using the image's corner radius, or its four separate radii; grow widens each rounded corner.
 function cornerPath(c,x,y,w,h,f,grow){const R=f.radii?f.radii.map(v=>+v||0):Array(4).fill(+f.radius||0),r=R.map(v=>v>0?Math.max(0,Math.min(v+(grow||0),w/2,h/2)):0);
   c.beginPath();c.moveTo(x+r[0],y);c.arcTo(x+w,y,x+w,y+h,r[1]);c.arcTo(x+w,y+h,x,y+h,r[2]);c.arcTo(x,y+h,x,y,r[3]);c.arcTo(x,y,x+w,y,r[0]);c.closePath()}
@@ -512,7 +511,7 @@ function render(){
 }
 let scrollRender94=0;stage.addEventListener('scroll',()=>{if(cv.width*cv.height>12e6&&!scrollRender94)scrollRender94=requestAnimationFrame(()=>{scrollRender94=0;render()})},{passive:true});
 function roundRectPath(c,x,y,w,h,r){r=Math.max(0,Math.min(r,w/2,h/2));c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
-function edgePath(c,x,y,w,h,e){const d=+e.depth||10,step=Math.max(6,Math.round(d*1.4));let sd=((w*31+h*17)|0)>>>0;const rnd=()=>{sd=(sd*1664525+1013904223)>>>0;return sd/4294967296};
+function edgePath(c,x,y,w,h,e){const d=+e.depth||10,step=+e.size>0?Math.max(4,+e.size):Math.max(6,Math.round(d*1.4));let sd=((w*31+h*17)|0)>>>0;const rnd=()=>{sd=(sd*1664525+1013904223)>>>0;return sd/4294967296};
   const off=i=>e.style==='zigzag'?(i%2?d:0):e.style==='wave'?(Math.sin(i*.9)+1)/2*d:rnd()*d;
   const nx=Math.max(2,Math.round(w/step)),ny=Math.max(2,Math.round(h/step)),pts=[];
   for(let i=0;i<nx;i++)pts.push([x+w*i/nx,y+off(i)]);
@@ -526,7 +525,7 @@ function drawComposite(c,it,p,ui){
   const o=p-ob; // outer frame origin
   // frame + shadow
   c.save();
-  if(f.shadow){c.shadowColor='rgba(0,0,0,.38)';c.shadowBlur=+f.shadowBlur||24;c.shadowOffsetY=8;}
+  if(f.shadow){const sc=/^#[0-9a-f]{6}$/i.test(f.shadowColor||'')?f.shadowColor:'#000000';c.shadowColor=`rgba(${[1,3,5].map(i=>parseInt(sc.slice(i,i+2),16)).join(',')},${f.shadowOp!=null?+f.shadowOp:.38})`;c.shadowBlur=+f.shadowBlur||24;c.shadowOffsetX=+f.shadowX||0;c.shadowOffsetY=f.shadowY!=null?+f.shadowY:8;}
   if(E){edgePath(c,p,p,W,H,E);c.fillStyle='#fff';c.fill()}
   else{cornerPath(c,o,o,W+ob*2,H+ob*2,f,ob); c.fillStyle=ob&&bs==='solid'?f.borderColor:'#fff'; c.fill();}
   c.restore();
@@ -535,10 +534,10 @@ function drawComposite(c,it,p,ui){
   const flt=FXFILTER(f.adj);if(flt!=='none')c.filter=flt;
   if(!(ui&&S.rzHide==='base'))c.drawImage(ui&&S.simp&&S.simp.prev&&it===S.cur?S.simp.prev:it.base,0,0);
   c.filter='none';
-  if(f.vig){const g=c.createRadialGradient(W/2,H/2,Math.min(W,H)*.25,W/2,H/2,Math.hypot(W,H)/2);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,`rgba(0,0,0,${f.vig/100*.85})`);c.fillStyle=g;c.fillRect(0,0,W,H)}
+  FXVIG(c,0,0,W,H,f);
   // 9.06: Blur and Magnify use everything drawn beneath them (pictures and annotations), not only the base layer
   {const sh=it.shapes,baseSrc=ui&&S.simp&&S.simp.prev&&it===S.cur?S.simp.prev:it.base;let last=-1;sh.forEach((s,i)=>{if(s.t==='blur'||s.t==='magnify')last=i});let acc=null,ag=null;
-   if(last>=0){acc=under9(W,H);ag=acc.getContext('2d');if(f.bg){ag.fillStyle=f.bg;ag.fillRect(0,0,W,H)}if(flt!=='none')ag.filter=flt;ag.drawImage(baseSrc,0,0);ag.filter='none';if(f.vig){const vg=ag.createRadialGradient(W/2,H/2,Math.min(W,H)*.25,W/2,H/2,Math.hypot(W,H)/2);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,`rgba(0,0,0,${f.vig/100*.85})`);ag.fillStyle=vg;ag.fillRect(0,0,W,H)}}
+   if(last>=0){acc=under9(W,H);ag=acc.getContext('2d');if(f.bg){ag.fillStyle=f.bg;ag.fillRect(0,0,W,H)}if(flt!=='none')ag.filter=flt;ag.drawImage(baseSrc,0,0);ag.filter='none';FXVIG(ag,0,0,W,H,f);}
    const one=(g,s,src)=>{if(s.t==='img'&&flt!=='none'){g.save();g.filter=flt;drawShape(g,s,src);g.restore()}else drawShape(g,s,src)};
    const solo=last>=0&&!(ui&&S.rzHide!=null);
    for(let i=0;i<sh.length;i++){const s=sh[i],skip=s._editing9||s.hidden9;if(solo&&i<last){if(!skip)one(ag,s,acc);continue}if(solo&&i===last)c.drawImage(acc,0,0);if(skip)continue;if(!(ui&&S.rzHide!=null&&S.rzHide===s.id))one(c,s,acc||it.base);if(acc&&!solo&&i<last)one(ag,s,acc)}}
@@ -1022,13 +1021,13 @@ function pickWindow(list){return new Promise(res=>{const m=document.createElemen
   m.onclick=e=>{const b=e.target.closest('button');if(e.target===m||(b&&b.hasAttribute('data-x'))){m.remove();res(null)}else if(b&&b.dataset.i){m.remove();res(list[+b.dataset.i])}};
   document.body.appendChild(m)})}
 const audioBar98=AUDIOBAR.mount(()=>saveOpts());
-function curOpts(){return{audio:audioBar98.get(),mode:S.mode,area:$('#area').value,cursor:$('#cursorOn').checked,clip:$('#clipOn').checked,sys:$('#sysAudio').checked,sysAudio:$('#sysAudio').checked,mic:$('#mic').checked,cam:$('#camOn').checked,micId:devPick.mic,camId:devPick.cam,delay:$('#delay').value,fx:{id:autoFx.id,p:autoFx.p}}}
+function curOpts(){return{audio:audioBar98.get(),mode:S.mode,area:$('#area').value,cursor:$('#cursorOn').checked,clip:$('#clipOn').checked,sys:$('#sysAudio').checked,sysAudio:$('#sysAudio').checked,mic:$('#mic').checked,cam:$('#camOn').checked,micId:devPick.mic,camId:devPick.cam,delay:$('#delay').value,fx:autoFx.map(e=>({id:e.id,p:{...e.p}}))}}
 // Settings chosen in the capture widget flow back into the top row
 function applySettings(s){if(!s)return;
   if(s.audio)audioBar98.set(s.audio);
   if(s.mode==='video'&&S.mode!=='video')$('#mVid').click();else if(s.mode==='audio'&&S.mode!=='audio')$('#mAud').click();else if(s.mode==='image'&&S.mode!=='image')$('#mImg').click();
   if(s.area&&$('#area').querySelector(`option[value="${s.area}"]`)&&!$('#area').querySelector(`option[value="${s.area}"]`).disabled)$('#area').value=s.area;try{setCapLabel()}catch(e){}
-  const set=(id,v)=>{if(v!==undefined&&v!==null)$('#'+id).checked=!!v};set('cursorOn',s.cursor);set('clipOn',s.clip);set('sysAudio',s.sys);set('mic',s.mic);set('camOn',s.cam);if(s.micId!=null||s.camId!=null){if(s.micId!=null)devPick.mic=s.micId;if(s.camId!=null)devPick.cam=s.camId;saveDevices();refreshDevices()}if(s.delay!=null&&$('#delay').querySelector(`option[value="${s.delay}"]`))$('#delay').value=s.delay;if(s.fx&&s.fx.id){fxUi.set(s.fx);try{localStorage.setItem('saveit.fx',JSON.stringify({id:autoFx.id,p:autoFx.p}))}catch(e){}}saveOpts()}
+  const set=(id,v)=>{if(v!==undefined&&v!==null)$('#'+id).checked=!!v};set('cursorOn',s.cursor);set('clipOn',s.clip);set('sysAudio',s.sys);set('mic',s.mic);set('camOn',s.cam);if(s.micId!=null||s.camId!=null){if(s.micId!=null)devPick.mic=s.micId;if(s.camId!=null)devPick.cam=s.camId;saveDevices();refreshDevices()}if(s.delay!=null&&$('#delay').querySelector(`option[value="${s.delay}"]`))$('#delay').value=s.delay;if(s.fx!=null)setAutoFx(s.fx);saveOpts()}
 async function captureDesktop(area,hot,pre){if(area==='steps')return startSteps();const delay=+$('#delay').value;let res=null;
   try{res=await window.bench.capture(area,delay,{...curOpts(),confirm:!hot},pre||null);}catch(e){toast('Capture failed: '+(e.message||e));return}
   if(!res)return;if(typeof res==='string')res={url:res};
@@ -1202,7 +1201,7 @@ async function startAudioRec(){if(rec||audioRecStarting)return;const o=audioBar9
   if(window.bench){window.bench.setRecording(true);window.bench.recUI(true,null,{audio:true,tracks:ctl.parts,countdown:delay})}
   else toast('Recording audio… press Stop when you are done.',4000);
   const begin=()=>{if(cancelled)return;started=true;ctl.start()};delay?setTimeout(begin,delay*1000):begin()}
-function syncAreaOptions(){const v=S.mode==='video',a98=S.mode==='audio';$('.tleft').classList.toggle('amode',a98);$('#area').closest('label').hidden=a98;$('#clipWrap').hidden=a98||v;audioBar98.setActive(a98);$('#curWrap').hidden=a98;$('#cursorOn').disabled=v;$('#curWrap').title=v?'Windows always includes the mouse pointer in screen recordings. This option applies to screenshots.':'Show the mouse pointer in screenshots';$('#camWrap').hidden=!v;$('#fxWrap').hidden=true; /* 10.4.11: the effect is chosen in the bar under the selection after Capture */$('#sysWrap').hidden=!v;$('#micWrap').hidden=!v;
+function syncAreaOptions(){const v=S.mode==='video',a98=S.mode==='audio';$('.tleft').classList.toggle('amode',a98);$('#area').closest('label').hidden=a98;$('#clipWrap').hidden=a98||v;audioBar98.setActive(a98);$('#curWrap').hidden=a98;$('#cursorOn').disabled=v;$('#curWrap').title=v?'Windows always includes the mouse pointer in screen recordings. This option applies to screenshots.':'Show the mouse pointer in screenshots';$('#camWrap').hidden=!v;$('#sysWrap').hidden=!v;$('#micWrap').hidden=!v;
   for(const val of ['steps','text','scroll']){const o=$('#area').querySelector(`option[value="${val}"]`);o.hidden=o.disabled=v}if(v&&['steps','text','scroll'].includes($('#area').value))$('#area').value='region';saveOpts();try{setCapLabel()}catch(e){}if(v)refreshDevices()}
 // ---------- recording devices ----------
 const devPick={mic:'',cam:''};try{Object.assign(devPick,JSON.parse(localStorage.getItem('saveit.devices')||'{}'))}catch(e){}
@@ -1214,9 +1213,11 @@ if(navigator.mediaDevices?.addEventListener)navigator.mediaDevices.addEventListe
 $('#camGear').onclick=e=>{e.preventDefault();e.stopPropagation();if(window.bench?.camSettings)window.bench.camSettings();else camSetup()};
 // A camera picked in the webcam settings window becomes the recording camera.
 addEventListener('storage',e=>{if(e.key!=='saveit.cam')return;const id=CAMDRAW.load().deviceId||'';if(id!==devPick.cam){devPick.cam=id;try{localStorage.setItem('saveit.devices',JSON.stringify({mic:devPick.mic||'',cam:id}))}catch(_){}refreshDevices()}});
-const autoFx={id:'none',p:{}};try{Object.assign(autoFx,JSON.parse(localStorage.getItem('saveit.fx')||'{}'))}catch(e){}
-const fxUi=FXUI.mount($('#fxSel'),$('#fxGear'),autoFx,st=>{try{localStorage.setItem('saveit.fx',JSON.stringify({id:st.id,p:st.p}))}catch(e){}});fxUi.set(autoFx);
-function applyAutoFx(it){if(autoFx.id==='none')return;it.fx=FXAPPLY(Object.assign(FXBLANK(),it.fx),autoFx.id,autoFx.p);S.fx=it.fx;layoutStage();render();persist(it);renderTray()}
+// 10.4.12: the effects for new screenshots are chosen (and stacked) in the bar under the selection after Capture.
+// They are kept here as a list of {id,p}; older versions kept one {id,p}.
+var autoFx=[];try{autoFx=FXLIST(JSON.parse(localStorage.getItem('saveit.fx')||'[]'))}catch(e){}
+function setAutoFx(v){autoFx=FXLIST(v);try{localStorage.setItem('saveit.fx',JSON.stringify(autoFx))}catch(e){}}
+function applyAutoFx(it){if(!autoFx.length)return;it.fx=FXAPPLYALL(Object.assign(FXBLANK(),it.fx),autoFx);S.fx=it.fx;layoutStage();render();persist(it);renderTray()}
 const OPT_IDS=['cursorOn','clipOn','mic','sysAudio','camOn','delay','area'];
 function saveOpts(){try{const o={mode:S.mode};for(const id of OPT_IDS){const e=$('#'+id);o[id]=e.type==='checkbox'?e.checked:e.value}localStorage.setItem('saveit.opts',JSON.stringify(o))}catch(e){}}
 function loadOpts(){try{const o=JSON.parse(localStorage.getItem('saveit.opts')||'{}');for(const id of OPT_IDS){const e=$('#'+id);if(!e||o[id]==null)continue;if(e.type==='checkbox')e.checked=!!o[id];else e.value=o[id]}return o}catch(e){return{}}}
@@ -2695,11 +2696,11 @@ function syncZoomBox(){const i=$('#zPct');if(!i||document.activeElement===i)retu
  inp.onchange=commit;inp.onfocus=()=>inp.select();inp.ondblclick=()=>inp.select();
  const statusBefore36=status;status=function(){statusBefore36();syncZoomBox()};syncZoomBox()}
 // Top bar in two compact rows: brand and Widget (as in the widget window) over Capture; Image/Video starts the top row of options.
-// Image: Selection, Cursor, Copy to clipboard / Effect, Delay. Video: Selection, Cursor, Copy to clipboard, Delay / System audio, Microphone, Webcam.
+// Image: Cursor, Copy to clipboard / Selection, Delay. Video: Cursor, Selection, Delay / System audio, Microphone, Webcam (10.4.12).
 {const lead=$('.lead'),segcol=document.createElement('div'),col=document.createElement('div'),r1=document.createElement('div'),r2=document.createElement('div'),areaL=$('#area').closest('label'),delayL=$('#delay').closest('label');
  segcol.className='segcol';col.className='optcol';r1.className='optrow';r2.className='optrow';
  const seg=$('.top .seg');$('.leadrow').append($('#widgetBtn'));col.append(r1,r2);lead.after(col);
- const ab=audioBar98.els,place=()=>{const v=S.mode==='video';if(S.mode==='audio'){r1.append(seg,ab.mic1,ab.add,areaL,$('#curWrap'),$('#clipWrap'));r2.append(ab.mic2,ab.sys,delayL);return}r1.append(seg,areaL,$('#curWrap'),$('#clipWrap'));if(v){r1.append(delayL);r2.append($('#sysWrap'),$('#micWrap'),$('#camWrap'))}else r2.append($('#fxWrap'),delayL);r2.append(ab.mic2,ab.sys);r1.append(ab.mic1,ab.add)};
+ const ab=audioBar98.els,place=()=>{const v=S.mode==='video';if(S.mode==='audio'){r1.append(seg,ab.mic1,ab.add,areaL,$('#curWrap'),$('#clipWrap'));r2.append(ab.mic2,ab.sys,delayL);return}r1.append(seg,$('#curWrap'),$('#clipWrap'));if(v){r1.append(areaL,delayL);r2.append($('#sysWrap'),$('#micWrap'),$('#camWrap'))}else r2.append(areaL,delayL);r2.append(ab.mic2,ab.sys);r1.append(ab.mic1,ab.add)};
  const syncBefore37=syncAreaOptions;syncAreaOptions=function(){syncBefore37();place()};place();
  const st=document.createElement('style');st.textContent=`.top{flex-wrap:nowrap!important}.tleft{flex-wrap:nowrap!important;align-items:center!important;gap:12px!important}
   .lead,.optcol{display:grid!important;grid-template-rows:28px 32px;row-gap:5px!important;align-content:center;min-width:0}
