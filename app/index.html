@@ -534,11 +534,14 @@ function drawComposite(c,it,p,ui){
   const flt=FXFILTER(f.adj);if(flt!=='none')c.filter=flt;
   if(!(ui&&S.rzHide==='base'))c.drawImage(ui&&S.simp&&S.simp.prev&&it===S.cur?S.simp.prev:it.base,0,0);
   c.filter='none';
-  FXVIG(c,0,0,W,H,f);
+  // 10.5.0: a capture is a picture layer over the base, so the vignette goes over the last picture layer (under the
+  // annotations drawn after it); with no picture layers it shades the base as before
+  const vigPic=f.vig?it.shapes.slice().reverse().find(s=>s.t==='img'&&!s.hidden9):null;
+  if(!vigPic)FXVIG(c,0,0,W,H,f);
   // 9.06: Blur and Magnify use everything drawn beneath them (pictures and annotations), not only the base layer
   {const sh=it.shapes,baseSrc=ui&&S.simp&&S.simp.prev&&it===S.cur?S.simp.prev:it.base;let last=-1;sh.forEach((s,i)=>{if(s.t==='blur'||s.t==='magnify')last=i});let acc=null,ag=null;
-   if(last>=0){acc=under9(W,H);ag=acc.getContext('2d');if(f.bg){ag.fillStyle=f.bg;ag.fillRect(0,0,W,H)}if(flt!=='none')ag.filter=flt;ag.drawImage(baseSrc,0,0);ag.filter='none';FXVIG(ag,0,0,W,H,f);}
-   const one=(g,s,src)=>{if(s.t==='img'&&flt!=='none'){g.save();g.filter=flt;drawShape(g,s,src);g.restore()}else drawShape(g,s,src)};
+   if(last>=0){acc=under9(W,H);ag=acc.getContext('2d');if(f.bg){ag.fillStyle=f.bg;ag.fillRect(0,0,W,H)}if(flt!=='none')ag.filter=flt;ag.drawImage(baseSrc,0,0);ag.filter='none';if(!vigPic)FXVIG(ag,0,0,W,H,f);}
+   const one=(g,s,src)=>{if(s.t==='img'&&flt!=='none'){g.save();g.filter=flt;drawShape(g,s,src);g.restore()}else drawShape(g,s,src);if(s===vigPic)FXVIG(g,0,0,W,H,f)};
    const solo=last>=0&&!(ui&&S.rzHide!=null);
    for(let i=0;i<sh.length;i++){const s=sh[i],skip=s._editing9||s.hidden9;if(solo&&i<last){if(!skip)one(ag,s,acc);continue}if(solo&&i===last)c.drawImage(acc,0,0);if(skip)continue;if(!(ui&&S.rzHide!=null&&S.rzHide===s.id))one(c,s,acc||it.base);if(acc&&!solo&&i<last)one(ag,s,acc)}}
   if(ui && S.drag && S.drag.preview){const pv=S.drag.preview;
