@@ -978,6 +978,8 @@ const sessionSaved34=new Set();
 function saveExts9(it){const k=it.kind==='image'&&it.guide?'image':it.kind,l=(FORMATS[k]||FORMATS.image).map(x=>x[0]);if(it.kind==='video')return l.filter(x=>x==='mp4'?it.mp4:x==='webm'?it.webm:x==='gif');if(it.kind==='audio')return l;return['saveit',...l.filter(x=>x!=='saveit')]}
 async function save(fmtArg){const it=S.cur;if(!it)return;commitText();saveTarget9=null;saveOwner9=null;let fmt=typeof fmtArg==='string'?fmtArg:$('#fmt').value;
   if(typeof fmtArg!=='string'&&window.bench?.savePick){let p=it.savedPath;if(!p||!sessionSaved34.has(it.id)){const ex=saveExts9(it),pe=p?p.split('.').pop().toLowerCase():fmt;if(pe&&ex.includes(pe)){ex.splice(ex.indexOf(pe),1);ex.unshift(pe)}p=await window.bench.savePick(p?p.replace(/\.[^.\\]+$/,''):baseName(it),ex);if(!p)return;sessionSaved34.add(it.id)}fmt=p.split('.').pop().toLowerCase();saveTarget9=p;saveOwner9=it}
+  // 10.4.6: picking a .pptx name in the Save box wrote a PNG picture (or, for a guide, nothing) under that name
+  if(fmt==='pptx'&&(it.kind==='image'||it.kind==='guide')){const tgt=saveTarget9,own=saveOwner9;saveTarget9=null;saveOwner9=null;toast('Preparing the PowerPoint…',0);try{const b=await pptx33(it,true);if(!b)return;saveTarget9=tgt;saveOwner9=own;await saveBlob(b,fileName('pptx'))}catch(e){actionError(e)}return}
   if(it.kind==='video'){if(fmt==='gif'){saveTarget9=null;saveOwner9=null;if(vid&&vid._ctl)vid._ctl.saveGif();return}const ctl97=vid&&vid._ctl;if(ctl97&&((ctl97.needsRender&&ctl97.needsRender())||(fmt==='mp4'&&VEdit.needsMp4Render(it)))){const tgt=saveTarget9,own=saveOwner9,len=ctl97.duration?ctl97.duration():0,lenT=len?' ('+Math.floor(len/60)+':'+String((len%60).toFixed(1)).padStart(4,'0')+')':'';saveTarget9=null;saveOwner9=null;
     toast('Saving your edited video'+lenT+'… Cancel is in Export.',9000);
     (async()=>{try{const o=await ctl97.renderBlob(fmt==='mp4'?'mp4':'webm');if(!o){toast('Save cancelled. Nothing was written.',5000);return}const b2=fmt==='mp4'?o.mp4:(o.webm||o.mp4);if(!b2){toast('MP4 could not be made here. Choose WebM.',6000);return}saveTarget9=tgt;saveOwner9=own;saveBlob(b2,fileName(fmt),'Saved the edited video'+lenT+' to')}catch(e){toast('Could not save: '+(e.message||e),6000)}})();return}
@@ -1228,8 +1230,11 @@ function importFile(f){
   if(/\.saveit$/i.test(f.name)||/\.saveit\.json$/i.test(f.name)){openSaveit(f);return}
   if(f.type.startsWith('image/')){const img=new Image();img.onload=()=>{addImage(canvasFrom(img),f.name.replace(/\.\w+$/,''));URL.revokeObjectURL(img.src)};img.onerror=()=>toast('That image could not be opened.');img.src=URL.createObjectURL(f)}
   else if(f.type.startsWith('audio/')||/\.(wav|mp3|m4a|aac|ogg|oga|opus|flac|weba)$/i.test(f.name)){const nm=f.name.replace(/\.\w+$/,'');AEdit.decode(f).then(()=>addAudio([{name:nm,blob:f,vol:1,mute:false,solo:false}],nm)).catch(()=>toast('That audio file could not be opened. Try WAV, MP3, M4A, OGG or FLAC.',6000))}
-  else if(f.type.startsWith('video/')){videoThumb(f).then(t=>addVideo(f,f.name.replace(/\.\w+$/,''),t))}
+  else if(f.type.startsWith('video/')){videoOk106(f).then(ok=>{if(!ok){toast('That video could not be opened. Try MP4 or WebM.',6000);return}return videoThumb(f).then(t=>addVideo(f,f.name.replace(/\.\w+$/,''),t))}).catch(actionError)}
+  else toast(`Saveit can't open ${f.name}. It opens pictures, videos, audio and .saveit files.`,6000) // 10.4.6: before, other files were silently ignored
 }
+/* 10.4.6: a damaged video was added to the library as an empty "0.0 MB" item that could not play. Check it can be read first. */
+function videoOk106(f){return new Promise(res=>{const v=document.createElement('video'),u=URL.createObjectURL(f);let d=false;const end=ok=>{if(d)return;d=true;v.removeAttribute('src');v.load();URL.revokeObjectURL(u);res(ok)};v.muted=true;v.preload='metadata';v.onloadedmetadata=()=>end(true);v.onerror=()=>end(false);setTimeout(()=>end(true),10000);v.src=u})}
 $('#openBtn').onclick=()=>$('#file').click();
 $('#file').onchange=e=>{const gid=e.target.dataset.guide;delete e.target.dataset.guide;const g=gid&&S.items.find(x=>x.id===gid);
   if(g){inOrder105([...e.target.files].filter(f=>f.type.startsWith('image/')),img=>{makeStep(g,canvasFrom(img));persist(g);if(S.cur===g){renderGuide();renderGuideProps($('#props'),g)}renderTray()})}
@@ -1240,7 +1245,7 @@ function importFiles105(files){const pics=files.filter(f=>f.type.startsWith('ima
 document.addEventListener('paste',e=>{if(editing||textTarget(e.target))return;const fs=[...(e.clipboardData?.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean);if(fs.length){e.preventDefault();pasteFiles11(fs)}});
 // 10.3.11: Ctrl+V does what right-click > Paste does. With a screenshot open, pasted pictures go on top of it as layers; with
 // nothing open, in the Library window, or for video/audio files they are added to the library as before.
-async function pasteFiles11(fs){const it=S.cur;if(it?.kind==='image'&&!it.guide&&!$('#libModal')&&fs.every(f=>/^image\//.test(f.type))){try{let n=0;for(const f of fs)await pasteImageLayer(await pictureUrl88(f),n++,fs.length>1);if(fs.length>1)toast(`Added ${fs.length} pictures. Drag to move; use the handles to resize. Ctrl+Z undoes.`,5000)}catch(err){actionError(err)}return}importFiles105(fs);toast('Pasted into library')}
+async function pasteFiles11(fs){const it=S.cur;if(it?.kind==='image'&&!it.guide&&!$('#libModal')&&fs.every(f=>/^image\//.test(f.type))){try{let n=0;for(const f of fs)await pasteImageLayer(await pictureUrl88(f),n++,fs.length>1);if(fs.length>1)toast(`Added ${fs.length} pictures. Drag to move; use the handles to resize. Ctrl+Z undoes.`,5000)}catch(err){actionError(err)}return}importFiles105(fs);if(fs.some(f=>/^(image|video|audio)\//.test(f.type)||/\.(saveit|saveit\.json|wav|mp3|m4a|aac|ogg|oga|opus|flac|weba)$/i.test(f.name)))toast('Pasted into library')}
 stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('dragging')});
 stage.addEventListener('dragleave',e=>{if(e.target===stage||!stage.contains(e.relatedTarget))stage.classList.remove('dragging')});
 stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('dragging');importFiles105([...e.dataTransfer.files])});
@@ -2297,6 +2302,7 @@ async function openSaveit(f){try{const d=JSON.parse(await f.text());if(d.app!=='
   else if(d.kind==='guide'){const g=newGuide(d.title);g.numColor=d.numColor||g.numColor;g.pageShapes=d.pageShapes||[];
     for(const st of d.steps||[]){const c=await dataUrlCanvas(st.png);const x=makeStep(g,c);x.title=st.title||'';x.text=st.text||'';x.shapes=st.shapes||[];x.fx=st.fx||defFx();const old=st.id;if(old){for(const ps of g.pageShapes)if(ps.anchor===old)ps.anchor=x.id}}
     openItem(g);persist(g)}
+  else throw 0; // 10.4.6: an unknown kind said "Opened" while nothing opened
   toast('Opened '+f.name)}catch(e){toast('That file is not a Saveit file, or it is damaged.')}}
 
 // Saveit 3.3: library performance first, then everyday workflows and editing.
