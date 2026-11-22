@@ -132,8 +132,9 @@ const zeros=n=>new Uint8Array(n),MATRIX=cat([be32(0x10000),be32(0),be32(0),be32(
 function desc(tag,body){const n=body.length,len=[ (n>>21)&127|128,(n>>14)&127|128,(n>>7)&127|128,n&127];return cat([new Uint8Array([tag,...len]),body])}
 function sttsOf(durs){const runs=[];for(const d of durs){const r=runs[runs.length-1];if(r&&r[1]===d)r[0]++;else runs.push([1,d])}return full('stts',0,0,be32(runs.length),...runs.map(([n,d])=>cat([be32(n),be32(d)])))}
 // video: {chunks:[{ts,dur,data,key}], w,h, avcC, timescale}; audio: {chunks:[{ts,dur,data}], rate, channels, codec:'aac'|'opus', asc|preskip}
+// 10.4.3: video may be null, for an audio-only .m4a file
 function mp4({video,audio,durationMs}){const now=0,VT=90000,AT=audio?audio.rate:1;
-  const vs=video.chunks.map(c=>({c,dur:Math.max(1,Math.round(c.dur*VT/1e6))})),as=audio?audio.chunks.map(c=>({c,dur:Math.max(1,Math.round(c.dur*AT/1e6))})):[];
+  const vs=(video?video.chunks:[]).map(c=>({c,dur:Math.max(1,Math.round(c.dur*VT/1e6))})),as=audio?audio.chunks.map(c=>({c,dur:Math.max(1,Math.round(c.dur*AT/1e6))})):[];
   // interleave samples by time in the mdat; every sample is its own chunk, so any order works
   const order=[...vs.map(s=>({s,v:1})),...as.map(s=>({s,v:0}))].sort((a,b)=>a.s.c.ts-b.s.c.ts);
   const total=order.reduce((n,o)=>n+o.s.c.data.length,0),big=total>4e9;
@@ -142,25 +143,25 @@ function mp4({video,audio,durationMs}){const now=0,VT=90000,AT=audio?audio.rate:
     const stsz=list=>full('stsz',0,0,be32(0),be32(list.length),...list.map(s=>be32(s.c.data.length))),stsc=full('stsc',0,0,be32(1),be32(1),be32(1),be32(1));
     const dinf=box('dinf',full('dref',0,0,be32(1),full('url ',0,1)));
     const vDur=vs.reduce((n,s)=>n+s.dur,0),mvDur=Math.round(durationMs);
-    const avc1=box('avc1',zeros(6),be16(1),zeros(16),be16(video.w),be16(video.h),be32(0x480000),be32(0x480000),be32(0),be16(1),zeros(32),be16(0x18),be16(0xffff),box('avcC',video.avcC));
+    const vtrak=video?(()=>{const avc1=box('avc1',zeros(6),be16(1),zeros(16),be16(video.w),be16(video.h),be32(0x480000),be32(0x480000),be32(0),be16(1),zeros(32),be16(0x18),be16(0xffff),box('avcC',video.avcC));
     const sync=vs.map((s,i)=>s.c.key?i+1:0).filter(Boolean);
-    const vtrak=box('trak',full('tkhd',0,3,be32(now),be32(now),be32(1),be32(0),be32(mvDur),zeros(8),be16(0),be16(0),be16(0),be16(0),MATRIX,be32(video.w*65536),be32(video.h*65536)),
+    return box('trak',full('tkhd',0,3,be32(now),be32(now),be32(1),be32(0),be32(mvDur),zeros(8),be16(0),be16(0),be16(0),be16(0),MATRIX,be32(video.w*65536),be32(video.h*65536)),
       box('mdia',full('mdhd',0,0,be32(now),be32(now),be32(VT),be32(vDur),be16(0x55C4),be16(0)),full('hdlr',0,0,be32(0),new TextEncoder().encode('vide'),zeros(12),new TextEncoder().encode('VideoHandler\0')),
-        box('minf',full('vmhd',0,1,zeros(8)),dinf,box('stbl',full('stsd',0,0,be32(1),avc1),sttsOf(vs.map(s=>s.dur)),full('stss',0,0,be32(sync.length),...sync.map(be32)),stsc,stsz(vs),coBox(vOff)))));
+        box('minf',full('vmhd',0,1,zeros(8)),dinf,box('stbl',full('stsd',0,0,be32(1),avc1),sttsOf(vs.map(s=>s.dur)),full('stss',0,0,be32(sync.length),...sync.map(be32)),stsc,stsz(vs),coBox(vOff)))))})():new Uint8Array(0);
     let atrak=new Uint8Array(0);
     if(audio){const aDur=as.reduce((n,s)=>n+s.dur,0);let entry;
       if(audio.codec==='aac'){const dcd=desc(4,cat([new Uint8Array([0x40,0x15,0,0,0]),be32(audio.bitrate||192000),be32(audio.bitrate||192000),desc(5,audio.asc)])),es=desc(3,cat([be16(2),new Uint8Array([0]),dcd,desc(6,new Uint8Array([2]))]));
         entry=box('mp4a',zeros(6),be16(1),zeros(8),be16(audio.channels),be16(16),be16(0),be16(0),be32(audio.rate*65536),full('esds',0,0,es))}
       else entry=box('Opus',zeros(6),be16(1),zeros(8),be16(audio.channels),be16(16),be16(0),be16(0),be32(audio.rate*65536),box('dOps',new Uint8Array([0,audio.channels]),be16(audio.preskip||312),be32(audio.rate),be16(0),new Uint8Array([0])));
-      atrak=box('trak',full('tkhd',0,3,be32(now),be32(now),be32(2),be32(0),be32(mvDur),zeros(8),be16(0),be16(1),be16(0x100),be16(0),MATRIX,be32(0),be32(0)),
+      atrak=box('trak',full('tkhd',0,3,be32(now),be32(now),be32(video?2:1),be32(0),be32(mvDur),zeros(8),be16(0),be16(1),be16(0x100),be16(0),MATRIX,be32(0),be32(0)),
         box('mdia',full('mdhd',0,0,be32(now),be32(now),be32(AT),be32(aDur),be16(0x55C4),be16(0)),full('hdlr',0,0,be32(0),new TextEncoder().encode('soun'),zeros(12),new TextEncoder().encode('SoundHandler\0')),
           box('minf',full('smhd',0,0,zeros(4)),dinf,box('stbl',full('stsd',0,0,be32(1),entry),sttsOf(as.map(s=>s.dur)),stsc,stsz(as),coBox(aOff)))))}
-    const mvhd=full('mvhd',0,0,be32(now),be32(now),be32(1000),be32(mvDur),be32(0x10000),be16(0x100),zeros(10),MATRIX,zeros(24),be32(audio?3:2));
+    const mvhd=full('mvhd',0,0,be32(now),be32(now),be32(1000),be32(mvDur),be32(0x10000),be16(0x100),zeros(10),MATRIX,zeros(24),be32((video?1:0)+(audio?1:0)+1));
     return box('moov',mvhd,vtrak,atrak)};
-  const ftyp=box('ftyp',new TextEncoder().encode('isom'),be32(512),new TextEncoder().encode('isomiso2avc1mp41'));
+  const ftyp=video?box('ftyp',new TextEncoder().encode('isom'),be32(512),new TextEncoder().encode('isomiso2avc1mp41')):box('ftyp',new TextEncoder().encode('M4A '),be32(0),new TextEncoder().encode('M4A isommp42'));
   const mdatHd=big?cat([be32(1),new TextEncoder().encode('mdat'),be64(total+16)]):cat([be32(total+8),new TextEncoder().encode('mdat')]);
   const moovLen=build(null).length,moov=build(ftyp.length+moovLen+mdatHd.length);
-  return new Blob([ftyp,moov,mdatHd,...order.map(o=>o.s.c.data)],{type:'video/mp4'})}
+  return new Blob([ftyp,moov,mdatHd,...order.map(o=>o.s.c.data)],{type:video?'video/mp4':'audio/mp4'})}
 
 // ---------- audio speed change that keeps the pitch (overlap-add with a short similarity search) ----------
 function stretch(chs,speed){if(!(speed>0)||Math.abs(speed-1)<1e-3)return chs;const N=2048,Hs=512,Ha=Hs*speed,tol=192,cmp=256,len=chs[0].length,outLen=Math.max(1,Math.ceil(len/speed)),win=new Float32Array(N);

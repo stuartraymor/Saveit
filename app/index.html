@@ -348,7 +348,7 @@ function actionError(e){console.error(e);toast(e?.message||'That action could no
 function idb(){if(dbp)return dbp;dbp=new Promise((resolve,reject)=>{const r=indexedDB.open('capture-bench',2);r.onupgradeneeded=()=>{for(const name of ['items','catalog'])if(!r.result.objectStoreNames.contains(name))r.result.createObjectStore(name,{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.onblocked=()=>reject(Error('Close other Saveit windows and try again.'))});return dbp}
 async function dbRead(id){const db=await idb();return new Promise((resolve,reject)=>{const r=db.transaction('items').objectStore('items').get(id);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 function catalogOf(rec,it){return{id:rec.id,kind:rec.kind,name:rec.name,title:rec.title,created:rec.created,folder:rec.folder||'',tags:rec.tags||[],pinned:!!rec.pinned,hiddenRecent:!!rec.hiddenRecent,width:rec.width||it?.base?.width||0,height:rec.height||it?.base?.height||0,stepCount:rec.steps?.length||0,bytes:(Array.isArray(rec.tracks)?rec.tracks.reduce((n,t)=>n+(t.blob?.size||0),0):rec.blob?.size)||0,dur:rec.dur||0,sourceCount:Array.isArray(rec.tracks)?rec.tracks.length:0,trackCount:rec.audioProject?.tracks?.length??(Array.isArray(rec.tracks)?rec.tracks.length:0),thumb:rec.thumb||it?._catalogThumb||null}}
-async function dbPut(rec){if(deletedItemIds.has(rec.id))return;const it=S.items.find(i=>i.id===rec.id);if(it){Object.assign(rec,{tags:it.tags||[],pinned:!!it.pinned,hiddenRecent:!!it.hiddenRecent,width:it.base?.width||it.width||0,height:it.base?.height||it.height||0});if(it.kind==='image'||it.kind==='guide')rec.thumb=thumbSrc(it,192)||it._catalogThumb||null}
+async function dbPut(rec){if(deletedItemIds.has(rec.id))return;const it=S.items.find(i=>i.id===rec.id);if(it){Object.assign(rec,{tags:it.tags||[],pinned:!!it.pinned,hiddenRecent:!!it.hiddenRecent,width:it.base?.width||it.width||0,height:it.base?.height||it.height||0});if(it.kind==='image'||it.kind==='guide'){rec.thumb=thumbSrc(it,192)||it._catalogThumb||null;if(it._thumbWait104)it._thumbStored104=true}}
  const db=await idb();if(deletedItemIds.has(rec.id))return;await new Promise((resolve,reject)=>{const t=db.transaction(['items','catalog'],'readwrite');t.objectStore('items').put(rec);t.objectStore('catalog').put(catalogOf(rec,it));t.oncomplete=resolve;t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||Error('Save was interrupted'))})}
 async function dbDel(id){deletedItemIds.add(id);try{const db=await idb();await new Promise((resolve,reject)=>{const t=db.transaction(['items','catalog'],'readwrite');for(const s of ['items','catalog'])t.objectStore(s).delete(id);t.oncomplete=resolve;t.onerror=()=>reject(t.error)})}catch(e){storageError(e)}}
 async function dbAll(){const db=await idb();return new Promise((resolve,reject)=>{const r=db.transaction('items').objectStore('items').getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error)})}
@@ -420,12 +420,18 @@ const trash=[];
 function syncUndoDel(){const b=$('#undoDelBtn');if(b){b.hidden=!trash.length;b.textContent='Undo delete'+(trash.length>1?' ('+trash.length+')':'')}const l=$('#libUndo');if(l)l.disabled=!trash.length}
 function deleteItems(list,quiet){list=list.filter(it=>S.items.includes(it));if(!list.length)return;
   const rec=list.map(it=>({it,i:S.items.indexOf(it)})).sort((a,b)=>a.i-b.i);
-  list.forEach(it=>{clearTimeout(saveTimers[it.id]);delete saveTimers[it.id];deletedItemIds.add(it.id);S.items.splice(S.items.indexOf(it),1);dbDel(it.id)});
+  list.forEach(it=>{clearTimeout(saveTimers[it.id]);delete saveTimers[it.id];deletedItemIds.add(it.id);S.items.splice(S.items.indexOf(it),1)});
+  /* 10.4.3: an item not opened this session exists here only as its library card, so keep its stored data until Undo delete can no longer bring it back */
+  rec.forEach(r=>{const id=r.it.id;r.snap=r.it._lazy?dbSnap104(id).catch(()=>null):Promise.resolve(null);r.del=r.snap.then(()=>dbDel(id))});
   trash.push(rec);while(trash.length>20)trash.shift().forEach(r=>{if(r.it.url)URL.revokeObjectURL(r.it.url)});
   if(S.cur&&(list.includes(S.cur)||list.includes(S.cur.guide)))openItem(S.items.find(i=>i.kind!=='text')||null);else renderTray();
   syncUndoDel();if(!quiet)toast(`Deleted ${list.length} item${list.length>1?'s':''}. Press Undo delete to bring ${list.length>1?'them':'it'} back.`,6000)}
-function undoDelete(){const rec=trash.pop();if(!rec)return;for(const r of rec){deletedItemIds.delete(r.it.id);S.items.splice(Math.min(r.i,S.items.length),0,r.it);persist(r.it)}
-  renderTray();syncUndoDel();toast(`Restored ${rec.length} item${rec.length>1?'s':''}`)}
+function undoDelete(){const rec=trash.pop();if(!rec)return;for(const r of rec){deletedItemIds.delete(r.it.id);S.items.splice(Math.min(r.i,S.items.length),0,r.it)}
+  renderTray();syncUndoDel();toast(`Restored ${rec.length} item${rec.length>1?'s':''}`);
+  /* 10.4.3: write each item back once its deletion has finished; unopened items get their stored data back as it was */
+  Promise.all(rec.map(async r=>{await r.del;deletedItemIds.delete(r.it.id);const snap=await r.snap;if(snap&&r.it._lazy)await dbRestore104(snap);else persist(r.it)})).catch(storageError)}
+async function dbSnap104(id){const db=await idb();return new Promise((resolve,reject)=>{const t=db.transaction(['items','catalog']),out={};t.objectStore('items').get(id).onsuccess=e=>out.item=e.target.result;t.objectStore('catalog').get(id).onsuccess=e=>out.cat=e.target.result;t.oncomplete=()=>resolve(out.item?out:null);t.onerror=()=>reject(t.error)})}
+async function dbRestore104(snap){const db=await idb();await new Promise((resolve,reject)=>{const t=db.transaction(['items','catalog'],'readwrite');t.objectStore('items').put(snap.item);if(snap.cat)t.objectStore('catalog').put(snap.cat);t.oncomplete=resolve;t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||Error('Restore was interrupted'))})}
 function removeItem(it){const i=S.items.indexOf(it);if(i<0)return;S.items.splice(i,1);dbDel(it.id);if(it.url)URL.revokeObjectURL(it.url);if(S.cur===it)openItem(S.items.find(i=>i.kind!=='text')||null);else renderTray()}
 // 8.07: effect sliders and colour pickers fire on every move; keep one undo step per burst of changes.
 let fxSnapT=0;function fxSnap(){if(Date.now()-fxSnapT>800)snap();fxSnapT=Date.now()}
@@ -469,7 +475,9 @@ function layoutStage(){
   if(it&&it.kind==='image'){const p=padFor(S.fx)+picMargin();cvW=S.ws?S.ws.sw:it.base.width+p*2;cvH=S.ws?S.ws.sh:it.base.height+p*2;cvK=0;applyZoom();}
 }
 let cvW=300,cvH=150,cvK=1;
-function backing94(z){const m=Math.max(cvW,cvH);return m>16000?Math.min(1,Math.max(16000/m,z*(devicePixelRatio||1))):1}
+function backing94(z){const m=Math.max(cvW,cvH);if(m>16000)return Math.min(1,Math.max(16000/m,z*(devicePixelRatio||1)));
+  /* 10.4.3: draw at zoom x display scale so the picture, outlines, handles and labels stay sharp when zoomed in (was always 1, then stretched); capped at 32 MP */
+  const want=z*(devicePixelRatio||1);if(want<=1)return 1;return Math.max(1,Math.min(want,16384/m,Math.sqrt(32e6/(cvW*cvH))))}
 function scale(){
   if(S.zoom!=='fit')return +S.zoom;
   const r=stage.getBoundingClientRect();
@@ -490,13 +498,13 @@ function render(){
   const it=S.cur; status(); if(it&&it.kind==='guide'){drawPage();return} if(!it||it.kind!=='image')return;
   ctx.setTransform(cvK||1,0,0,cvK||1,0,0);
   // 9.4: on very large canvases only the visible part (plus a margin) is redrawn; scrolling redraws the rest
-  const big=cvW*cvH>12e6;let clip=null;if(big){const r=cv.getBoundingClientRect(),sr=stage.getBoundingClientRect(),z=r.width/cvW||1,m=300;const x0=Math.max(0,Math.floor((sr.left-r.left)/z-m)),y0=Math.max(0,Math.floor((sr.top-r.top)/z-m)),x1=Math.min(cvW,Math.ceil((sr.right-r.left)/z+m)),y1=Math.min(cvH,Math.ceil((sr.bottom-r.top)/z+m));if(x1>x0&&y1>y0)clip=[x0,y0,x1-x0,y1-y0]}
+  const big=cv.width*cv.height>12e6;let clip=null;if(big){const r=cv.getBoundingClientRect(),sr=stage.getBoundingClientRect(),z=r.width/cvW||1,m=300;const x0=Math.max(0,Math.floor((sr.left-r.left)/z-m)),y0=Math.max(0,Math.floor((sr.top-r.top)/z-m)),x1=Math.min(cvW,Math.ceil((sr.right-r.left)/z+m)),y1=Math.min(cvH,Math.ceil((sr.bottom-r.top)/z+m));if(x1>x0&&y1>y0)clip=[x0,y0,x1-x0,y1-y0]}
   if(clip){ctx.save();ctx.beginPath();ctx.rect(...clip);ctx.clip();ctx.clearRect(...clip)}else ctx.clearRect(0,0,cvW,cvH);
   const p0=padFor(S.fx)+(S.ws?0:picMargin());
   if(S.ws){ctx.save();ctx.translate(S.ws.ox-p0,S.ws.oy-p0);drawComposite(ctx,it,p0,true);ctx.restore()}else drawComposite(ctx,it,p0,true);
   if(clip)ctx.restore();
 }
-let scrollRender94=0;stage.addEventListener('scroll',()=>{if(cvW*cvH>12e6&&!scrollRender94)scrollRender94=requestAnimationFrame(()=>{scrollRender94=0;render()})},{passive:true});
+let scrollRender94=0;stage.addEventListener('scroll',()=>{if(cv.width*cv.height>12e6&&!scrollRender94)scrollRender94=requestAnimationFrame(()=>{scrollRender94=0;render()})},{passive:true});
 function roundRectPath(c,x,y,w,h,r){r=Math.max(0,Math.min(r,w/2,h/2));c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
 function edgePath(c,x,y,w,h,e){const d=+e.depth||10,step=Math.max(6,Math.round(d*1.4));let sd=((w*31+h*17)|0)>>>0;const rnd=()=>{sd=(sd*1664525+1013904223)>>>0;return sd/4294967296};
   const off=i=>e.style==='zigzag'?(i%2?d:0):e.style==='wave'?(Math.sin(i*.9)+1)/2*d:rnd()*d;
@@ -640,7 +648,11 @@ function drawArrow(c,s){const st=s.style||'solid',len=Math.hypot(s.x2-s.x1,s.y2-
   const bx=s.x2-Math.cos(a)*hl*.85,by=s.y2-Math.sin(a)*hl*.85;dash();c.beginPath();c.moveTo(s.x1,s.y1);c.lineTo(bx,by);c.stroke();head(s.x2,s.y2,a,false)}
 const IMGS={};let imgsN94=0;
 function pruneImgs94(){const keep=new Set(),add=a=>(a||[]).forEach(s=>{if(s&&typeof s.src==='string')keep.add(s.src)});for(const it of S.items){if(it._lazy)continue;add(it.shapes);add(it.pageShapes);(it.undo||[]).forEach(u=>add(u.shapes||u.page));(it.redo||[]).forEach(u=>add(u.shapes||u.page));(it.steps||[]).forEach(st=>{if(st){add(st.shapes);(st.undo||[]).forEach(u=>add(u.shapes));(st.redo||[]).forEach(u=>add(u.shapes))}})}for(const k of Object.keys(IMGS))if(!keep.has(k))delete IMGS[k];imgsN94=Object.keys(IMGS).length}
-function imgFor(src){let i=IMGS[src];if(!i){if(++imgsN94>80)setTimeout(pruneImgs94);i=new Image();i.onload=()=>render();i.src=src;IMGS[src]=i}return i}
+function imgFor(src){let i=IMGS[src];if(!i){if(++imgsN94>80)setTimeout(pruneImgs94);i=new Image();i.onload=()=>{render();thumbImgLoaded104()};i.src=src;IMGS[src]=i}return i}
+/* 10.4.3: a thumbnail drawn before its picture layers finished loading is redrawn (and its library copy corrected) once they load */
+let thumbImgT104=0;function thumbImgLoaded104(){clearTimeout(thumbImgT104);thumbImgT104=setTimeout(()=>{let any=false;for(const it of S.items){const key=it.id;if(!it._thumbWait104)continue;const im=it.kind==='guide'?it.steps[0]:it;if(picsPending104(im))continue;it._thumbWait104=false;any=true;thumbCache.delete(key);it._catalogThumb=null;if(it._thumbStored104){it._thumbStored104=false;fixCatalogThumb104(it).catch(()=>{})}}if(any)renderTray()},60)}
+function picsPending104(im){return !!(im&&(im.shapes||[]).some(s=>s&&s.t==='img'&&typeof s.src==='string'&&!(IMGS[s.src]&&IMGS[s.src].complete&&IMGS[s.src].naturalWidth)))}
+async function fixCatalogThumb104(it){if(it._lazy||deletedItemIds.has(it.id))return;const thumb=thumbSrc(it,192);if(!thumb||it._thumbWait104)return;const db=await idb();await new Promise((resolve,reject)=>{const t=db.transaction('catalog','readwrite'),st=t.objectStore('catalog'),q=st.get(it.id);q.onsuccess=()=>{if(q.result){q.result.thumb=thumb;st.put(q.result)}};t.oncomplete=resolve;t.onerror=()=>reject(t.error)})}
 function stepLabel(n,seq){if(seq==='A'||seq==='a'){let t='',k=n;while(k>0){k--;t=String.fromCharCode(65+k%26)+t;k=Math.floor(k/26)}return seq==='a'?t.toLowerCase():t}
   if(seq==='I'){const m=[[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];let t='',k=n;for(const [v,r] of m)while(k>=v){t+=r;k-=v}return t}return String(n)}
 function shapesOf(it){return it.kind==='guide'?(it.pageShapes=it.pageShapes||[]):it.shapes}
@@ -2287,7 +2299,7 @@ function stored33(k,def){try{return JSON.parse(localStorage.getItem('saveit33.'+
 function store33(k,v){try{localStorage.setItem('saveit33.'+k,JSON.stringify(v))}catch(_){throw Error('Settings storage is full. Export your library and remove unused custom stamps.')}}
 const baseOpen33=openItem;openItem=function(it){const ticket=++openRequest;if(!it?._lazy)return baseOpen33(it);document.querySelector('#status').textContent='Opening capture…';return hydrate(it).then(()=>{if(ticket===openRequest&&S.items.includes(it))baseOpen33(it)}).catch(storageError)};
 const baseChanged33=changed;changed=function(){if(S.cur){thumbCache.delete(S.cur.id);S.cur._catalogThumb=null}baseChanged33();document.body.dataset.catalogCount=S.items.length};
-thumbSrc=function(it,w){if(it._lazy)return it._catalogThumb||'';const key=it.guide?it.guide.id:it.id;if(thumbCache.has(key))return thumbCache.get(key);let src=it.thumb||it._catalogThumb||'';const im=it.kind==='guide'?it.steps[0]:it;if(im?.base){try{src=thumbDraw07(im,192,.75)}catch(e){console.error(e)}}thumbCache.set(key,src);it._catalogThumb=src;return src};
+thumbSrc=function(it,w){if(it._lazy)return it._catalogThumb||'';const key=it.guide?it.guide.id:it.id;if(thumbCache.has(key))return thumbCache.get(key);let src=it.thumb||it._catalogThumb||'';const im=it.kind==='guide'?it.steps[0]:it;if(im?.base){try{src=thumbDraw07(im,192,.75)}catch(e){console.error(e)}}/* 10.4.3: don't keep a thumbnail whose picture layers are still loading */const owner=it.guide||it;if(picsPending104(im)){owner._thumbWait104=true;return src}/* 10.4.3: a guide shown before its steps exist has no picture yet; keep asking instead of caching the empty one */if(!src)return src;owner._thumbWait104=false;thumbCache.set(key,src);it._catalogThumb=src;return src};
 function fastTray(){const T=$('#thumbs');T.innerHTML='';const chosen=[...S.items.filter(i=>i.pinned&&!i.hiddenRecent).slice(0,16),...S.items.filter(i=>!i.pinned&&!i.hiddenRecent).slice(0,40)];if(S.cur&&!S.cur.hiddenRecent&&!S.cur.guide&&!chosen.includes(S.cur))chosen.push(S.cur);for(const it of chosen){const cell=document.createElement('div');cell.className='tcell';const b=document.createElement('div');b.className='thumb'+(it.pinned?' pinned':'');b.tabIndex=0;b.dataset.itemId=it.id;if(it.kind==='audio'){b.draggable=true;b.ondragstart=e=>{e.dataTransfer.setData('application/x-saveit-audio',it.id);e.dataTransfer.setData('text/plain',it.id);e.dataTransfer.effectAllowed='copy'}}b.setAttribute('role','button');b.setAttribute('aria-label',itemName(it));b.setAttribute('aria-current',it===S.cur);const src=thumbSrc(it);if(src)b.style.backgroundImage=`url(${src})`;b.innerHTML=`<span class="tag">${it.pinned?'PIN · ':''}${it.kind.toUpperCase()}</span><button class="x" aria-label="Close ${escH(itemName(it))} from recent">✕</button>`;b.onclick=e=>{if(e.target.closest('.x'))closeRecent33(it);else openItem(it)};b.onkeydown=e=>{if(e.key==='Enter')openItem(it);if(e.key==='Delete')deleteItems([it])};const name=document.createElement('div');name.className='tn';name.textContent=itemName(it);cell.append(b,name);T.append(cell)}if(!chosen.length)T.innerHTML='<p class="hint">Capture, paste or open an image to begin.</p>';document.body.dataset.catalogCount=S.items.length;if($('#libModal'))renderLib()}
 const oldLibPaste33=libPaste;libPaste=async()=>{await Promise.all(libClip.map(id=>S.items.find(i=>i.id===id)).filter(Boolean).map(hydrate));oldLibPaste33()};
 const oldLibBatch33=libBatch;libBatch=async move=>{await Promise.all(libChosen().map(hydrate));return oldLibBatch33(move)};
