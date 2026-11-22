@@ -50,6 +50,6 @@ contextBridge.exposeInMainWorld('bench', {
   textWindow: o => ipcRenderer.invoke('te-open', o),
   onTextSave: fn => ipcRenderer.on('te-save', (e, req) => fn(req)),
   textSaved: (req, result) => ipcRenderer.send('te-saved', req, result),
-  onGrabTextNow: fn => ipcRenderer.on('grab-text-now', () => fn()),
+  onGrabTextNow: fn => ipcRenderer.on('grab-text-now', (e, o) => fn(o)),
   onShortcutFailed: fn => ipcRenderer.on('shortcut-failed', (e, keys) => fn(keys))
 });

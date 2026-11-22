@@ -1,5 +1,6 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Saveit Grab Text</title>
+<html><head><meta charset="utf-8"><title>Saveit Page</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data: blob: https: http: file:; font-src data:; connect-src data: blob:">
 <style>
 :root{--bg:#16181a;--panel:#1e2124;--panel2:#26292d;--line:#3a3f45;--fg:#e8eaec;--dim:#9aa1a8;--acc:#2db3a0;--accfg:#06211d;--red:#e5483b}
 *{box-sizing:border-box}
@@ -10,95 +11,232 @@ button{background:#30343a;border:1px solid var(--line);border-radius:7px;padding
 button:hover:not(:disabled){border-color:#9aa1a8}button:disabled{opacity:.4;cursor:default}
 button.pri{background:var(--acc);border-color:var(--acc);color:var(--accfg)}button.pri:hover:not(:disabled){filter:brightness(1.08);border-color:var(--acc)}
 button[aria-pressed=true]{background:#2a4a45;border-color:var(--acc)}
-select,input[type=text],input[type=search]{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 6px;height:30px}
-.top{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+select,input[type=text],input[type=search],input[type=url]{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 6px;height:30px}
+.top{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--panel);flex-wrap:wrap}
 .top .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;margin-right:4px}
-.brand i{width:22px;height:22px;border-radius:6px;background:var(--acc);display:grid;place-items:center}
-.brand i::after{content:"T";font-style:normal;color:var(--accfg);font-weight:800;font-size:13px}
-#name{width:170px;min-width:120px;flex:0 1 170px}
+.brand i{width:22px;height:22px;border-radius:6px;background:var(--acc);display:grid;place-items:center;color:var(--accfg);font-style:normal;font-weight:800;font-size:13px}
+.brand i svg{width:15px;height:15px}
+#name{width:190px;min-width:120px;flex:0 1 190px}
 .sp{flex:1}
-.fmt{display:flex;align-items:center;gap:4px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+.tabs{display:flex;gap:2px;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+.tabs button{background:transparent;border:0;border-bottom:2px solid transparent;border-radius:0;padding:6px 12px 5px;color:var(--dim);font-weight:600}
+.tabs button[aria-selected=true]{color:var(--fg);border-bottom-color:var(--acc)}
+.tabs button:hover{color:var(--fg)}
+.fmt{display:flex;align-items:center;gap:4px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap;min-height:43px}
 .fmt button{padding:4px 8px;min-width:30px;justify-content:center;height:30px}
+.fmt button.lbl{padding:4px 10px}
 .fmt .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
 .fmt select{height:30px}
-.fmt input[type=color]{width:30px;height:30px;padding:2px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);cursor:pointer}
-.colr{display:inline-flex;align-items:center;gap:2px}
+.fmt label.f{display:inline-flex;align-items:center;gap:6px;color:var(--dim)}
+.split{display:inline-flex}.split>button:first-child{border-top-right-radius:0;border-bottom-right-radius:0}.split>button+button{border-top-left-radius:0;border-bottom-left-radius:0;border-left:0;min-width:18px;padding:4px 3px}
+.swbar{display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1}.swbar b{font-size:13px}.swbar i{display:block;width:16px;height:4px;border-radius:1px}
+.hidecol{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .find{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);background:#202428;flex-wrap:wrap}
 .find label{display:flex;align-items:center;gap:4px;color:var(--dim)}
 #findCount{color:var(--dim);min-width:80px}
-.main{flex:1;display:flex;min-height:0}
-.docwrap{flex:1;overflow:auto;background:#2b2f34;padding:22px 18px;min-width:0}
-#doc{background:#fff;color:#111;max-width:820px;min-height:calc(100% - 4px);margin:0 auto;padding:36px 44px;border-radius:3px;box-shadow:0 2px 12px rgba(0,0,0,.35);outline:none;white-space:pre-wrap;word-wrap:break-word;tab-size:6;font:11pt/1.45 "Segoe UI","Calibri",sans-serif;transform-origin:top center}
+.main{flex:1;display:flex;min-height:0;position:relative}
+.docwrap{flex:1;overflow:auto;background:#2b2f34;padding:22px 18px 40px;min-width:0;position:relative}
+#doc{background:#fff;color:#111;margin:0 auto;border-radius:2px;box-shadow:0 2px 12px rgba(0,0,0,.35);outline:none;white-space:pre-wrap;word-wrap:break-word;tab-size:6;font:11pt/1.45 "Segoe UI","Calibri",sans-serif;caret-color:#111}
+.page{width:816px;padding:96px;min-height:1056px}
 #doc.nowrap{white-space:pre;overflow-x:auto}
-#doc table{border-collapse:collapse;margin:6px 0;white-space:normal}#doc td,#doc th{border:1px solid #b9c0c7;padding:3px 8px;vertical-align:top}
-#doc h1{font-size:20pt;margin:.3em 0}#doc h2{font-size:16pt;margin:.3em 0}#doc h3{font-size:13pt;margin:.3em 0}
-#doc blockquote{margin:.3em 0 .3em 1.2em;padding-left:10px;border-left:3px solid #c5cbd1;color:#444}
-#doc pre{font:10pt/1.4 Consolas,"Courier New",monospace;background:#f3f4f6;padding:6px 8px;border-radius:4px;margin:.3em 0}
+.page table{border-collapse:collapse;margin:6px 0;white-space:normal;max-width:100%}.page td,.page th{border:1px solid #b9c0c7;padding:3px 8px;vertical-align:top;min-width:30px}
+.page h1{font-size:20pt;margin:.3em 0}.page h2{font-size:16pt;margin:.3em 0}.page h3{font-size:13pt;margin:.3em 0}
+.page blockquote{margin:.3em 0 .3em 1.2em;padding-left:10px;border-left:3px solid #c5cbd1;color:#444}
+.page pre{font:10pt/1.4 Consolas,"Courier New",monospace;background:#f3f4f6;padding:6px 8px;border-radius:4px;margin:.3em 0}
+.page ul,.page ol{margin:.2em 0;padding-left:2em;white-space:normal}.page li{white-space:pre-wrap}
+.page hr{border:0;border-top:1px solid #a0a6ad;margin:10px 0}
+.page a{color:#0563c1}
+.page img{max-width:100%;vertical-align:bottom}
+.page .pgbreak{display:block;height:0;border-top:1px dashed #9aa1a8;margin:14px 0;position:relative;user-select:none}
+.page .pgbreak::after{content:"Page break";position:absolute;left:50%;top:-8px;transform:translateX(-50%);background:#fff;color:#7a828a;font:11px "Segoe UI",sans-serif;padding:0 6px}
+/* 10.5.4: header and footer preview, Title/Subtitle/Heading 4, contents, footnotes, format painter */
+#doc{position:relative}
+#doc::before,#doc::after{position:absolute;left:var(--pm,96px);right:var(--pm,96px);color:#8a9199;font:9pt "Segoe UI",sans-serif;white-space:pre;overflow:hidden;text-overflow:ellipsis;pointer-events:none;user-select:none}
+#doc::before{content:attr(data-hdr);top:calc(var(--pm,96px) / 2 - 8px)}
+#doc::after{content:attr(data-ftr);bottom:calc(var(--pm,96px) / 2 - 8px)}
+#doc.numright::after{text-align:right}#doc.numcentre::after{text-align:center}
+#doc.painting{cursor:copy}
+.page .pgset{display:none}
+.page h4{font-size:11.5pt;margin:.3em 0;font-style:italic}
+.page .p-title{font-size:26pt;font-weight:600;line-height:1.2;margin:.15em 0 .1em}
+.page .p-subtitle{font-size:14pt;color:#5a6168;margin:0 0 .5em}
+.page .toc{border:1px solid #d5dae0;border-radius:4px;padding:8px 14px;margin:8px 0;white-space:normal;user-select:none}
+.page .toc .toc-t{font-weight:700;font-size:13pt;margin-bottom:4px}
+.page .toc>div:not(.toc-t){cursor:pointer;color:#0b4f9c;padding:1px 0}.page .toc>div:not(.toc-t):hover{text-decoration:underline}
+.page .toc .toc-2{margin-left:.3in}.page .toc .toc-3{margin-left:.6in}.page .toc .toc-4{margin-left:.9in}
+.page sup.fnref{color:#0b4f9c;cursor:default;font-size:.7em;user-select:all}
+.page .fnotes{border-top:1px solid #a0a6ad;margin-top:24px;padding-top:6px;font-size:9.5pt}
+.page .fnotes .fn{margin:2px 0}.page .fnotes .fn-n{color:#5a6168}
+/* 10.5.3: text set in columns (Layout > Columns) and column breaks */
+.page .cols{column-gap:.5in;margin:0}
+.page .colbreak{display:block;height:0;border-top:1px dotted #9aa1a8;margin:10px 0;position:relative;user-select:none;break-after:column}
+.page .colbreak::after{content:"Column break";position:absolute;left:50%;top:-8px;transform:translateX(-50%);background:#fff;color:#7a828a;font:11px "Segoe UI",sans-serif;padding:0 6px;white-space:nowrap}
 #doc ::selection{background:#b8e6df}
 #doc mark.hit{background:#ffe27a;color:inherit}
+#doc.dropping{outline:2px dashed var(--acc);outline-offset:4px}
+/* picture selection */
+#imgsel{position:absolute;border:1.5px solid var(--acc);z-index:4;cursor:move;touch-action:none}
+#imgsel .h{position:absolute;width:11px;height:11px;background:#fff;border:1.5px solid var(--acc);border-radius:2px;margin:-6px 0 0 -6px}
+#imgsel .h[data-h=nw]{left:0;top:0;cursor:nwse-resize}#imgsel .h[data-h=n]{left:50%;top:0;cursor:ns-resize}#imgsel .h[data-h=ne]{left:100%;top:0;cursor:nesw-resize}
+#imgsel .h[data-h=e]{left:100%;top:50%;cursor:ew-resize}#imgsel .h[data-h=se]{left:100%;top:100%;cursor:nwse-resize}#imgsel .h[data-h=s]{left:50%;top:100%;cursor:ns-resize}
+#imgsel .h[data-h=sw]{left:0;top:100%;cursor:nesw-resize}#imgsel .h[data-h=w]{left:0;top:50%;cursor:ew-resize}
+#imgsel.cropping{cursor:default;border-color:transparent;overflow:visible}
+#imgsel.cropping>.h{display:none}
+#crop{position:absolute;box-shadow:0 0 0 9999px rgba(10,12,14,.55);border:1.5px dashed #fff;cursor:move}
+#crop .h{position:absolute;width:14px;height:14px;background:#111;border:2px solid #fff;margin:-7px 0 0 -7px;border-radius:0}
+#imgclip{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+#imgclip #crop{pointer-events:auto}
+#imgbar{position:absolute;left:0;bottom:calc(100% + 8px);display:flex;gap:3px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px;box-shadow:0 6px 18px rgba(0,0,0,.4);cursor:default;white-space:nowrap;z-index:6}
+#imgbar.below{bottom:auto;top:calc(100% + 8px)}
+#imgbar button{height:28px;padding:3px 8px;font-weight:600;font-size:12px}
+#imgbar .sep{width:1px;background:var(--line);margin:2px 3px}
+#imgsize{position:absolute;right:0;top:calc(100% + 4px);background:rgba(20,22,24,.85);color:#fff;font-size:11px;padding:1px 6px;border-radius:4px;pointer-events:none}
 .pic{width:38%;max-width:520px;min-width:200px;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column}
 .pic h3{margin:0;padding:8px 10px;font-size:12px;color:var(--dim);font-weight:600;display:flex;align-items:center;gap:6px}
-.pic .imgbox{flex:1;overflow:auto;padding:6px 10px 10px}
+.pic .imgbox{flex:1 1 55%;min-height:70px;overflow:auto;padding:6px 10px 10px}
+/* 10.5.3: the text read from the picture, under it, ready to copy or put into the page */
+.pic .gt{flex:1 1 45%;min-height:150px;display:flex;flex-direction:column;gap:6px;padding:0 10px 10px;border-top:1px solid var(--line)}
+.pic .gt h3{padding:8px 0 0}
+.pic .gt textarea{flex:1;min-height:60px;resize:none;background:#fff;color:#111;border:1px solid var(--line);border-radius:6px;padding:8px;font:12px/1.45 "Segoe UI",system-ui,sans-serif;white-space:pre-wrap;outline-offset:1px}
+.pic .gt .row{display:flex;gap:6px;flex-wrap:wrap}
+.pic .gt .row button{height:28px;padding:3px 9px;font-size:12px}
 .pic img{max-width:100%;display:block;image-rendering:auto;border:1px solid var(--line);background:#fff;cursor:zoom-in}
 .pic img.full{max-width:none;cursor:zoom-out}
 .status{display:flex;align-items:center;gap:12px;padding:5px 10px;border-top:1px solid var(--line);background:var(--panel);color:var(--dim);font-size:12px;flex-wrap:wrap}
 .status select{height:26px;max-width:320px;font-size:12px}
+.status button{height:26px;padding:2px 8px;font-size:12px}
 #state.unsaved{color:#f1b860}#state.saved{color:#5fd0bd}
 .banner{padding:8px 12px;background:#33302a;color:#f3d79b;border-bottom:1px solid var(--line)}
 .loading{position:absolute;inset:0;display:grid;place-items:center;background:rgba(22,24,26,.55);font-size:15px;font-weight:600;z-index:5}
 .loading span::before{content:"";display:inline-block;width:16px;height:16px;border:3px solid var(--acc);border-right-color:transparent;border-radius:50%;margin-right:10px;vertical-align:-3px;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.menu{position:fixed;z-index:20;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.4);min-width:220px}
-.menu button{display:flex;width:100%;border:0;background:transparent;border-radius:5px;padding:6px 10px;font-weight:500;justify-content:space-between}
-.menu button:hover{background:#3a3f45}.menu kbd{color:var(--dim);font:11px inherit}
+.menu{position:fixed;z-index:20;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.4);min-width:220px;max-height:calc(100vh - 16px);overflow:auto}
+.menu button{display:flex;width:100%;border:0;background:transparent;border-radius:5px;padding:6px 10px;font-weight:500;justify-content:space-between;gap:18px}
+.menu button:hover:not(:disabled){background:#3a3f45}.menu kbd{color:var(--dim);font:11px inherit}
+.menu button.sugg{font-weight:700}
+.menu .head{padding:4px 10px 2px;color:var(--dim);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
 .menu hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
+.menu .grid{display:grid;gap:3px;padding:4px}
+.menu .grid button{width:auto;padding:0;justify-content:center;border:1px solid transparent}
+.menu .pal button{width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,.18)}
+.menu .pal button:hover{outline:2px solid var(--fg);outline-offset:1px}
+.menu .sym button{width:30px;height:30px;font-size:16px}
+.menu .tgrid{grid-template-columns:repeat(8,18px);gap:2px}
+.menu .tgrid i{width:18px;height:18px;border:1px solid #5a6168;border-radius:2px;display:block;cursor:pointer}
+.menu .tgrid i.on{background:#2a4a45;border-color:var(--acc)}
+.menu .tlabel{text-align:center;color:var(--dim);padding:4px 0 2px;font-size:12px}
 .toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:#30343a;border:1px solid var(--line);padding:8px 14px;border-radius:8px;z-index:30;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:40}
+.modal form{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:340px;max-width:92vw;box-shadow:0 12px 32px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:10px}
+.modal h2{margin:0 0 2px;font-size:15px}
+.modal label{display:flex;flex-direction:column;gap:4px;color:var(--dim);font-size:12px}
+.modal input{width:100%}
+.modal p{margin:0;color:var(--fg);line-height:1.5}
+.modal table{border-collapse:collapse}.modal td{padding:3px 14px 3px 0}.modal td+td{text-align:right;font-weight:600}
+.modal .row{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
 [hidden]{display:none!important}
 svg{width:15px;height:15px}
-</style></head>
+@media print{
+  html,body{height:auto;background:#fff;display:block;overflow:visible}
+  .top,.tabs,.fmt,.find,.banner,.pic,.status,.loading,#imgsel,.menu,.toast,.modal{display:none!important}
+  .main,.docwrap{display:block;overflow:visible;padding:0;background:#fff}
+  #doc{box-shadow:none;margin:0;padding:0!important;width:auto!important;min-height:0!important;zoom:1!important;border-radius:0}
+  #doc .pgbreak{break-after:page;border:0;margin:0}#doc .pgbreak::after{display:none}
+  #doc .colbreak{border:0;margin:0}#doc .colbreak::after{display:none}
+  #doc::before,#doc::after{content:none!important}
+  #doc .toc{border:0;padding:0}#doc .toc>div:not(.toc-t){color:inherit}#doc sup.fnref{color:inherit}
+  #doc mark.hit{background:none}
+}
+</style><style id="pagecss"></style></head>
 <body>
 <div class="top">
-  <span class="brand"><i></i>Grab Text</span>
+  <span class="brand"><i id="brandIcon"></i><span id="brandName">Page</span></span>
   <input type="text" id="name" aria-label="Name" placeholder="Name" title="Name used in the library and for saved files">
-  <button class="pri" id="saveLib" title="Save this text in the Saveit library (Ctrl+S)">Save to library</button>
+  <button id="newPage" title="Start a new blank page (Ctrl+N)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14h6"/></svg>New</button>
+  <button id="openFile" title="Open a Word document, text file or web page (Ctrl+O)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="M3 7v11a1 1 0 0 0 1 1h14l3-8H7l-3 8"/></svg>Open</button>
+  <button class="pri" id="saveLib" title="Save this page in the Saveit library (Ctrl+S)">Save to library</button>
+  <button id="saveAs" title="Save as a Word document, PDF, web page or text file (Ctrl+Shift+S)">Save as ▾</button>
+  <button id="print" title="Print (Ctrl+P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>Print</button>
   <button id="copyAll" title="Copy all the text (Ctrl+Shift+C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>Copy all</button>
-  <button id="saveAs" title="Save as a file (Ctrl+Shift+S)">Save as…</button>
-  <button id="print" title="Print (Ctrl+P)">Print</button>
   <span class="sp"></span>
-  <button id="grab" title="Grab text from another area of the screen (Ctrl+G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M9 9h6M12 9v7"/></svg>Grab again</button>
-  <button id="picBtn" aria-pressed="true" title="Show the picture the text was read from, to check it">Picture</button>
+  <button id="grab" title="Grab text from an area of the screen. The picture and the text read from it appear beside this page (Ctrl+G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M9 9h6M12 9v7"/></svg>Grab text</button>
+  <button id="picBtn" aria-pressed="true" title="Show or hide the picture the text was read from, and the grabbed text">Picture</button>
   <button id="editor" title="Bring the Saveit editor forward">Editor</button>
 </div>
-<div class="fmt" role="toolbar" aria-label="Formatting">
+<div class="tabs" role="tablist" aria-label="Ribbon">
+  <button role="tab" data-tab="home" aria-selected="true">Home</button>
+  <button role="tab" data-tab="insert" aria-selected="false">Insert</button>
+  <button role="tab" data-tab="layout" aria-selected="false">Layout</button>
+  <button role="tab" data-tab="tools" aria-selected="false">Tools</button>
+</div>
+<div class="fmt" role="toolbar" aria-label="Home" data-panel="home">
   <button data-cmd="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
   <button data-cmd="redo" title="Redo (Ctrl+Y)" aria-label="Redo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
   <span class="sep"></span>
-  <select id="block" aria-label="Paragraph style" title="Paragraph style"><option value="div">Normal</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="blockquote">Quote</option><option value="pre">Code</option></select>
-  <select id="font" aria-label="Font" title="Font"><option value="">Font</option><option>Segoe UI</option><option>Calibri</option><option>Arial</option><option>Verdana</option><option>Georgia</option><option>Times New Roman</option><option>Consolas</option><option>Courier New</option></select>
-  <select id="size" aria-label="Text size" title="Text size"><option value="">Size</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>14</option><option>16</option><option>18</option><option>20</option><option>24</option><option>28</option><option>36</option><option>48</option></select>
+  <select id="block" aria-label="Paragraph style" title="Paragraph style"><option value="div">Normal</option><option value="title">Title</option><option value="subtitle">Subtitle</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="h4">Heading 4</option><option value="blockquote">Quote</option><option value="pre">Code</option></select>
+  <select id="font" aria-label="Font" title="Font" style="width:150px"><option value="">Font</option><option>Segoe UI</option><option>Calibri</option><option>Cambria</option><option>Arial</option><option>Verdana</option><option>Tahoma</option><option>Trebuchet MS</option><option>Georgia</option><option>Times New Roman</option><option>Garamond</option><option>Book Antiqua</option><option>Consolas</option><option>Courier New</option><option>Comic Sans MS</option></select>
+  <select id="size" aria-label="Text size" title="Text size"><option value="">Size</option><option>8</option><option>9</option><option>10</option><option>10.5</option><option>11</option><option>12</option><option>14</option><option>16</option><option>18</option><option>20</option><option>24</option><option>28</option><option>32</option><option>36</option><option>48</option><option>72</option></select>
+  <button id="grow" title="Bigger text (Ctrl+])" aria-label="Bigger text"><b>A</b><sup style="font-size:9px">+</sup></button>
+  <button id="shrink" title="Smaller text (Ctrl+[)" aria-label="Smaller text"><span style="font-size:11px;font-weight:700">A</span><sup style="font-size:9px">−</sup></button>
   <span class="sep"></span>
   <button data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button>
   <button data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic"><i>I</i></button>
   <button data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"><u>U</u></button>
   <button data-cmd="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><s>S</s></button>
-  <span class="colr" title="Text colour"><input type="color" id="fore" value="#c62828" aria-label="Text colour"></span>
-  <span class="colr" title="Highlight"><input type="color" id="hili" value="#fff176" aria-label="Highlight colour"></span>
-  <span class="sep"></span>
-  <button data-cmd="justifyLeft" title="Align left" aria-label="Align left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg></button>
-  <button data-cmd="justifyCenter" title="Centre" aria-label="Centre"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg></button>
-  <button data-cmd="justifyRight" title="Align right" aria-label="Align right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg></button>
-  <button data-cmd="insertUnorderedList" title="Bullets" aria-label="Bullets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>
-  <button data-cmd="insertOrderedList" title="Numbering" aria-label="Numbering"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 6h10M10 12h10M10 18h10M4 4v4M3.5 14h2l-2 3h2"/></svg></button>
-  <button data-cmd="outdent" title="Decrease indent" aria-label="Decrease indent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 6h9M11 12h9M11 18h9M7 9l-3 3 3 3"/></svg></button>
-  <button data-cmd="indent" title="Increase indent" aria-label="Increase indent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 6h9M11 12h9M11 18h9M4 9l3 3-3 3"/></svg></button>
+  <button data-cmd="superscript" title="Superscript (Ctrl+Shift+=)" aria-label="Superscript">x<sup style="font-size:9px">2</sup></button>
+  <button data-cmd="subscript" title="Subscript (Ctrl+=)" aria-label="Subscript">x<sub style="font-size:9px">2</sub></button>
+  <span class="split"><button id="foreBtn" title="Text colour" aria-label="Text colour"><span class="swbar"><b>A</b><i id="foreBar" style="background:#c62828"></i></span></button><button id="foreMore" title="Choose text colour" aria-label="Choose text colour">▾</button></span>
+  <span class="split"><button id="hiliBtn" title="Highlight" aria-label="Highlight"><span class="swbar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" style="width:13px;height:13px"><path d="m9 15 6-6 3 3-6 6H9z"/><path d="m15 9 3-3 3 3-3 3"/></svg><i id="hiliBar" style="background:#fff176"></i></span></button><button id="hiliMore" title="Choose highlight colour" aria-label="Choose highlight colour">▾</button></span>
+  <input type="color" id="fore" class="hidecol" value="#c62828" aria-label="Text colour" tabindex="-1"><input type="color" id="hili" class="hidecol" value="#fff176" aria-label="Highlight colour" tabindex="-1">
+  <button id="painter" aria-pressed="false" title="Format painter: copy the look of the text the cursor is in, then drag over other text to give it the same look" aria-label="Format painter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="3" width="13" height="6" rx="1.5"/><path d="M17 6h3v6h-8v3"/><rect x="10.5" y="15" width="3" height="6" rx="1"/></svg></button>
   <button data-cmd="removeFormat" title="Clear formatting" aria-label="Clear formatting"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 5h12M12 5l-3 14M4 20 20 4"/></svg></button>
   <span class="sep"></span>
-  <button id="table" title="Turn lines with columns (tabs) into a table">Table</button>
-  <button id="tools" title="Text tools: join lines, fix spacing, change case…">Text tools ▾</button>
-  <button id="findBtn" title="Find and replace (Ctrl+F, Ctrl+H)">Find</button>
+  <button data-cmd="justifyLeft" title="Align left (Ctrl+L)" aria-label="Align left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg></button>
+  <button data-cmd="justifyCenter" title="Centre (Ctrl+E)" aria-label="Centre"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg></button>
+  <button data-cmd="justifyRight" title="Align right (Ctrl+R)" aria-label="Align right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg></button>
+  <button data-cmd="justifyFull" title="Justify (Ctrl+J)" aria-label="Justify"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg></button>
+  <span class="sep"></span>
+  <span class="split"><button data-cmd="insertUnorderedList" title="Bullets (Ctrl+Shift+L)" aria-label="Bullets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button><button id="bulletMore" title="Bullet styles" aria-label="Bullet styles">▾</button></span>
+  <span class="split"><button data-cmd="insertOrderedList" title="Numbering" aria-label="Numbering"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 6h10M10 12h10M10 18h10M4 4v4M3.5 14h2l-2 3h2"/></svg></button><button id="numberMore" title="Numbering styles" aria-label="Numbering styles">▾</button></span>
+  <button data-cmd="outdent" title="Decrease indent (Shift+Tab in a list)" aria-label="Decrease indent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 6h9M11 12h9M11 18h9M7 9l-3 3 3 3"/></svg></button>
+  <button data-cmd="indent" title="Increase indent (Tab in a list)" aria-label="Increase indent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 6h9M11 12h9M11 18h9M4 9l3 3-3 3"/></svg></button>
+  <button id="spacing" title="Line and paragraph spacing" aria-label="Line spacing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 6h9M11 12h9M11 18h9M5 4v16M3 6l2-2 2 2M3 18l2 2 2-2"/></svg>▾</button>
+</div>
+<div class="fmt" role="toolbar" aria-label="Insert" data-panel="insert" hidden>
+  <button class="lbl" id="insPic" title="Insert a picture from a file (you can also drop or paste pictures)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 6-6 5 5 3-3 4 4"/></svg>Picture</button>
+  <button class="lbl" id="insTable" title="Insert a table"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>Table ▾</button>
+  <button class="lbl" id="insLink" title="Insert a link (Ctrl+K)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Link</button>
+  <span class="sep"></span>
+  <button class="lbl" id="insHr" title="Insert a horizontal line"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"/></svg>Line</button>
+  <button class="lbl" id="insBreak" title="Start a new page here when printed or saved (Ctrl+Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v5h12V3M6 21v-5h12v5M3 12h3M9 12h2M13 12h2M18 12h3"/></svg>Page break</button>
+  <button class="lbl" id="insColBreak" title="Continue in the next column (Ctrl+Shift+Enter). For text set in columns."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v16M20 4v16M12 3v3M12 9v2M12 14v2M12 19v2"/></svg>Column break</button>
+  <span class="sep"></span>
+  <button class="lbl" id="insToc" title="Insert a list of the headings in this page. Click it again to update the list.">Contents</button>
+  <button class="lbl" id="insNote" title="Add a footnote: a small number here and the note at the end of the page">Footnote</button>
+  <span class="sep"></span>
+  <button class="lbl" id="insDate" title="Insert today's date">Date ▾</button>
+  <button class="lbl" id="insSym" title="Insert a symbol">Ω Symbol ▾</button>
+  <button class="lbl" id="insCheck" title="Insert a tick box (click it to tick)">☐ Tick box</button>
+  <input type="file" id="picFile" accept="image/*" multiple hidden>
+</div>
+<div class="fmt" role="toolbar" aria-label="Layout" data-panel="layout" hidden>
+  <label class="f">Page size <select id="pgSize"><option value="letter">Letter (8.5 × 11 in)</option><option value="a4">A4 (210 × 297 mm)</option><option value="legal">Legal (8.5 × 14 in)</option><option value="executive">Executive (7.25 × 10.5 in)</option><option value="tabloid">Tabloid (11 × 17 in)</option><option value="a3">A3 (297 × 420 mm)</option><option value="a5">A5 (148 × 210 mm)</option></select></label>
+  <label class="f">Orientation <select id="pgOrient"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+  <label class="f">Margins <select id="pgMargin"><option value="0.5">Narrow (0.5 in)</option><option value="0.75">Moderate (0.75 in)</option><option value="1">Normal (1 in)</option><option value="1.5">Wide (1.5 in)</option><option value="custom">Custom…</option></select></label>
+  <button class="lbl" id="colsBtn" title="Set the text in one, two or more columns. Select text first to change only that part."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h6M4 9h6M4 13h6M4 17h6M14 5h6M14 9h6M14 13h6M14 17h6"/></svg>Columns ▾</button>
+  <button class="lbl" id="hfBtn" title="Text at the top and bottom of every page, and page numbers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 17h8"/></svg>Header &amp; footer</button>
   <span class="sep"></span>
   <button id="wrap" aria-pressed="true" title="Wrap long lines">Wrap</button>
-  <select id="zoom" aria-label="Zoom" title="Zoom"><option value="0.75">75%</option><option value="0.9">90%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option></select>
+  <label class="f">Zoom <select id="zoom" aria-label="Zoom" title="Zoom (Ctrl+mouse wheel)"><option value="0.5">50%</option><option value="0.75">75%</option><option value="0.9">90%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option></select></label>
+  <button id="fitWidth" title="Zoom so the page fills the window width">Fit width</button>
+</div>
+<div class="fmt" role="toolbar" aria-label="Tools" data-panel="tools" hidden>
+  <button class="lbl" id="findBtn" title="Find and replace (Ctrl+F, Ctrl+H)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>Find</button>
+  <button class="lbl" id="tools" title="Text tools: join lines, fix spacing, change case…">Text tools ▾</button>
+  <button class="lbl" id="table" title="Turn lines with columns (tabs) into a table">Table from columns</button>
+  <span class="sep"></span>
+  <button class="lbl" id="spellBtn" aria-pressed="true" title="Underline spelling mistakes. Right-click a word for suggestions.">Spelling</button>
+  <button class="lbl" id="wcBtn" title="Word count">Word count</button>
 </div>
 <div class="find" id="findBar" hidden>
   <input type="search" id="fq" placeholder="Find" aria-label="Find" style="width:200px">
@@ -109,118 +247,23 @@ svg{width:15px;height:15px}
   <span id="findCount"></span><span class="sp"></span><button id="fclose" title="Close (Esc)" aria-label="Close find">✕</button>
 </div>
 <div class="banner" id="banner" hidden></div>
-<div class="main" style="position:relative">
-  <div class="docwrap" id="docwrap"><div id="doc" contenteditable="true" spellcheck="true" aria-label="Grabbed text" role="textbox" aria-multiline="true"></div></div>
-  <div class="pic" id="pic" hidden><h3>Picture the text was read from <span class="sp"></span><span style="font-weight:400">click to zoom</span></h3><div class="imgbox"><img id="picImg" alt="The grabbed area"></div></div>
+<div class="main">
+  <div class="docwrap" id="docwrap"><div id="doc" class="page" contenteditable="true" spellcheck="true" aria-label="Page" role="textbox" aria-multiline="true"></div>
+    <div id="imgsel" hidden><div id="imgclip"><div id="crop" hidden><span class="h" data-c="nw" style="left:0;top:0;cursor:nwse-resize"></span><span class="h" data-c="ne" style="left:100%;top:0;cursor:nesw-resize"></span><span class="h" data-c="se" style="left:100%;top:100%;cursor:nwse-resize"></span><span class="h" data-c="sw" style="left:0;top:100%;cursor:nesw-resize"></span><span class="h" data-c="n" style="left:50%;top:0;cursor:ns-resize"></span><span class="h" data-c="s" style="left:50%;top:100%;cursor:ns-resize"></span><span class="h" data-c="e" style="left:100%;top:50%;cursor:ew-resize"></span><span class="h" data-c="w" style="left:0;top:50%;cursor:ew-resize"></span></div></div>
+      <span class="h" data-h="nw"></span><span class="h" data-h="n"></span><span class="h" data-h="ne"></span><span class="h" data-h="e"></span><span class="h" data-h="se"></span><span class="h" data-h="s"></span><span class="h" data-h="sw"></span><span class="h" data-h="w"></span>
+      <div id="imgbar"></div><span id="imgsize" hidden></span></div>
+  </div>
+  <div class="pic" id="pic" hidden><h3>Picture the text was read from <span class="sp"></span><span style="font-weight:400">click to zoom</span></h3><div class="imgbox"><img id="picImg" alt="The grabbed area"></div>
+    <div class="gt" id="gt" hidden><h3>Grabbed text <span class="sp"></span><span id="gtState" style="font-weight:400"></span></h3><textarea id="gtText" aria-label="Grabbed text" spellcheck="false"></textarea>
+      <div class="row"><button id="gtCopy" title="Copy the grabbed text (or the part you selected in the box)">Copy text</button><button class="pri" id="gtInsert" title="Put the grabbed text (or the part you selected in the box) into the page where the cursor is">Insert into page</button><button id="gtInsPic" title="Put the picture into the page where the cursor is">Insert picture</button></div></div></div>
   <div class="loading" id="loading" hidden><span>Reading text…</span></div>
 </div>
 <div class="status">
   <span id="counts">0 words</span><span id="state"></span><span class="sp"></span>
-  <label>This session's grabs <select id="hist" aria-label="This session's grabs"></select></label>
+  <label>Recent pages <select id="hist" aria-label="Recent pages"></select></label>
+  <button id="closePage" title="Remove this page from the recent list">Remove</button>
 </div>
-<script>
-const $=id=>document.getElementById(id),doc=$('doc');let entry=null,dirty=false,savedOnce=false,syncT=0,picWanted=true;
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function textToHtml(t){return String(t||'').split(/\r?\n/).map(l=>'<div>'+(l?esc(l):'<br>')+'</div>').join('')}
-function plain(){return doc.innerText.replace(/ /g,' ').replace(/\n$/,'')}
-function toast(m,ms=2600){document.querySelectorAll('.toast').forEach(e=>e.remove());const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),ms)}
-function counts(){const t=plain(),w=(t.match(/\S+/g)||[]).length,l=t?t.split('\n').length:0;$('counts').textContent=`${w} word${w===1?'':'s'} · ${t.length} character${t.length===1?'':'s'} · ${l} line${l===1?'':'s'}`;$('copyAll').disabled=!t.trim();$('saveLib').disabled=!t.trim()||(entry&&entry.loading)}
-function stateLabel(){const s=$('state');if(!entry){s.textContent='';return}if(entry.libId&&!dirty){s.className='saved';s.textContent='Saved in the library';$('saveLib').textContent='Saved ✓'}else if(entry.libId){s.className='unsaved';s.textContent='Changes not saved to the library';$('saveLib').textContent='Save changes'}else{s.className='';s.textContent='Not saved to the library';$('saveLib').textContent='Save to library'}}
-function sync(){clearTimeout(syncT);syncT=setTimeout(()=>{if(entry&&!entry.loading)window.te.update({key:entry.key,text:plain(),html:doc.innerHTML,name:$('name').value})},300)}
-function changed(){dirty=true;counts();stateLabel();sync()}
-function fillHist(list){const h=$('hist');h.innerHTML=list.map(g=>`<option value="${esc(g.key)}">${esc(new Date(g.created).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}))} · ${esc(g.libId?'★ ':'')}${esc(g.preview||g.name||'(empty)')}</option>`).join('');if(entry)h.value=entry.key;h.closest('label').hidden=list.length<2}
-function showPic(){const has=!!(entry&&entry.src);$('picBtn').hidden=!has;$('pic').hidden=!has||!picWanted;$('picBtn').setAttribute('aria-pressed',has&&picWanted)}
-function load(d){if(!d||!d.entry)return;entry=d.entry;dirty=!!(entry.dirty);$('name').value=entry.name||'Grabbed text';
-  doc.innerHTML=entry.html||textToHtml(entry.text);$('loading').hidden=!entry.loading;doc.contentEditable=entry.loading?'false':'true';
-  const b=$('banner');b.hidden=!entry.empty;b.textContent=entry.empty?'No text was found in that area. Try Grab again with a tighter box around clear text, or type it in yourself.':'';
-  if(entry.src){if($('picImg').src!==entry.src)$('picImg').src=entry.src}else $('picImg').removeAttribute('src');$('picImg').classList.remove('full');
-  showPic();fillHist(d.list||[]);counts();stateLabel();closeFind(true);if(!entry.loading){doc.focus();selectAll()}document.title=(entry.name||'Grabbed text')+' · Saveit Grab Text';document.body.dataset.state=entry.loading?'loading':'ready'}
-window.te.onLoad(load);
-function selectAll(){const r=document.createRange();r.selectNodeContents(doc);const s=getSelection();s.removeAllRanges();s.addRange(r)}
-doc.addEventListener('input',changed);$('name').addEventListener('input',()=>{changed();document.title=($('name').value||'Grabbed text')+' · Saveit Grab Text'});
-// ---- formatting ----
-const ex=(c,v=null)=>{doc.focus();document.execCommand('styleWithCSS',false,true);document.execCommand(c,false,v);changed();refreshState()};
-document.querySelectorAll('[data-cmd]').forEach(b=>{b.onmousedown=e=>e.preventDefault();b.onclick=()=>ex(b.dataset.cmd)});
-$('block').onchange=e=>{ex('formatBlock',e.target.value);};
-$('font').onchange=e=>{if(e.target.value)ex('fontName',e.target.value);e.target.value=''};
-$('size').onchange=e=>{const pt=e.target.value;e.target.value='';if(!pt)return;doc.focus();document.execCommand('styleWithCSS',false,true);document.execCommand('fontSize',false,'7');doc.querySelectorAll('[style*="xxx-large"]').forEach(el=>{el.style.fontSize=pt+'pt'});doc.querySelectorAll('font[size="7"]').forEach(el=>{const s=document.createElement('span');s.style.fontSize=pt+'pt';s.append(...el.childNodes);el.replaceWith(s)});changed()};
-for(const id of ['fore','hili'])$(id).addEventListener('mousedown',()=>{saveSel()});
-let keptRange=null;function saveSel(){const s=getSelection();if(s.rangeCount&&doc.contains(s.anchorNode))keptRange=s.getRangeAt(0).cloneRange()}
-function restoreSel(){if(!keptRange)return;const s=getSelection();s.removeAllRanges();s.addRange(keptRange)}
-for(const id of ['fore','hili']){const el=$(id),cmd=id==='fore'?'foreColor':'hiliteColor';el.onchange=()=>{restoreSel();ex(cmd,el.value)}}
-function refreshState(){for(const b of document.querySelectorAll('[data-cmd]')){const c=b.dataset.cmd;if(['bold','italic','underline','strikeThrough','insertUnorderedList','insertOrderedList','justifyLeft','justifyCenter','justifyRight'].includes(c)){try{b.setAttribute('aria-pressed',document.queryCommandState(c))}catch(_){}}}
-  try{const v=String(document.queryCommandValue('formatBlock')||'div').toLowerCase();$('block').value=['h1','h2','h3','blockquote','pre'].includes(v)?v:'div'}catch(_){}}
-document.addEventListener('selectionchange',()=>{if(doc.contains(getSelection().anchorNode))refreshState()});
-$('wrap').onclick=()=>{const on=$('wrap').getAttribute('aria-pressed')!=='true';$('wrap').setAttribute('aria-pressed',on);doc.classList.toggle('nowrap',!on)};
-$('zoom').onchange=e=>{doc.style.zoom=e.target.value};
-$('docwrap').addEventListener('wheel',e=>{if(!e.ctrlKey)return;e.preventDefault();const o=[...$('zoom').options].map(o=>o.value),i=o.indexOf($('zoom').value),n=Math.max(0,Math.min(o.length-1,i+(e.deltaY<0?1:-1)));$('zoom').value=o[n];doc.style.zoom=o[n]},{passive:false});
-// ---- text tools (work on the selection, or on everything when nothing is selected) ----
-function selText(){const s=getSelection();return s.rangeCount&&!s.isCollapsed&&doc.contains(s.anchorNode)?s.toString():null}
-function replaceSelOrAll(fn){let t=selText();const all=t==null;if(all){selectAll();t=plain()}const out=fn(t);if(out===t){toast('Nothing to change.');return}doc.focus();document.execCommand('insertHTML',false,all?textToHtml(out):out.split('\n').map(esc).join('<br>'));changed()}
-const titleCase=s=>s.toLowerCase().replace(/(^|[\s\t"'(\[-])(\p{L})/gu,(m,a,b)=>a+b.toUpperCase());
-const sentenceCase=s=>s.toLowerCase().replace(/(^\s*|[.!?]\s+|\n\s*)(\p{L})/gu,(m,a,b)=>a+b.toUpperCase());
-const TOOLS=[
- ['Join lines into one paragraph',t=>t.split('\n').map(s=>s.trim()).filter(Boolean).join(' ').replace(/(\w)- (\w)/g,'$1$2')],
- ['Join wrapped lines (keep paragraphs)',t=>t.split(/\n\s*\n/).map(p=>p.split('\n').map(s=>s.trim()).filter(Boolean).join(' ')).join('\n\n')],
- ['Remove blank lines',t=>t.split('\n').filter(s=>s.trim()).join('\n')],
- ['Fix spacing (extra spaces, spaces at line ends)',t=>t.split('\n').map(s=>s.replace(/[  ]{2,}/g,' ').replace(/ +([,.;:!?%)\]])/g,'$1').replace(/([(\[]) +/g,'$1').trim()).join('\n')],
- ['Columns: tabs to spaces',t=>t.replace(/\t+/g,'  ')],
- null,
- ['UPPERCASE',t=>t.toUpperCase()],['lowercase',t=>t.toLowerCase()],['Title Case',titleCase],['Sentence case',sentenceCase],
- null,
- ['Straight quotes and dashes',t=>t.replace(/[‘’‚′]/g,"'").replace(/[“”„″]/g,'"').replace(/[–—]/g,'-').replace(/…/g,'...')],
- ['Keep only numbers and symbols',t=>t.split('\n').map(s=>(s.match(/[-+$£€¥]?\d[\d.,:/%-]*/g)||[]).join('\t')).filter(Boolean).join('\n')],
- ['Sort lines A–Z',t=>t.split('\n').sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'})).join('\n')],
- ['Remove duplicate lines',t=>[...new Set(t.split('\n'))].join('\n')]];
-function menu(anchor,rows){document.querySelectorAll('.menu').forEach(m=>m.remove());const m=document.createElement('div');m.className='menu';m.setAttribute('role','menu');
-  rows.forEach(r=>{if(!r){m.append(document.createElement('hr'));return}const b=document.createElement('button');b.setAttribute('role','menuitem');b.innerHTML=`<span>${esc(r[0])}</span>${r[2]?`<kbd>${esc(r[2])}</kbd>`:''}`;b.onmousedown=e=>e.preventDefault();b.onclick=()=>{m.remove();r[1]()};m.append(b)});
-  document.body.append(m);const a=anchor.getBoundingClientRect();m.style.left=Math.min(a.left,innerWidth-m.offsetWidth-8)+'px';m.style.top=(a.bottom+4)+'px';
-  setTimeout(()=>addEventListener('mousedown',function off(e){if(!m.contains(e.target)){m.remove();removeEventListener('mousedown',off)}}),0)}
-$('tools').onmousedown=e=>e.preventDefault();
-$('tools').onclick=()=>menu($('tools'),TOOLS.map(r=>r&&[r[0],()=>replaceSelOrAll(r[1])]));
-// Lines with tab-separated columns become a table (copies into Word and Excel as a real table)
-$('table').onmousedown=e=>e.preventDefault();
-$('table').onclick=()=>{let t=selText();if(t==null){selectAll();t=plain()}const lines=t.split('\n');if(!lines.some(l=>l.includes('\t'))){toast('No columns found. Grab Text puts a tab between table columns.');return}
-  let html='',rows=[];const flush=()=>{if(!rows.length)return;const n=Math.max(...rows.map(r=>r.length));html+='<table>'+rows.map(r=>'<tr>'+Array.from({length:n},(_,i)=>'<td>'+(r[i]?esc(r[i]):'<br>')+'</td>').join('')+'</tr>').join('')+'</table>';rows=[]};
-  for(const l of lines){if(l.includes('\t'))rows.push(l.split('\t'));else{flush();html+='<div>'+(l?esc(l):'<br>')+'</div>'}}flush();doc.focus();document.execCommand('insertHTML',false,html);changed()};
-// ---- find and replace ----
-let hits=[],hitI=-1;
-function findAll(){hits=[];hitI=-1;const q=$('fq').value;if(!q){$('findCount').textContent='';return}const cs=$('fcase').checked,needle=cs?q:q.toLowerCase(),w=document.createTreeWalker(doc,NodeFilter.SHOW_TEXT);let n;while((n=w.nextNode())){const s=cs?n.data:n.data.toLowerCase();let i=0;while((i=s.indexOf(needle,i))>=0){hits.push({n,i,len:q.length});i+=q.length}}$('findCount').textContent=hits.length?`${hits.length} found`:'Not found'}
-function goHit(dir){findAll();if(!hits.length)return;const s=getSelection();let from=0;if(s.rangeCount&&doc.contains(s.anchorNode)){const r=s.getRangeAt(0);from=hits.findIndex(h=>{const c=document.createRange();c.setStart(h.n,h.i);return r.compareBoundaryPoints(Range.START_TO_START,c)<(dir>0?0:1)});if(dir>0&&from<0)from=0;if(dir<0)from=(from<=0?hits.length:from)-1}else if(dir<0)from=hits.length-1;
-  if(dir>0&&s.rangeCount&&!s.isCollapsed&&from>=0){const h=hits[from],r=s.getRangeAt(0);if(r.startContainer===h.n&&r.startOffset===h.i)from=(from+1)%hits.length}
-  hitI=from;const h=hits[hitI],r=document.createRange();r.setStart(h.n,h.i);r.setEnd(h.n,h.i+h.len);s.removeAllRanges();s.addRange(r);(h.n.parentElement||doc).scrollIntoView({block:'nearest'});$('findCount').textContent=`${hitI+1} of ${hits.length}`}
-function openFind(rep){$('findBar').hidden=false;const t=selText();if(t&&!t.includes('\n'))$('fq').value=t;(rep&&$('fq').value?$('fr'):$('fq')).focus();$('fq').select();findAll()}
-function closeFind(silent){$('findBar').hidden=true;if(!silent)doc.focus()}
-function selIsHit(){const s=getSelection(),q=$('fq').value;if(!q||!s.rangeCount||!doc.contains(s.anchorNode))return false;const t=s.toString();return $('fcase').checked?t===q:t.toLowerCase()===q.toLowerCase()}
-$('findBtn').onclick=()=>$('findBar').hidden?openFind(false):closeFind();$('fclose').onclick=()=>closeFind();
-$('fq').oninput=findAll;$('fcase').onchange=findAll;$('fnext').onclick=()=>goHit(1);$('fprev').onclick=()=>goHit(-1);
-$('fq').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();goHit(e.shiftKey?-1:1)}};$('fr').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('frep').click()}};
-$('frep').onclick=()=>{if(!selIsHit()){goHit(1);return}doc.focus();document.execCommand('insertText',false,$('fr').value);changed();goHit(1)};
-$('frepAll').onclick=()=>{findAll();const n=hits.length;if(!n)return;for(let k=hits.length-1;k>=0;k--){const h=hits[k],r=document.createRange();r.setStart(h.n,h.i);r.setEnd(h.n,h.i+h.len);const s=getSelection();s.removeAllRanges();s.addRange(r);document.execCommand('insertText',false,$('fr').value)}changed();findAll();toast(`Replaced ${n}`)};
-// ---- copy, save, print ----
-function cleanHtml(){const c=doc.cloneNode(true);c.querySelectorAll('mark.hit').forEach(m=>m.replaceWith(...m.childNodes));return c.innerHTML}
-async function copyAll(){const t=plain();if(!t.trim())return;try{await window.te.copy(t,`<div style="white-space:pre-wrap">${cleanHtml()}</div>`);toast('All the text is copied. Paste it anywhere.')}catch(e){toast('Copy failed: '+(e.message||e))}}
-$('copyAll').onclick=copyAll;
-async function saveLib(){const t=plain();if(!t.trim()||!entry)return;$('saveLib').disabled=true;try{const r=await window.te.saveLib({key:entry.key,name:$('name').value.trim()||'Grabbed text',text:t,html:cleanHtml()});entry.libId=r.id;dirty=false;stateLabel();fillHist(r.list||[]);toast('Saved in the Saveit library')}catch(e){toast((e.message||String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/,''),6000)}finally{counts()}}
-$('saveLib').onclick=saveLib;
-$('saveAs').onclick=()=>menu($('saveAs'),[['Text file (.txt)',()=>saveFile('txt')],['Web page with formatting (.html, opens in Word)',()=>saveFile('html')]]);
-async function saveFile(fmt){const name=$('name').value.trim()||'Grabbed text';const data=fmt==='html'?`<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)}</title><style>body{font:11pt/1.45 "Segoe UI",Calibri,sans-serif;white-space:pre-wrap;max-width:820px;margin:30px auto}table{border-collapse:collapse;white-space:normal}td{border:1px solid #b9c0c7;padding:3px 8px}</style></head><body>${cleanHtml()}</body></html>`:plain();try{const p=await window.te.saveFile(name,fmt,data);if(p)toast('Saved '+p.split(/[\\/]/).pop(),4000)}catch(e){toast('Could not save: '+(e.message||e),6000)}}
-$('print').onclick=()=>window.te.print();
-$('editor').onclick=()=>window.te.editor();
-$('grab').onclick=()=>window.te.grab();
-$('picBtn').onclick=()=>{picWanted=!picWanted;showPic()};
-$('picImg').onclick=()=>$('picImg').classList.toggle('full');
-$('hist').onchange=async e=>{const d=await window.te.pick(e.target.value);if(d)load(d)};
-addEventListener('keydown',e=>{const k=e.key.toLowerCase(),c=e.ctrlKey||e.metaKey;
-  if(c&&k==='s'){e.preventDefault();e.shiftKey?$('saveAs').click():saveLib()}
-  else if(c&&e.shiftKey&&k==='c'){e.preventDefault();copyAll()}
-  else if(c&&k==='f'){e.preventDefault();openFind(false)}
-  else if(c&&k==='h'){e.preventDefault();openFind(true)}
-  else if(c&&k==='p'){e.preventDefault();window.te.print()}
-  else if(c&&k==='g'){e.preventDefault();window.te.grab()}
-  else if(e.key==='F3'){e.preventDefault();if($('findBar').hidden)openFind(false);else goHit(e.shiftKey?-1:1)}
-  else if(e.key==='Escape'){if(document.querySelector('.menu'))document.querySelector('.menu').remove();else if(!$('findBar').hidden)closeFind()}});
-// Pasting keeps simple formatting but drops colours and backgrounds made for other pages
-doc.addEventListener('paste',e=>{const h=e.clipboardData.getData('text/html');if(!h)return;e.preventDefault();const t=document.createElement('template');t.innerHTML=h;t.content.querySelectorAll('script,style,meta,link').forEach(x=>x.remove());t.content.querySelectorAll('*').forEach(x=>{x.removeAttribute('class');x.removeAttribute('id');if(x.style){x.style.removeProperty('color');x.style.removeProperty('background');x.style.removeProperty('background-color');x.style.removeProperty('font-family')}});document.execCommand('insertHTML',false,t.innerHTML)});
-counts();stateLabel();
-</script></body></html>
+<script src="docx.js"></script>
+<script src="textedit.js"></script>
+<script src="textedit-more.js"></script>
+</body></html>

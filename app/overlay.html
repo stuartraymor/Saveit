@@ -1,7 +1,7 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>Select region</title>
 <style>
-html,body{margin:0;height:100%;overflow:hidden;background:#000;user-select:none;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
+html,body{margin:0;height:100%;overflow:hidden;background:transparent;user-select:none;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
 canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
 .tip{position:fixed;left:50%;top:78px;transform:translateX(-50%);background:rgba(22,24,26,.92);color:#e8eaec;font-size:13px;font-weight:600;padding:8px 14px;border-radius:999px;pointer-events:none}
 .tip b{color:#2db3a0}
@@ -23,6 +23,20 @@ canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
 .wid [hidden]{display:none!important}
 .wid{flex-wrap:nowrap}.wid:not(.adj) .adjonly{display:none!important}.wid.adj{transform:none}
 .wid button.toggle{min-width:84px}
+.wid,.tip{opacity:0;transition:opacity .09s}body.in .wid,body.in .tip{opacity:1}
+.wid .r1,.wid .r2{display:flex;align-items:center;gap:6px 8px}
+.wid.adj{flex-direction:column;align-items:stretch}
+.wid #fxRow{display:flex;flex-direction:column;gap:6px;border-top:1px solid #3a3f45;padding-top:6px}
+.wid .r2 .fxsel{min-width:150px}.wid .r2 .fxsp{flex:1;min-width:4px}
+.wid .r2 button.fxdel{padding:3px 8px;font-size:11px;color:#b4bac0}
+.wid .r2 input.fxtog{appearance:none;width:34px;height:18px;border-radius:9px;background:#3a3f45;position:relative;cursor:pointer;margin:0;transition:background .15s}
+.wid .r2 input.fxtog::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#e8eaec;transition:left .15s}
+.wid .r2 input.fxtog:checked{background:#2db3a0}.wid .r2 input.fxtog:checked::after{left:18px}
+.wid .r2 button.fxadd{padding:4px 10px;background:transparent;border-color:#2db3a0;color:#2db3a0}
+.wid .r2 button.fxadd:hover:not(:disabled){background:#2db3a0;color:#06211d;border-color:#2db3a0}
+.wid .r2 input[type=range]{width:110px;accent-color:#2db3a0}
+.wid .r2 input[type=color]{width:30px;height:24px;padding:1px;background:#26292d;border:1px solid #3a3f45;border-radius:6px;cursor:pointer}
+.wid .r2 .v{font-family:"Cascadia Mono",Consolas,monospace;color:#e8eaec;min-width:22px;text-align:right}
 </style></head>
 <body>
 <canvas id="c"></canvas>
@@ -33,14 +47,18 @@ canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
   <label>Selection <select id="area"><option value="region">Region</option><option value="window">Window</option><option value="screen">Full screen</option><option value="steps">Steps</option><option value="scroll">Scrolling</option><option value="text">Grab text</option></select></label>
   <label class="ck"><input type="checkbox" id="oCur"> Cursor</label>
   <label class="ck"><input type="checkbox" id="oClip"> Copy to clipboard</label>
-  <span id="imgOpts" style="display:contents"><label>Effect <select id="fxSel"></select></label><button id="fxGear" title="Settings for this effect">⚙</button></span>
+  <span id="imgOpts" style="display:contents"></span>
   <span id="vidOpts" style="display:contents"><label class="ck"><input type="checkbox" id="oSys"> System audio</label><label class="ck"><input type="checkbox" id="oMic"> Mic</label><label class="ck"><input type="checkbox" id="oCam"> Webcam</label></span>
   <span class="tm" id="tm">00:00</span><button id="pz" disabled>Pause</button><button id="sp" disabled>Stop</button><button id="redo">Redo</button><button id="cancel">Cancel</button>
   </div>
+  <div class="r1">
   <label class="adjonly" title="Width in pixels">W <input id="w" type="number" min="1"></label><span class="adjonly">×</span><label class="adjonly" title="Height in pixels">H <input id="h" type="number" min="1"></label>
   <select class="adjonly" id="preset" title="Common sizes"><option value="">Size…</option><option>1920x1080</option><option>1280x720</option><option>1024x768</option><option>800x600</option><option>640x480</option><option>1080x1080</option></select>
   <span class="sep adjonly"></span>
   <button class="go adjonly" id="ok">Capture</button><button id="toggle" class="toggle">Cancel</button>
+  </div>
+  <!-- 10.4.12: the effects for this capture, each with its settings, under the size row once an area is selected; Add effect stacks another -->
+  <div class="adjonly" id="fxRow"></div>
 </div>
 <script src="fxdefs.js"></script><script src="fxui.js"></script>
 <script>
@@ -49,27 +67,48 @@ const c=$('c'),g=c.getContext('2d'),tip=$('tip');let img=new Image(); // 10.4.0:
 let W=innerWidth,H=innerHeight,dpr=devicePixelRatio||1,ready=false,mode='image';
 let state='drag',start=null,cur={x:W/2,y:H/2},sel=null,act=null; // act: {type:'move'|'resize'|'new', ...}
 const HS=6;
-const K=()=>(img.naturalWidth||img.width)/W||1;
+// K: physical screen pixels per page pixel (sizes shown and sent). IK: pixels of the picture held here per page pixel
+// (10.5.2: a screen-sized picture comes first on a scaled screen, the full-resolution one a moment later)
+let physW=0;const IK=()=>(img.naturalWidth||img.width)/W||1,K=()=>physW?physW/W:IK();
 function size(){W=innerWidth;H=innerHeight;dpr=devicePixelRatio||1;c.width=W*dpr;c.height=H*dpr;g.setTransform(dpr,0,0,dpr,0,0);draw()}
 addEventListener('resize',size);
-let vmode='image',sent=false;
-const fxs={id:'none',p:{}};const fxUi=FXUI.mount($('fxSel'),$('fxGear'),fxs,()=>draw());
-function collect(){return{fx:{id:fxs.id,p:fxs.p},mode:vmode,area:$('area').value,cursor:$('oCur').checked,clip:$('oClip').checked,sys:$('oSys').checked,mic:$('oMic').checked,cam:$('oCam').checked}}
+let vmode='image',sent=false,dimA=.45;
+let fxl=[];const fxUi=FXUI.stack($('fxRow'),l=>{fxl=l;draw()});
+const noFx=()=>vmode==='video'||['text','scroll'].includes($('area').value);
+function collect(){return{fx:noFx()?[]:fxl.map(e=>({id:e.id,p:{...e.p}})),mode:vmode,area:$('area').value,cursor:$('oCur').checked,clip:$('oClip').checked,sys:$('oSys').checked,mic:$('oMic').checked,cam:$('oCam').checked}}
 function labels(){const v=vmode==='video',a=$('area').value;
   $('mImg').setAttribute('aria-pressed',!v);$('mVid').setAttribute('aria-pressed',v);$('vidOpts').hidden=!v;$('imgOpts').hidden=v;
   for(const val of ['steps','text','scroll']){const o=$('area').querySelector('option[value="'+val+'"]');o.hidden=o.disabled=v}
   if(v&&['steps','text','scroll'].includes(a))$('area').value='region';
-  const a2=$('area').value;$('ok').textContent=a2==='text'?'Grab text':(v?'Record':'Capture');$('ok').classList.toggle('rec',v);
-  if(state==='drag')tip.innerHTML=v?'Drag the area to <b>record</b> · <b>Click</b> for the whole screen · <b>Esc</b> to cancel':(a2==='text'?'Drag around the <b>text</b> to grab · <b>Esc</b> to cancel':'Drag to select an area · <b>Click</b> for the whole screen · <b>Esc</b> to cancel')}
+  const a2=$('area').value;$('fxRow').hidden=noFx();$('ok').textContent=a2==='text'?'Grab text':a2==='scroll'?'Start scrolling':(v?'Record':'Capture');$('ok').title=a2==='scroll'?'Close this screen and start the scrolling capture of the selected area':'';$('ok').classList.toggle('rec',v);
+  if(state==='drag')tip.innerHTML=v?'Drag the area to <b>record</b> · <b>Click</b> for the whole screen · <b>Esc</b> to cancel':(a2==='text'?'Drag around the <b>text</b> to grab · <b>Esc</b> to cancel':a2==='scroll'?'Drag around the part of the page that <b>scrolls</b> · <b>Esc</b> to cancel':'Drag to select an area · <b>Click</b> for the whole screen · <b>Esc</b> to cancel');draw()}
+// 10.5.2: the selector first shows the frozen screen exactly as the screen looked; once it is up, the dimming and the bar
+// fade in quickly (90 ms)
+// 10.5.2: the window is put up while the frozen screen is still on its way (it is transparent, so the real screen shows
+// through until then); the fade starts once both have happened
+// (the screen behind looks the same as the screenshot, so the dimming starts as soon as the window is up and the sharp
+// frozen screen is put under it when it arrives; the bar appears once the page has its data)
+let visOn=false,faded=false;const fadeIn=()=>{if(ready&&visOn)requestAnimationFrame(()=>document.body.classList.add('in'));if(faded||!visOn)return;faded=true;
+  const t0=performance.now(),fade=()=>{const k=Math.min(1,(performance.now()-t0)/90);dimA=.45*Math.max(.08,k);draw();if(k<1)requestAnimationFrame(fade)};fade()};
+window.overlay.onVisible&&window.overlay.onVisible(()=>{visOn=true;if(!ready)size();fadeIn()});
 window.overlay.onData(d=>{sent=false;const o=d.opts||{};vmode=o.mode==='video'?'video':'image';
   $('area').value=o.area&&o.area!=='window'&&o.area!=='steps'?o.area:'region';
-  $('oCur').checked=!!o.cursor;$('oClip').checked=!!o.clip;$('oSys').checked=o.sys!==false;$('oMic').checked=!!o.mic;$('oCam').checked=!!o.cam;fxUi.set(o.fx||{id:'none',p:{}});
+  $('oCur').checked=!!o.cursor;$('oClip').checked=!!o.clip;$('oSys').checked=o.sys!==false;$('oMic').checked=!!o.mic;$('oCam').checked=!!o.cam;fxUi.set([]);fxl=[]; /* 10.5.1: each capture starts with No effect */
   if(d.init==='full'||$('area').value==='screen'){$('area').value='screen';state='adjust';tip.style.display='none'}
   labels();
-  const shown=()=>{ready=true;size();if(state==='adjust'){sel={x:0,y:0,w:W,h:H};draw()}window.overlay.shown&&window.overlay.shown()};
+  // 10.5.1: the frozen screen first appears exactly as the screen looks (no dimming), then the dimming and the bar fade in,
+  // so opening the selector does not flash
+  const shown=()=>{ready=true;if(!faded)dimA=0;size();if(state==='adjust'){sel={x:0,y:0,w:W,h:H}}draw();fadeIn();
+    // 10.5.2: tell Saveit only after the frozen screen has really been put on screen (two frames), so it never moves in black
+    requestAnimationFrame(()=>requestAnimationFrame(()=>window.overlay.shown&&window.overlay.shown()))};
   // 10.4.0: raw BGRA pixels (no PNG to encode and decode, which took a noticeable part of a second on a large screen)
-  if(d.raw){const w=d.w,h=d.h,n=w*h;let src=d.raw;if(src.byteOffset%4||src.byteLength<n*4){const c=new Uint8Array(n*4);c.set(src.subarray(0,n*4));src=c}const q=new Uint32Array(src.buffer,src.byteOffset,n);for(let i=0;i<n;i++){const v=q[i];q[i]=(v&0x0000ff00)|((v&0xff)<<16)|((v>>>16)&0xff)|0xff000000}const px=new Uint8ClampedArray(src.buffer,src.byteOffset,n*4);const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').putImageData(new ImageData(px,w,h),0,0);img=cv;shown();return}
+  physW=d.fullW||0;
+  if(d.raw){img=rawCanvas(d);shown();return}
   img=new Image();img.onload=shown;img.src=d.shot});
+// 10.4.0: raw BGRA pixels (no PNG to encode and decode, which took a noticeable part of a second on a large screen)
+function rawCanvas(d){const w=d.w,h=d.h,n=w*h;let src=d.raw;if(src.byteOffset%4||src.byteLength<n*4){const c=new Uint8Array(n*4);c.set(src.subarray(0,n*4));src=c}const q=new Uint32Array(src.buffer,src.byteOffset,n);for(let i=0;i<n;i++){const v=q[i];q[i]=(v&0x0000ff00)|((v&0xff)<<16)|((v>>>16)&0xff)|0xff000000}const px=new Uint8ClampedArray(src.buffer,src.byteOffset,n*4);const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').putImageData(new ImageData(px,w,h),0,0);return cv}
+// 10.5.2: the full-resolution picture arrives after the selector is up; the magnifier and effect preview then use it
+window.overlay.onFull&&window.overlay.onFull(d=>{if(!d||!d.raw)return;img=rawCanvas(d);draw()});
 function norm(a,b){return{x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y)}}
 function clampSel(){sel.w=Math.max(4,Math.min(sel.w,W));sel.h=Math.max(4,Math.min(sel.h,H));sel.x=Math.max(0,Math.min(W-sel.w,sel.x));sel.y=Math.max(0,Math.min(H-sel.h,sel.y))}
 function handles(r){const mx=r.x+r.w/2,my=r.y+r.h/2,R=r.x+r.w,B=r.y+r.h;return[['nw',r.x,r.y],['n',mx,r.y],['ne',R,r.y],['e',R,my],['se',R,B],['s',mx,B],['sw',r.x,B],['w',r.x,my]]}
@@ -79,40 +118,56 @@ const CUR={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n
 const isFull=()=>!!sel&&sel.w>=W-1&&sel.h>=H-1;
 function placeBar(){const b=$('wid'),adj=state==='adjust'&&!!sel,t=$('toggle');
   if(state==='adjust'){const full=isFull();tip.style.display=full?'':'none';if(full)tip.innerHTML=(vmode==='video'?'Whole screen selected · <b>Record</b> to start':'Whole screen selected · <b>Capture</b> to take it')+' · <b>Drag</b> anywhere to pick an area instead'}
-  if(adj&&isFull()){b.classList.add('adj');t.textContent='Redo';t.title='Draw the selection again';b.style.left='50%';b.style.top='10px';b.style.transform='translateX(-50%)';const k=K();if(document.activeElement!==$('w'))$('w').value=Math.round(sel.w*k);if(document.activeElement!==$('h'))$('h').value=Math.round(sel.h*k);return}
-  b.style.transform='';b.classList.toggle('adj',adj);
+  if(adj&&isFull()){b.classList.add('adj');t.textContent='Redo';t.title='Draw the selection again';b.style.left='50%';b.style.top='10px';b.style.transform='translateX(-50%)';tip.style.top=Math.max(78,10+b.offsetHeight+10)+'px';const k=K();if(document.activeElement!==$('w'))$('w').value=Math.round(sel.w*k);if(document.activeElement!==$('h'))$('h').value=Math.round(sel.h*k);return}
+  b.style.transform='';tip.style.top='';b.classList.toggle('adj',adj);
   t.textContent=adj?'Redo':'Cancel';t.title=adj?'Draw the selection again':'Close without capturing (Esc)';
   if(!adj){b.style.left='50%';b.style.top='10px';return}
   const bw=b.offsetWidth,bh=b.offsetHeight,m=8;let x=sel.x+sel.w-bw,y=sel.y+sel.h+m;
   if(y+bh>H-4){y=sel.y-bh-m;if(y<4)y=sel.y+sel.h-bh-m}b.style.left=Math.max(4,Math.min(W-bw-4,x))+'px';b.style.top=Math.max(4,y)+'px';
   const k=K();
   if(document.activeElement!==$('w'))$('w').value=Math.round(sel.w*k);if(document.activeElement!==$('h'))$('h').value=Math.round(sel.h*k)}
-function rrPath(x,y,w,h,r){r=Math.max(0,Math.min(r,w/2,h/2));g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath()}
-function edgeP(x,y,w,h,e,k){const d=(+e.depth||10)/k,step=Math.max(6,d*1.4);let sd=((w*31+h*17)|0)>>>0;const rnd=()=>{sd=(sd*1664525+1013904223)>>>0;return sd/4294967296};
+// Same corner, edge and border shapes the editor draws (index.html cornerPath / edgePath / strokeBorder), in screen pixels
+function cornerP(x,y,w,h,f,grow,keep){const R=f.radii?f.radii.map(v=>+v||0):Array(4).fill(+f.radius||0),r=R.map(v=>v>0?Math.max(0,Math.min(v+(grow||0),w/2,h/2)):0);
+  if(!keep)g.beginPath();g.moveTo(x+r[0],y);g.arcTo(x+w,y,x+w,y+h,r[1]);g.arcTo(x+w,y+h,x,y+h,r[2]);g.arcTo(x,y+h,x,y,r[3]);g.arcTo(x,y,x+w,y,r[0]);g.closePath()}
+function edgeP(x,y,w,h,e,k,keep){const d=(+e.depth||10)/k,step=+e.size>0?Math.max(4,+e.size)/k:Math.max(6,d*1.4);let sd=((w*31+h*17)|0)>>>0;const rnd=()=>{sd=(sd*1664525+1013904223)>>>0;return sd/4294967296};
   const off=i=>e.style==='zigzag'?(i%2?d:0):e.style==='wave'?(Math.sin(i*.9)+1)/2*d:rnd()*d;const nx=Math.max(2,Math.round(w/step)),ny=Math.max(2,Math.round(h/step)),pts=[];
   for(let i=0;i<nx;i++)pts.push([x+w*i/nx,y+off(i)]);for(let i=0;i<ny;i++)pts.push([x+w-off(i),y+h*i/ny]);for(let i=0;i<nx;i++)pts.push([x+w-w*i/nx,y+h-off(i)]);for(let i=0;i<ny;i++)pts.push([x+off(i),y+h-h*i/ny]);
-  g.beginPath();pts.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]));g.closePath()}
-// Live preview of the chosen effect on the area you have selected
-function fxPreview(r){if(vmode==='video'||fxs.id==='none'||r.w<2||r.h<2)return;const k=K(),f=FXAPPLY(FXBLANK(),fxs.id,fxs.p),b=(f.border||0)/k,R=(f.radius||0)/k,E=f.edge;
-  g.save();
-  if(f.shadow){g.save();g.shadowColor='rgba(0,0,0,.5)';g.shadowBlur=(f.shadowBlur||24)/k;g.shadowOffsetY=8/k;g.fillStyle='#fff';if(E)edgeP(r.x,r.y,r.w,r.h,E,k);else rrPath(r.x,r.y,r.w,r.h,R);g.fill();g.restore()}
-  if(b&&!E){rrPath(r.x-b,r.y-b,r.w+b*2,r.h+b*2,R+(R?b:0));g.fillStyle=f.borderColor;g.fill()}
-  if(E)edgeP(r.x,r.y,r.w,r.h,E,k);else rrPath(r.x,r.y,r.w,r.h,R);g.clip();
-  const fl=FXFILTER(f.adj);if(fl!=='none')g.filter=fl.replace(/blur\(([\d.]+)px\)/,(m,v)=>`blur(${v/k}px)`);
-  g.drawImage(img,r.x*k,r.y*k,r.w*k,r.h*k,r.x,r.y,r.w,r.h);g.filter='none';
-  if(f.vig){const gr=g.createRadialGradient(r.x+r.w/2,r.y+r.h/2,Math.min(r.w,r.h)*.25,r.x+r.w/2,r.y+r.h/2,Math.hypot(r.w,r.h)/2);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,`rgba(0,0,0,${f.vig/100*.85})`);g.fillStyle=gr;g.fillRect(r.x,r.y,r.w,r.h)}
+  if(!keep)g.beginPath();pts.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]));g.closePath()}
+function strokeB(f,r,b,inside,style){g.save();g.strokeStyle=f.borderColor;
+  const ring=(lw,off)=>{const d=inside?off:-off;if(r.w-2*d<=0||r.h-2*d<=0)return;g.lineWidth=lw;cornerP(r.x+d,r.y+d,r.w-2*d,r.h-2*d,f,-d);g.stroke()};
+  if(style==='double'){const t=Math.max(1,b/3);ring(t,t/2);ring(t,b-t/2)}
+  else{if(style==='dashed')g.setLineDash([b*2.5,b*1.5]);if(style==='dotted'){g.lineCap='round';g.setLineDash([.01,b*2])}ring(b,b/2)}
   g.restore()}
-function draw(){if(!ready)return;g.clearRect(0,0,W,H);g.drawImage(img,0,0,W,H);g.fillStyle='rgba(0,0,0,.45)';
+// Live preview of the chosen effects on the area you have selected
+let fxGuide=null;
+function fxPreview(r){fxGuide=null;if(noFx()||!fxl.length||r.w<2||r.h<2)return;const k=K(),f0=FXAPPLYALL(FXBLANK(),fxl),E=f0.edge,inside=f0.bPlace==='inside',bs=f0.bStyle||'solid',b=(+f0.border||0)/k,ob=inside?0:b;
+  const f={...f0,radius:(+f0.radius||0)/k,radii:f0.radii?f0.radii.map(v=>(+v||0)/k):null};
+  g.save();
+  // the parts of the selection a rounded corner or torn edge cuts away are dimmed like the rest of the screen
+  if(E||(f.radii||[f.radius]).some(v=>v>0)){g.beginPath();g.rect(r.x,r.y,r.w,r.h);if(E)edgeP(r.x,r.y,r.w,r.h,E,k,true);else cornerP(r.x,r.y,r.w,r.h,f,0,true);g.fillStyle='rgba(0,0,0,.45)';g.fill('evenodd')}
+  if(f.shadow){g.save();const sc=/^#[0-9a-f]{6}$/i.test(f.shadowColor||'')?f.shadowColor:'#000000';g.shadowColor=`rgba(${[1,3,5].map(i=>parseInt(sc.slice(i,i+2),16)).join(',')},${f.shadowOp!=null?+f.shadowOp:.38})`;g.shadowBlur=(+f.shadowBlur||24)/k;g.shadowOffsetX=(+f.shadowX||0)/k;g.shadowOffsetY=(f.shadowY!=null?+f.shadowY:8)/k;
+    g.fillStyle='#fff';if(E)edgeP(r.x,r.y,r.w,r.h,E,k);else cornerP(r.x-ob,r.y-ob,r.w+ob*2,r.h+ob*2,f,ob);g.fill();g.restore()}
+  if(ob&&!E&&bs==='solid'){cornerP(r.x-ob,r.y-ob,r.w+ob*2,r.h+ob*2,f,ob);g.fillStyle=f.borderColor;g.fill()}
+  g.save();if(E)edgeP(r.x,r.y,r.w,r.h,E,k);else cornerP(r.x,r.y,r.w,r.h,f,0);g.clip();
+  const fl=FXFILTER(f.adj);if(fl!=='none')g.filter=fl.replace(/blur\(([\d.]+)px\)/,(m,v)=>`blur(${v/k}px)`);
+  {const ik=IK();g.drawImage(img,r.x*ik,r.y*ik,r.w*ik,r.h*ik,r.x,r.y,r.w,r.h)}g.filter='none';
+  FXVIG(g,r.x,r.y,r.w,r.h,f);g.restore();
+  if(b&&!E&&(inside||bs!=='solid'))strokeB(f,r,b,inside,bs);
+  g.restore();
+  // 10.4.12: rounded corners get a dotted guide (white over dark) showing exactly where each corner is cut; it is drawn
+  // after the selection outline (draw() calls fxGuide) so the outline does not cover it
+  const R=f.radii||[f.radius,f.radius,f.radius,f.radius];if(!E&&R.some(v=>v>0))fxGuide=()=>{g.save();g.lineWidth=1.5;g.setLineDash([3,3]);cornerP(r.x+.75,r.y+.75,r.w-1.5,r.h-1.5,f,0);g.strokeStyle='rgba(0,0,0,.8)';g.stroke();g.lineDashOffset=3;g.strokeStyle='#ffffff';g.stroke();g.restore()}}
+function draw(){if(!ready){if(visOn){g.clearRect(0,0,W,H);g.fillStyle=`rgba(0,0,0,${dimA})`;const r=start?norm(start,cur):null;g.beginPath();g.rect(0,0,W,H);if(r&&r.w>1&&r.h>1){g.rect(r.x,r.y,r.w,r.h);g.fill('evenodd');g.strokeStyle='#2db3a0';g.lineWidth=1.5;g.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1)}else g.fill()}return}g.clearRect(0,0,W,H);g.drawImage(img,0,0,W,H);g.fillStyle=`rgba(0,0,0,${dimA})`;
   const r=state==='adjust'?sel:(start?norm(start,cur):null);
-  if(r&&r.w>1&&r.h>1){g.beginPath();g.rect(0,0,W,H);g.rect(r.x,r.y,r.w,r.h);g.fill('evenodd');fxPreview(r);
-    g.strokeStyle='#2db3a0';g.lineWidth=1.5;if(state==='adjust'&&isFull()){g.lineWidth=3;g.setLineDash([10,7]);g.strokeRect(4,4,W-8,H-8);g.setLineDash([])}else g.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1);
+  if(r&&r.w>1&&r.h>1){g.beginPath();g.rect(0,0,W,H);g.rect(r.x,r.y,r.w,r.h);g.fill('evenodd');try{fxPreview(r)}catch(e){fxGuide=null;console.error(e)}g.setTransform(dpr,0,0,dpr,0,0);g.globalAlpha=1;g.filter='none';g.shadowColor='transparent';g.setLineDash([]);
+    g.strokeStyle='#2db3a0';g.lineWidth=1.5;if(state==='adjust'&&isFull()){g.lineWidth=3;g.setLineDash([10,7]);g.strokeRect(4,4,W-8,H-8);g.setLineDash([])}else g.strokeRect(r.x+.5,r.y+.5,r.w-1,r.h-1);if(fxGuide)fxGuide();
     const k=K(),label=`${Math.round(r.w*k)} × ${Math.round(r.h*k)}`;g.font='600 12px "Cascadia Mono",Consolas,monospace';const tw=g.measureText(label).width+14;let ly=r.y-26;if(ly<4)ly=r.y+6;
     g.fillStyle='rgba(22,24,26,.92)';g.fillRect(r.x,ly,tw,22);g.fillStyle='#e8eaec';g.fillText(label,r.x+7,ly+15);
     if(state==='adjust'){for(const [,x,y] of handles(r)){g.fillStyle='#ffffff';g.strokeStyle='#2db3a0';g.lineWidth=1.5;g.fillRect(x-HS,y-HS,HS*2,HS*2);g.strokeRect(x-HS+.5,y-HS+.5,HS*2-1,HS*2-1)}}}
   else{g.fillRect(0,0,W,H);g.strokeStyle='rgba(45,179,160,.9)';g.lineWidth=1;g.beginPath();g.moveTo(cur.x+.5,0);g.lineTo(cur.x+.5,H);g.moveTo(0,cur.y+.5);g.lineTo(W,cur.y+.5);g.stroke()}
   if(state==='drag'||act){// magnifier loupe
     const L=120,z=8,k=K(),src=L/z;let lx=cur.x+20,ly2=cur.y+20;if(lx+L>W)lx=cur.x-20-L;if(ly2+L+22>H)ly2=cur.y-20-L-22;
-    g.save();g.imageSmoothingEnabled=false;g.beginPath();g.rect(lx,ly2,L,L);g.clip();g.drawImage(img,(cur.x-src/2)*k,(cur.y-src/2)*k,src*k,src*k,lx,ly2,L,L);g.restore();
+    g.save();g.imageSmoothingEnabled=false;g.beginPath();g.rect(lx,ly2,L,L);g.clip();{const ik=IK();g.drawImage(img,(cur.x-src/2)*ik,(cur.y-src/2)*ik,src*ik,src*ik,lx,ly2,L,L)}g.restore();
     g.strokeStyle='#e8eaec';g.lineWidth=2;g.strokeRect(lx,ly2,L,L);g.strokeStyle='rgba(229,72,59,.9)';g.lineWidth=1;g.beginPath();g.moveTo(lx+L/2,ly2);g.lineTo(lx+L/2,ly2+L);g.moveTo(lx,ly2+L/2);g.lineTo(lx+L,ly2+L/2);g.stroke();
     g.fillStyle='rgba(22,24,26,.92)';g.fillRect(lx,ly2+L,L,22);g.fillStyle='#e8eaec';g.font='12px "Cascadia Mono",Consolas,monospace';g.fillText(`${Math.round(cur.x*k)}, ${Math.round(cur.y*k)}`,lx+7,ly2+L+15)}
   placeBar()}
@@ -134,7 +189,7 @@ addEventListener('mousemove',e=>{const p={x:e.clientX,y:e.clientY};cur=p;
   else c.style.cursor='crosshair';
   draw()});
 addEventListener('mouseup',e=>{if(act){act=null;c.style.cursor='move';draw();return}if(!start)return;const r=norm(start,cur);start=null;
-  sel=(r.w<4||r.h<4)?{x:0,y:0,w:W,h:H}:r;if(sel.w>=W-1&&sel.h>=H-1&&$('area').value!=='text')$('area').value='screen';state='adjust';tip.style.display='none';draw();$('ok').focus()});
+  sel=(r.w<4||r.h<4)?{x:0,y:0,w:W,h:H}:r;if(sel.w>=W-1&&sel.h>=H-1&&!['text','scroll'].includes($('area').value))$('area').value='screen';state='adjust';tip.style.display='none';draw();$('ok').focus()});
 c.addEventListener('dblclick',e=>{if(state==='adjust'&&inside({x:e.clientX,y:e.clientY}))finish()});
 addEventListener('keydown',e=>{if((e.target.tagName==='INPUT'||e.target.tagName==='SELECT')&&e.key!=='Escape'&&e.key!=='Enter')return;if(e.target.tagName==='SELECT'&&e.key==='Enter')return;
   if(e.key==='Escape')cancel();

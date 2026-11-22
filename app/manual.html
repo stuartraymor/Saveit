@@ -15,7 +15,7 @@ button.go{background:#e5483b;border-color:#e5483b;color:#fff}
 </style></head><body>
 <div class="wid">
   <span class="dot" id="dot"></span>
-  <div class="txt"><span id="state">Capturing the visible area…</span><span id="hint">Scroll down through the page. Click Capture when you reach the end.</span></div>
+  <div class="txt"><span id="state">Capturing the visible area…</span><span id="hint">Scroll the page inside the outline, up or down. Click Capture when you have it all.</span></div>
   <span class="tm" id="size"></span>
   <button class="go" id="finish" title="Finish and open the long screenshot">Capture</button><button id="cancel" title="Close without capturing">Cancel</button>
 </div>
@@ -23,16 +23,17 @@ button.go{background:#e5483b;border-color:#e5483b;color:#fff}
 const $=id=>document.getElementById(id);
 for(const cmd of ['finish','cancel'])$(cmd).onclick=()=>{if(cmd==='finish'){$('finish').disabled=true;$('cancel').disabled=true}window.manual.send(cmd)};
 const TEXT={
-  initial:['Ready','Scroll down through the page. Click Capture when you reach the end.',''],
+  initial:['Ready','Scroll the page inside the outline, up or down. Click Capture when you have it all.',''],
   same:null,waiting:null,blank:null,
-  collecting:['Adding new content','Keep scrolling down, or click Capture to finish.',''],
-  revisiting:['Already captured here','Scrolling back up adds nothing. Scroll below the end to add more.','warn'],
-  lost:['Can’t line this up','Scroll back to a part already captured, then scroll down more slowly.','bad'],
+  collecting:['Adding new content','Keep scrolling, or click Capture to finish.',''],
+  revisiting:['Already captured here','Scroll past the top or the bottom of what you have to add more.','warn'],
+  lost:['Can’t line this up','Scroll back to a part already captured, then scroll on more slowly.','bad'],
   full:['Maximum length reached','Click Capture to keep what was captured.','warn'],
   finalizing:['Putting the picture together…','',''],
   error:['Capture problem','', 'bad']};
 window.manual.onStatus(s=>{if(typeof s==='string'){$('hint').textContent=s;return}
   const t=TEXT[s.state];if(t){$('state').textContent=t[0];$('hint').textContent=s.state==='error'?(s.message||'Saveit could not read the screen.'):t[1];$('dot').className='dot'+(t[2]?' '+t[2]:'')}
+  if(s.state==='error'){$('finish').disabled=false;$('cancel').disabled=false} /* 10.5.3: a problem while finishing no longer leaves both buttons off */
   if(s.height)$('size').textContent=s.height.toLocaleString()+' px'});
 addEventListener('keydown',e=>{if(e.key==='Escape')$('cancel').click();if(e.key==='Enter')$('finish').click()});
 </script>

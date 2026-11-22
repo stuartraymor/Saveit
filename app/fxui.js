@@ -1,25 +1,25 @@
-// Effect picker: a dropdown plus a small settings button that pops up the controls for the chosen effect.
+// Capture effect picker: rows of effects, each with its settings inline, that stack (used by the capture bar).
 window.FXUI={
- mount(sel,gear,state,onChange,onToggle){
-  if(!document.getElementById('fxui-css')){const st=document.createElement('style');st.id='fxui-css';st.textContent=`
-  .fxpop{position:fixed;z-index:9999;min-width:230px;background:#16181a;color:#e8eaec;border:1px solid #3a3f45;border-radius:10px;padding:10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.55);font:12px "Segoe UI",system-ui,sans-serif;display:none}
-  .fxpop.on{display:block}.fxpop h4{margin:0 0 8px;font-size:12px}
-  .fxpop .r{display:flex;align-items:center;gap:8px;margin:6px 0}.fxpop .r span:first-child{width:62px;color:#b4bac0}.fxpop .r input[type=range]{flex:1;min-width:0}
-  .fxpop .v{width:30px;text-align:right;font-family:Consolas,monospace;color:#9aa1a8}.fxpop select{background:#26292d;color:#e8eaec;border:1px solid #3a3f45;border-radius:6px;padding:3px}
-  .fxpop .h{color:#9aa1a8}`;document.head.appendChild(st)}
-  sel.innerHTML=FXDEFS.map(d=>`<option value="${d.id}">${d.label}</option>`).join('');
-  const pop=document.createElement('div');pop.className='fxpop';document.body.appendChild(pop);
-  const def=()=>FXDEFS.find(d=>d.id===state.id)||FXDEFS[0];
-  const close=()=>{if(pop.classList.contains('on')){pop.classList.remove('on');onToggle&&onToggle(false)}};
-  const place=()=>{const r=gear.getBoundingClientRect(),w=pop.offsetWidth||240;pop.style.left=Math.max(6,Math.min(innerWidth-w-6,r.left))+'px';pop.style.top=(r.bottom+6)+'px'};
-  function build(){const d=def();sel.value=d.id;gear.disabled=!d.params.length;gear.title=d.params.length?'Settings for this effect':'This effect has no settings';
-   pop.innerHTML=`<h4>${d.label}</h4>`+(d.params.length?d.params.map(q=>{const v=state.p[q.k]!=null?state.p[q.k]:q.def;
-    if(q.type==='color')return`<div class="r"><span>${q.label}</span><input type="color" data-k="${q.k}" value="${v}"></div>`;
-    if(q.type==='select')return`<div class="r"><span>${q.label}</span><select data-k="${q.k}">${q.options.map(([a,b])=>`<option value="${a}" ${a===v?'selected':''}>${b}</option>`).join('')}</select></div>`;
-    return`<div class="r"><span>${q.label}</span><input type="range" data-k="${q.k}" min="${q.min}" max="${q.max}" value="${v}"><span class="v">${v}</span></div>`}).join(''):'<p class="h">Nothing to adjust.</p>');
-   pop.querySelectorAll('[data-k]').forEach(el=>{const h=()=>{state.p[el.dataset.k]=el.type==='range'?+el.value:el.value;if(el.type==='range')el.nextElementSibling.textContent=el.value;onChange(state)};el.oninput=h;el.onchange=h})}
-  sel.onchange=()=>{state.id=sel.value;state.p=FXDEFAULTS(state.id);build();onChange(state);if(def().params.length){pop.classList.add('on');place();onToggle&&onToggle(true)}else close()};
-  gear.onclick=e=>{e.stopPropagation();if(gear.disabled)return;const on=!pop.classList.contains('on');if(on){build();pop.classList.add('on');place()}else pop.classList.remove('on');onToggle&&onToggle(on)};
-  document.addEventListener('mousedown',e=>{if(!pop.contains(e.target)&&e.target!==gear&&e.target!==sel)close()},true);
+ // 10.4.12: effects in rows (capture bar under the selection): each row is an effect dropdown with its settings beside
+ // it and a remove button; "Add effect" at the bottom right adds another row, so effects stack (Black & white + Border).
+ stack(host,onChange){let rows=[{id:'none',p:{}}];
+  const esc=v=>String(v).replace(/"/g,'&quot;');
+  const ctl=(q,v,i)=>{const a=`data-i="${i}" data-k="${q.k}" aria-label="${q.label}"`;
+   if(q.type==='color')return`<input type="color" ${a} value="${esc(v)}">`;
+   if(q.type==='toggle')return`<input type="checkbox" class="fxtog" role="switch" ${a} ${v===false||v==='false'?'':'checked'}>`;
+   if(q.type==='select')return`<select ${a}>${q.options.map(([o,l])=>`<option value="${o}" ${o===v?'selected':''}>${l}</option>`).join('')}</select>`;
+   return`<input type="range" ${a} min="${q.min}" max="${q.max}" value="${v}"><span class="v">${v}</span>`};
+  const list=()=>rows.filter(r=>r.id!=='none').map(r=>({id:r.id,p:{...r.p}}));
+  const fire=()=>onChange(list());
+  function build(){const used=rows.map(r=>r.id),last=rows.length-1,canAdd=FXDEFS.some(d=>d.id!=='none'&&!used.includes(d.id));
+   host.innerHTML=rows.map((r,i)=>{const d=FXDEFS.find(x=>x.id===r.id)||FXDEFS[0];
+    return`<div class="r2 fxr" data-row="${i}"><select class="fxsel" data-i="${i}" title="Effect applied to this capture" aria-label="Effect ${i+1}">${FXDEFS.map(x=>`<option value="${x.id}" ${x.id===r.id?'selected':''} ${x.id!=='none'&&x.id!==r.id&&used.includes(x.id)?'disabled':''}>${x.label}</option>`).join('')}</select>`+
+     d.params.map(q=>`<span class="sep"></span><label class="fxp">${q.label} ${ctl(q,r.p[q.k]!=null?r.p[q.k]:q.def,i)}</label>`).join('')+
+     `<span class="fxsp"></span>${rows.length>1?`<button class="fxdel" data-i="${i}" title="Remove this effect" aria-label="Remove effect ${i+1}">✕</button>`:''}`+
+     (i===last?`<button class="fxadd" id="fxAdd" title="Add another effect on top of this one" ${canAdd&&r.id!=='none'?'':'disabled'}>+ Add effect</button>`:'')+`</div>`}).join('');
+   host.querySelectorAll('.fxsel').forEach(el=>el.onchange=()=>{const r=rows[+el.dataset.i];r.id=el.value;r.p=FXDEFAULTS(r.id);build();fire()});
+   host.querySelectorAll('[data-k]').forEach(el=>{const h=()=>{rows[+el.dataset.i].p[el.dataset.k]=el.type==='range'?+el.value:el.type==='checkbox'?el.checked:el.value;if(el.type==='range')el.nextElementSibling.textContent=el.value;fire()};el.oninput=h;el.onchange=h});
+   host.querySelectorAll('.fxdel').forEach(el=>el.onclick=()=>{rows.splice(+el.dataset.i,1);if(!rows.length)rows=[{id:'none',p:{}}];build();fire()});
+   const add=host.querySelector('#fxAdd');if(add)add.onclick=()=>{const u=rows.map(r=>r.id),d=FXDEFS.find(x=>x.id!=='none'&&!u.includes(x.id));if(!d)return;rows.push({id:d.id,p:FXDEFAULTS(d.id)});build();fire();const s=host.querySelectorAll('.fxsel');s[s.length-1].focus()}}
   build();
-  return{set(s){state.id=s&&s.id||'none';state.p=s&&s.p||FXDEFAULTS(state.id);build()},close,popEl:pop}}};
+  return{set(v){const l=FXLIST(v);rows=l.length?l:[{id:'none',p:{}}];build()},get:list}}};

@@ -7,7 +7,7 @@ html,body{margin:0;background:#16181a;overflow:hidden;font-family:"Segoe UI Vari
 select.dev{max-width:104px}
 .bar{align-items:center;gap:12px;padding:6px 10px}.lead{display:grid;grid-template-rows:28px 32px;row-gap:5px;margin-right:0}.lead .go{height:32px;padding:0 12px}
 .optcol{display:grid;grid-template-rows:28px 32px;row-gap:5px}.optrow{display:flex;align-items:center;gap:9px;white-space:nowrap}
-.seg button{height:26px;padding:0 10px}select{padding:2px 6px;height:28px}#area{max-width:118px}#fxGear,#camGear{height:28px;padding:0 8px}
+.seg button{height:26px;padding:0 10px}select{padding:2px 6px;height:28px}#area{max-width:118px}#camGear{height:28px;padding:0 8px}
 .lead{display:flex;flex-direction:column;gap:6px;margin-right:6px}.leadrow{display:flex;align-items:center;gap:10px}.lead .go{width:100%}
 .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;-webkit-app-region:drag}
 .brand i{width:22px;height:22px;border-radius:6px;background:#2db3a0;display:grid;place-items:center}
@@ -35,27 +35,25 @@ button.go{background:#e5483b;border-color:#e5483b;color:#fff}
   <label class="ck"><input type="checkbox" id="oCur"> Cursor</label>
   <label class="ck" title="Copy each capture or recording to the clipboard"><input type="checkbox" id="oClip"> Copy to clipboard</label>
   <span id="vidOpts" style="display:contents"><label class="ck" title="Record the sound your computer plays"><input type="checkbox" id="oSys"> System audio</label><label class="ck"><input type="checkbox" id="oMic"> Microphone</label><select class="dev" id="micDev" aria-label="Microphone device"></select><label class="ck"><input type="checkbox" id="oCam"> Webcam</label><select class="dev" id="camDev" aria-label="Webcam device"></select><button id="camGear" title="Webcam settings: shape, size, position, border" aria-label="Webcam settings">⚙</button></span>
-  <span id="imgOpts" style="display:contents"><label>Effect <select id="fxSel"></select></label><button id="fxGear" title="Settings for this effect" aria-label="Effect settings">⚙</button></span>
   <label>Delay <select id="delay"><option value="0">None</option><option value="3">3 s</option><option value="5">5 s</option><option value="10">10 s</option></select></label>
   
   <button id="hide" type="button" title="Close this bar. Saveit keeps running; click its tray icon to open the editor" aria-label="Close the capture bar">Close</button>
 </div>
-<script src="fxdefs.js"></script><script src="fxui.js"></script><link rel="stylesheet" href="capbar.css"><script src="devices.js"></script><script src="audiobar.js"></script><script src="camdraw.js"></script>
+<link rel="stylesheet" href="capbar.css"><script src="devices.js"></script><script src="audiobar.js"></script><script src="camdraw.js"></script>
 <script>
-const $=id=>document.getElementById(id);let vmode='image';const fx={id:'none',p:{}};
-function collect(){return{audio:ab?ab.get():null,mode:vmode,area:$('area').value,cursor:$('oCur').checked,clip:$('oClip').checked,sys:$('oSys').checked,sysAudio:$('oSys').checked,mic:$('oMic').checked,cam:$('oCam').checked,micId:dev.mic,camId:dev.cam,delay:$('delay').value,fx:{id:fx.id,p:fx.p}}}
-function resize(){const pop=document.querySelector('.fxpop.on'),r=pop?pop.getBoundingClientRect():null;const h=Math.max($('bar').offsetHeight,r?Math.ceil(r.bottom)+8:0),w=Math.max($('bar').offsetWidth,r?Math.ceil(r.right)+8:0);const lg=document.querySelector('.brand i').getBoundingClientRect();window.widget.size(w,h,lg.left,lg.top)}
-const ui=FXUI.mount($('fxSel'),$('fxGear'),fx,()=>{push()},()=>setTimeout(resize,30));
-function labels(){const v=vmode==='video',a=vmode==='audio';$('mImg').setAttribute('aria-pressed',vmode==='image');$('mVid').setAttribute('aria-pressed',v);$('mAud').setAttribute('aria-pressed',a);$('vidOpts').hidden=!v;$('imgOpts').hidden=v||a;
+const $=id=>document.getElementById(id);let vmode='image';
+function collect(){return{audio:ab?ab.get():null,mode:vmode,area:$('area').value,cursor:$('oCur').checked,clip:$('oClip').checked,sys:$('oSys').checked,sysAudio:$('oSys').checked,mic:$('oMic').checked,cam:$('oCam').checked,micId:dev.mic,camId:dev.cam,delay:$('delay').value}}
+function resize(){const h=$('bar').offsetHeight,w=$('bar').offsetWidth;const lg=document.querySelector('.brand i').getBoundingClientRect();window.widget.size(w,h,lg.left,lg.top)}
+function labels(){const v=vmode==='video',a=vmode==='audio';$('mImg').setAttribute('aria-pressed',vmode==='image');$('mVid').setAttribute('aria-pressed',v);$('mAud').setAttribute('aria-pressed',a);$('vidOpts').hidden=!v;
   $('bar').classList.toggle('amode',a);$('area').closest('label').hidden=a;$('oCur').closest('label').hidden=a;$('oClip').closest('label').hidden=a||v;if(ab)ab.setActive(a);$('oCur').disabled=v;$('oCur').parentElement.title=v?'Windows always includes the mouse pointer in screen recordings. This option applies to screenshots.':'Show the mouse pointer in screenshots';
   for(const val of['steps','text','scroll']){const o=$('area').querySelector('option[value="'+val+'"]');o.hidden=o.disabled=v}if(v&&['steps','text','scroll'].includes($('area').value))$('area').value='region';
   $('okLbl').textContent=a?'Record audio':$('area').value==='text'?'Grab text':(v?'Record':'Capture');$('ok').classList.toggle('rec',v||a);
   {const svg=$('ok').querySelector('svg'),want=a?AUDIOBAR.MIC_SVG:OK_SVG;if(svg.outerHTML!==want)svg.outerHTML=want}$('ok').title=a?'Record audio with the microphones chosen beside it':'';setTimeout(resize,30)}
 const OK_SVG=$('ok').querySelector('svg').outerHTML;let ab=null;
 function push(){window.widget.opts(collect())}
-window.widget.onInit(o=>{o=o||{};vmode=['video','audio'].includes(o.mode)?o.mode:'image';if(o.audio&&ab)ab.set(o.audio);$('area').value=o.area||'region';$('oCur').checked=!!o.cursor;$('oClip').checked=!!o.clip;$('oSys').checked=o.sys!==false;$('oMic').checked=!!o.mic;$('oCam').checked=!!o.cam;$('delay').value=o.delay||'0';ui.set(o.fx||{id:'none',p:{}});dev.mic=o.micId||'';dev.cam=o.camId||'';labels();refreshDevices()});
+window.widget.onInit(o=>{o=o||{};vmode=['video','audio'].includes(o.mode)?o.mode:'image';if(o.audio&&ab)ab.set(o.audio);$('area').value=o.area||'region';$('oCur').checked=!!o.cursor;$('oClip').checked=!!o.clip;$('oSys').checked=o.sys!==false;$('oMic').checked=!!o.mic;$('oCam').checked=!!o.cam;$('delay').value=o.delay||'0';dev.mic=o.micId||'';dev.cam=o.camId||'';labels();refreshDevices()});
 $('mImg').onclick=()=>{vmode='image';labels();push()};$('mVid').onclick=()=>{vmode='video';labels();push()};$('mAud').onclick=()=>{vmode='audio';labels();push()};
-document.querySelectorAll('input,select').forEach(e=>{if(e.id!=='fxSel'&&!e.classList.contains('dev'))e.addEventListener('change',()=>{labels();push()})});
+document.querySelectorAll('input,select').forEach(e=>{if(!e.classList.contains('dev'))e.addEventListener('change',()=>{labels();push()})});
 // Device pickers: choosing a device also turns that input on. Names appear once access is granted.
 const dev={mic:'',cam:''};
 async function refreshDevices(){if(vmode!=='video')return;for(const [type,box] of [['mic','oMic'],['cam','oCam']]){const res=await DEVICES.list(type,$(box).checked);dev[type]=DEVICES.fill($(type+'Dev'),type,res,dev[type])}setTimeout(resize,30)}
@@ -68,8 +66,9 @@ addEventListener('storage',e=>{if(e.key!=='saveit.cam')return;const id=CAMDRAW.l
 {const bar=$('bar'),col=document.createElement('div'),r1=document.createElement('div'),r2=document.createElement('div'),areaL=$('area').closest('label'),delayL=$('delay').closest('label'),curL=$('oCur').closest('label'),clipL=$('oClip').closest('label');
  col.className='optcol';r1.className='optrow';r2.className='optrow';col.append(r1,r2);bar.append(col);
  ab=AUDIOBAR.mount(()=>{push();setTimeout(resize,30)});const E=ab.els;
- const place=()=>{if(vmode==='audio'){r1.append(document.querySelector('.seg'),E.mic1,E.add,areaL,curL,clipL);r2.append(E.mic2,E.sys,delayL,$('imgOpts'),$('vidOpts'),$('hide'));setTimeout(resize,30);return}
-  r1.append(document.querySelector('.seg'),areaL,curL,clipL);if(vmode==='video'){r1.append(delayL);r2.append($('vidOpts'))}else r2.append($('imgOpts'),delayL);r2.append(vmode==='video'?$('imgOpts'):$('vidOpts'));r1.append(E.mic1,E.add);r2.append(E.mic2,E.sys,$('hide'))};
+ const place=()=>{if(vmode==='audio'){r1.append(document.querySelector('.seg'),E.mic1,E.add,areaL,curL,clipL);r2.append(E.mic2,E.sys,delayL,$('vidOpts'),$('hide'));setTimeout(resize,30);return}
+  // 10.4.12: Image/Video/Audio, Cursor and Copy to clipboard on the top row; Selection beside Delay underneath (same as the editor)
+  r1.append(document.querySelector('.seg'),curL,clipL);if(vmode==='video'){r1.append(areaL,delayL);r2.append($('vidOpts'))}else{r2.append(areaL,delayL);r2.append($('vidOpts'))}r1.append(E.mic1,E.add);r2.append(E.mic2,E.sys,$('hide'))};
  for(const b of [E.add,E.mic2.querySelector('.amic-x')])b.addEventListener('click',()=>setTimeout(resize,30));
  const labelsBefore=labels;labels=function(){labelsBefore();place()};place()}navigator.mediaDevices.addEventListener('devicechange',refreshDevices);
 $('ok').onclick=()=>window.widget.go(collect());$('ed').onclick=()=>window.widget.editor();$('hide').onclick=()=>window.widget.hide();

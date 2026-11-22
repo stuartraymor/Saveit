@@ -151,7 +151,7 @@ function pack(e){return e?JSON.parse(JSON.stringify(e)):null}
 root.VEditCore={clipLen,clipEnd,total,transition,TRANS,VFX,vfxState,BGS,LAYOUTS,LOOKS,lookRects,EQ_PRESETS,defFx,ensureProject,fillDefaults};
 
 // ---------- waveform peaks ----------
-async function computePeaks(blob){try{if(!blob||blob.size>90*1048576)return null;const ac=new (window.AudioContext||window.webkitAudioContext)();const buf=await ac.decodeAudioData(await blob.arrayBuffer());ac.close&&ac.close();
+async function computePeaks(blob){try{if(!blob||blob.size>90*1048576)return null;const ac=new (window.AudioContext||window.webkitAudioContext)();let buf;try{buf=await ac.decodeAudioData(await blob.arrayBuffer())}finally{try{ac.close&&ac.close()}catch(_){}} /* 10.5.4: also closed when the video has no sound (one was left open per video) */
   const per=40,n=Math.max(1,Math.ceil(buf.duration*per)),out=new Float32Array(n),ch=buf.getChannelData(0),step=Math.max(1,Math.floor(buf.sampleRate/per));
   for(let i=0;i<n;i++){let m=0;const s=i*step,eEnd=Math.min(ch.length,s+step);for(let j=s;j<eEnd;j+=Math.max(1,step>>6)){const a=Math.abs(ch[j]);if(a>m)m=a}out[i]=m}return out}catch(_){return null}}
 
