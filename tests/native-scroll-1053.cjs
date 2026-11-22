@@ -66,5 +66,6 @@ const { launch } = require('./native-driver.cjs'); const path = require('path'),
     check('outline and bar are gone afterwards', !(await frame()) && !(await t.find('manual.html', 3)));
     check('result opens in the editor', await p.evaluate(() => !!window.__wf.cur && window.__wf.cur.kind === 'image'));
     check('no page errors', !t.errors.length, t.errors.join(' | ').slice(0, 300));
+  } catch (e) { check('test ran to the end', false, String(e && e.stack || e).slice(0, 500));
   } finally { await t.finish(); }
 })().catch(e => { console.error(e); process.exit(1); });

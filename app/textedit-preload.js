@@ -13,7 +13,7 @@ contextBridge.exposeInMainWorld('te', {
   newPage: o => ipcRenderer.invoke('te-new', o),
   openFile: () => ipcRenderer.invoke('te-open-file'),
   ctx: o => ipcRenderer.send('te-ctx', o),
-  print: () => ipcRenderer.send('te-print'),
+  print: hf => ipcRenderer.send('te-print', hf),
   editor: () => ipcRenderer.send('te-editor'),
   grab: () => ipcRenderer.send('te-grab')
 });

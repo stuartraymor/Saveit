@@ -102,5 +102,6 @@ const { launch } = require('./native-driver.cjs'); const path = require('path'),
     const side0 = await w.evaluate(k => window.te.pick(k).then(d => { load(d); return { pic: !document.getElementById('pic').hidden, text: document.getElementById('gtText').value }; }), key0);
     check('The first page still has its grabbed picture and text beside it', side0.pic && /Desk lamp/.test(side0.text));
     check('no page errors', !t.errors.length, t.errors.join(' | ').slice(0, 400));
+  } catch (e) { check('test ran to the end', false, String(e && e.stack || e).slice(0, 500));
   } finally { await t.finish(); }
 })().catch(e => { console.error(e); process.exit(1); });

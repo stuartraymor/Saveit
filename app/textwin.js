@@ -129,14 +129,23 @@ module.exports = function textWindow({ ipcMain, BrowserWindow, Menu, clipboard, 
     let out;
     if (ext === 'pdf') {
       const p = page || {}, size = { letter: 'Letter', a4: 'A4', legal: 'Legal', tabloid: 'Tabloid', a3: 'A3', a5: 'A5', executive: p.orientation === 'landscape' ? { width: 10.5, height: 7.25 } : { width: 7.25, height: 10.5 } }[p.size] || 'Letter', m = Math.max(0, Math.min(3, +p.margin || 1));
-      out = await tw.webContents.printToPDF({ pageSize: size, landscape: p.orientation === 'landscape', printBackground: true, margins: { top: m, bottom: m, left: m, right: m } });
+      // 10.5.4: header, footer and page numbers on every page
+      const hf = p.hf && typeof p.hf === 'object' ? p.hf : {}, he = v => str(v, 300).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const numHtml = hf.fmt === 'nofm' ? 'Page <span class="pageNumber"></span> of <span class="totalPages"></span>' : '<span class="pageNumber"></span>';
+      const bar = (left, mid, right) => `<div style="font-size:9pt;font-family:'Segoe UI',sans-serif;color:#555;width:100%;padding:0 ${m}in;display:flex;justify-content:space-between;-webkit-print-color-adjust:exact"><span style="flex:1;text-align:left">${left}</span><span style="flex:1;text-align:center">${mid}</span><span style="flex:1;text-align:right">${right}</span></div>`;
+      const any = !!(str(hf.header, 300) || str(hf.footer, 300) || ['bc', 'br', 'tr'].includes(hf.num));
+      // 10.5.4: the window's dark colour was painted into the margins of every PDF page; it is white while the PDF is made
+      try { tw.setBackgroundColor('#ffffff'); } catch (_) {}
+      try { out = await tw.webContents.printToPDF({ pageSize: size, landscape: p.orientation === 'landscape', printBackground: true, margins: { top: m, bottom: m, left: m, right: m },
+        ...(any ? { displayHeaderFooter: true, headerTemplate: bar(he(hf.header), '', hf.num === 'tr' ? numHtml : ''), footerTemplate: bar(he(hf.footer), hf.num === 'bc' ? numHtml : '', hf.num === 'br' ? numHtml : '') } : {}) }); }
+      finally { try { tw.setBackgroundColor('#16181a'); } catch (_) {} }
     } else if (ext === 'docx') { if (!(data instanceof Uint8Array)) throw Error('Nothing to save.'); out = Buffer.from(data); }
     else if (ext === 'txt' || ext === 'md') out = '﻿' + str(data, 4e6).replace(/\r?\n/g, '\r\n');
     else out = str(data, 8e7);
     await fs.promises.writeFile(r.filePath, out, typeof out === 'string' ? 'utf8' : undefined);
     return r.filePath;
   });
-  ipcMain.on('te-print', e => { if (fromTw(e)) tw.webContents.print({ silent: false, printBackground: false }); });
+  ipcMain.on('te-print', (e, hf) => { if (!fromTw(e)) return; const o = { silent: false, printBackground: false }, h = str(hf && hf.header, 300), f = str(hf && hf.footer, 300); if (h) o.header = h; if (f) o.footer = f; tw.webContents.print(o); });
   ipcMain.on('te-editor', e => { if (fromTw(e)) showEditor(); });
   ipcMain.on('te-grab', e => { if (!fromTw(e)) return; const w = editor(); if (!w || w.isDestroyed()) return; sideFor = current ? current.key : null; sideAt = Date.now(); w.webContents.send('grab-text-now', { side: !!sideFor }); });
   return {

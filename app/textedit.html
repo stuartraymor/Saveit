@@ -49,6 +49,24 @@ select,input[type=text],input[type=search],input[type=url]{background:var(--pane
 .page img{max-width:100%;vertical-align:bottom}
 .page .pgbreak{display:block;height:0;border-top:1px dashed #9aa1a8;margin:14px 0;position:relative;user-select:none}
 .page .pgbreak::after{content:"Page break";position:absolute;left:50%;top:-8px;transform:translateX(-50%);background:#fff;color:#7a828a;font:11px "Segoe UI",sans-serif;padding:0 6px}
+/* 10.5.4: header and footer preview, Title/Subtitle/Heading 4, contents, footnotes, format painter */
+#doc{position:relative}
+#doc::before,#doc::after{position:absolute;left:var(--pm,96px);right:var(--pm,96px);color:#8a9199;font:9pt "Segoe UI",sans-serif;white-space:pre;overflow:hidden;text-overflow:ellipsis;pointer-events:none;user-select:none}
+#doc::before{content:attr(data-hdr);top:calc(var(--pm,96px) / 2 - 8px)}
+#doc::after{content:attr(data-ftr);bottom:calc(var(--pm,96px) / 2 - 8px)}
+#doc.numright::after{text-align:right}#doc.numcentre::after{text-align:center}
+#doc.painting{cursor:copy}
+.page .pgset{display:none}
+.page h4{font-size:11.5pt;margin:.3em 0;font-style:italic}
+.page .p-title{font-size:26pt;font-weight:600;line-height:1.2;margin:.15em 0 .1em}
+.page .p-subtitle{font-size:14pt;color:#5a6168;margin:0 0 .5em}
+.page .toc{border:1px solid #d5dae0;border-radius:4px;padding:8px 14px;margin:8px 0;white-space:normal;user-select:none}
+.page .toc .toc-t{font-weight:700;font-size:13pt;margin-bottom:4px}
+.page .toc>div:not(.toc-t){cursor:pointer;color:#0b4f9c;padding:1px 0}.page .toc>div:not(.toc-t):hover{text-decoration:underline}
+.page .toc .toc-2{margin-left:.3in}.page .toc .toc-3{margin-left:.6in}.page .toc .toc-4{margin-left:.9in}
+.page sup.fnref{color:#0b4f9c;cursor:default;font-size:.7em;user-select:all}
+.page .fnotes{border-top:1px solid #a0a6ad;margin-top:24px;padding-top:6px;font-size:9.5pt}
+.page .fnotes .fn{margin:2px 0}.page .fnotes .fn-n{color:#5a6168}
 /* 10.5.3: text set in columns (Layout > Columns) and column breaks */
 .page .cols{column-gap:.5in;margin:0}
 .page .colbreak{display:block;height:0;border-top:1px dotted #9aa1a8;margin:10px 0;position:relative;user-select:none;break-after:column}
@@ -125,6 +143,8 @@ svg{width:15px;height:15px}
   #doc{box-shadow:none;margin:0;padding:0!important;width:auto!important;min-height:0!important;zoom:1!important;border-radius:0}
   #doc .pgbreak{break-after:page;border:0;margin:0}#doc .pgbreak::after{display:none}
   #doc .colbreak{border:0;margin:0}#doc .colbreak::after{display:none}
+  #doc::before,#doc::after{content:none!important}
+  #doc .toc{border:0;padding:0}#doc .toc>div:not(.toc-t){color:inherit}#doc sup.fnref{color:inherit}
   #doc mark.hit{background:none}
 }
 </style><style id="pagecss"></style></head>
@@ -153,7 +173,7 @@ svg{width:15px;height:15px}
   <button data-cmd="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
   <button data-cmd="redo" title="Redo (Ctrl+Y)" aria-label="Redo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
   <span class="sep"></span>
-  <select id="block" aria-label="Paragraph style" title="Paragraph style"><option value="div">Normal</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="blockquote">Quote</option><option value="pre">Code</option></select>
+  <select id="block" aria-label="Paragraph style" title="Paragraph style"><option value="div">Normal</option><option value="title">Title</option><option value="subtitle">Subtitle</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="h4">Heading 4</option><option value="blockquote">Quote</option><option value="pre">Code</option></select>
   <select id="font" aria-label="Font" title="Font" style="width:150px"><option value="">Font</option><option>Segoe UI</option><option>Calibri</option><option>Cambria</option><option>Arial</option><option>Verdana</option><option>Tahoma</option><option>Trebuchet MS</option><option>Georgia</option><option>Times New Roman</option><option>Garamond</option><option>Book Antiqua</option><option>Consolas</option><option>Courier New</option><option>Comic Sans MS</option></select>
   <select id="size" aria-label="Text size" title="Text size"><option value="">Size</option><option>8</option><option>9</option><option>10</option><option>10.5</option><option>11</option><option>12</option><option>14</option><option>16</option><option>18</option><option>20</option><option>24</option><option>28</option><option>32</option><option>36</option><option>48</option><option>72</option></select>
   <button id="grow" title="Bigger text (Ctrl+])" aria-label="Bigger text"><b>A</b><sup style="font-size:9px">+</sup></button>
@@ -168,6 +188,7 @@ svg{width:15px;height:15px}
   <span class="split"><button id="foreBtn" title="Text colour" aria-label="Text colour"><span class="swbar"><b>A</b><i id="foreBar" style="background:#c62828"></i></span></button><button id="foreMore" title="Choose text colour" aria-label="Choose text colour">▾</button></span>
   <span class="split"><button id="hiliBtn" title="Highlight" aria-label="Highlight"><span class="swbar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" style="width:13px;height:13px"><path d="m9 15 6-6 3 3-6 6H9z"/><path d="m15 9 3-3 3 3-3 3"/></svg><i id="hiliBar" style="background:#fff176"></i></span></button><button id="hiliMore" title="Choose highlight colour" aria-label="Choose highlight colour">▾</button></span>
   <input type="color" id="fore" class="hidecol" value="#c62828" aria-label="Text colour" tabindex="-1"><input type="color" id="hili" class="hidecol" value="#fff176" aria-label="Highlight colour" tabindex="-1">
+  <button id="painter" aria-pressed="false" title="Format painter: copy the look of the text the cursor is in, then drag over other text to give it the same look" aria-label="Format painter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="3" width="13" height="6" rx="1.5"/><path d="M17 6h3v6h-8v3"/><rect x="10.5" y="15" width="3" height="6" rx="1"/></svg></button>
   <button data-cmd="removeFormat" title="Clear formatting" aria-label="Clear formatting"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 5h12M12 5l-3 14M4 20 20 4"/></svg></button>
   <span class="sep"></span>
   <button data-cmd="justifyLeft" title="Align left (Ctrl+L)" aria-label="Align left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg></button>
@@ -190,6 +211,9 @@ svg{width:15px;height:15px}
   <button class="lbl" id="insBreak" title="Start a new page here when printed or saved (Ctrl+Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v5h12V3M6 21v-5h12v5M3 12h3M9 12h2M13 12h2M18 12h3"/></svg>Page break</button>
   <button class="lbl" id="insColBreak" title="Continue in the next column (Ctrl+Shift+Enter). For text set in columns."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v16M20 4v16M12 3v3M12 9v2M12 14v2M12 19v2"/></svg>Column break</button>
   <span class="sep"></span>
+  <button class="lbl" id="insToc" title="Insert a list of the headings in this page. Click it again to update the list.">Contents</button>
+  <button class="lbl" id="insNote" title="Add a footnote: a small number here and the note at the end of the page">Footnote</button>
+  <span class="sep"></span>
   <button class="lbl" id="insDate" title="Insert today's date">Date ▾</button>
   <button class="lbl" id="insSym" title="Insert a symbol">Ω Symbol ▾</button>
   <button class="lbl" id="insCheck" title="Insert a tick box (click it to tick)">☐ Tick box</button>
@@ -200,6 +224,7 @@ svg{width:15px;height:15px}
   <label class="f">Orientation <select id="pgOrient"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
   <label class="f">Margins <select id="pgMargin"><option value="0.5">Narrow (0.5 in)</option><option value="0.75">Moderate (0.75 in)</option><option value="1">Normal (1 in)</option><option value="1.5">Wide (1.5 in)</option><option value="custom">Custom…</option></select></label>
   <button class="lbl" id="colsBtn" title="Set the text in one, two or more columns. Select text first to change only that part."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h6M4 9h6M4 13h6M4 17h6M14 5h6M14 9h6M14 13h6M14 17h6"/></svg>Columns ▾</button>
+  <button class="lbl" id="hfBtn" title="Text at the top and bottom of every page, and page numbers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 17h8"/></svg>Header &amp; footer</button>
   <span class="sep"></span>
   <button id="wrap" aria-pressed="true" title="Wrap long lines">Wrap</button>
   <label class="f">Zoom <select id="zoom" aria-label="Zoom" title="Zoom (Ctrl+mouse wheel)"><option value="0.5">50%</option><option value="0.75">75%</option><option value="0.9">90%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option></select></label>
@@ -240,4 +265,5 @@ svg{width:15px;height:15px}
 </div>
 <script src="docx.js"></script>
 <script src="textedit.js"></script>
+<script src="textedit-more.js"></script>
 </body></html>

@@ -41,7 +41,7 @@ async function launch({ exe, out, extraMain = '', env = {} }) {
   const open = nm => app.windows().filter(w => !w.isClosed() && w.url().includes(nm));
   // A window of ours showing page `nm`. (Hidden spare windows also say they are visible, because background throttling is
   // off; ask the main process which ones are really shown.)
-  const find = async (nm, tries = 60) => { for (let i = 0; i < tries; i++) { const shown = await app.evaluate(({ BrowserWindow }, nm) => BrowserWindow.getAllWindows().filter(w => !w.isDestroyed() && w.isVisible() && w.webContents.getURL().includes(nm)).length, nm); if (shown && open(nm).length) return open(nm)[open(nm).length - 1]; await sleep(150); } return null; };
+  const find = async (nm, tries = 60) => { for (let i = 0; i < tries; i++) { const shown = await app.evaluate(({ BrowserWindow }, nm) => BrowserWindow.getAllWindows().filter(w => !w.isDestroyed() && w.isVisible() && w.webContents.getURL().includes(nm)).length, nm).catch(() => 0); /* Playwright can lose its hold for a moment while a window opens; ask again */ if (shown && open(nm).length) return open(nm)[open(nm).length - 1]; await sleep(150); } return null; };
   // the region selector that has its picture and is waiting for a selection
   const findOverlay = async () => { for (let i = 0; i < 100; i++) { for (const w of open('overlay.html')) if (await w.evaluate(() => typeof ready !== 'undefined' && ready && !sent).catch(() => false)) return w; await sleep(100); } return null; };
   const wins = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(w => ({ url: w.webContents.getURL().split('/').pop().slice(0, 40), title: w.getTitle(), visible: w.isVisible(), focused: w.isFocused(), b: w.getBounds() })));

@@ -111,8 +111,9 @@ let quitPending=null;
 function requestQuit(){
   // 10.5.3: Quit during a recording or Step Capture closed Saveit and lost the take; it now asks you to stop first
   if((recording||steps)&&win&&!win.isDestroyed()){const what=recording?'A recording is running. Stop it first, then quit Saveit.':'Step Capture is running. Stop it first, then quit Saveit.';try{if(tray&&process.platform==='win32')tray.displayBalloon({iconType:'warning',title:'Saveit is still capturing',content:what});else dialog.showMessageBox({type:'warning',message:'Saveit is still capturing',detail:what,buttons:['OK']})}catch(_){}return}
-  if(!win||win.isDestroyed()||quitPending){app.isQuitting=true;app.quit();return}quitPending=setTimeout(()=>{quitPending=null;showWindow()},5000);win.webContents.send('review-before-close')}
-ipcMain.on('review-close-ready',e=>{if(!win||e.sender!==win.webContents)return;if(quitPending){clearTimeout(quitPending);quitPending=null;app.isQuitting=true;app.quit();return}
+  if(!win||win.isDestroyed()||quitPending){app.isQuitting=true;app.quit();return}quitWanted=Date.now();quitPending=setTimeout(()=>{quitPending=null;showWindow()},5000);win.webContents.send('review-before-close')}
+let quitWanted=0;
+ipcMain.on('review-close-ready',e=>{if(!win||e.sender!==win.webContents)return;if(quitPending||(quitWanted&&Date.now()-quitWanted<60000)){clearTimeout(quitPending);quitPending=null;quitWanted=0;app.isQuitting=true;app.quit();return}
   win.hide();
   if (!trayTipShown && tray && process.platform === 'win32') {
     tray.displayBalloon({ iconType: 'info', title: 'Saveit is still running', content: 'Press Print Screen to capture. Right-click the tray icon to quit.' });

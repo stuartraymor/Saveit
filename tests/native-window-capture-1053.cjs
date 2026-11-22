@@ -54,5 +54,6 @@ const PS_SHOW = (hwnd, cmd) => cp.execFileSync('powershell', ['-NoProfile', '-Co
       check('a second capture while the picker is open is ignored', second.r === null && ovs === 0, JSON.stringify(second) + ' selection screens: ' + ovs);
       await pk.keyboard.press('Escape').catch(() => {}); const r = await cap; check('Esc in the picker cancels', r.r === null, JSON.stringify(r).slice(0, 80)); }
     check('no page errors', !t.errors.length, t.errors.join(' | ').slice(0, 300));
+  } catch (e) { check('test ran to the end', false, String(e && e.stack || e).slice(0, 500));
   } finally { for (const c of procs) try { c.kill(); } catch (_) {} await t.finish(); }
 })().catch(e => { console.error(e); process.exit(1); });

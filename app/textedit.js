@@ -13,6 +13,9 @@ const isGrab = () => !!(entry && entry.src);
 
 // ---------- safety: only plain document content gets into the page ----------
 const DROP = 'script,style,meta,link,iframe,frame,frameset,object,embed,applet,form,button,textarea,select,option,svg,math,base,template,video,audio,source,track,canvas,noscript,title,head';
+// classes the page itself uses (page and column breaks, columns, header/footer marker, styles, contents, footnotes)
+const KEEP_CLASS = new Set(['pgbreak', 'cols', 'colbreak', 'pgset', 'p-title', 'p-subtitle', 'toc', 'toc-t', 'toc-1', 'toc-2', 'toc-3', 'toc-4', 'fnref', 'fnotes', 'fn', 'fn-n']);
+const FIXED_CLASS = new Set(['pgbreak', 'colbreak', 'pgset', 'toc', 'fnref', 'fn-n']); // parts that are not typed into
 function sanitize(html, fromOutside) {
   const t = document.createElement('template'); t.innerHTML = String(html || '');
   t.content.querySelectorAll(DROP).forEach(x => x.remove());
@@ -21,8 +24,8 @@ function sanitize(html, fromOutside) {
       const n = a.name.toLowerCase(), v = a.value.trim();
       if (n.startsWith('on') || n === 'srcset' || n === 'formaction' || n === 'xmlns' || n.includes(':')) x.removeAttribute(a.name);
       else if ((n === 'href' || n === 'src') && /^\s*(javascript|vbscript|data:text)/i.test(v)) x.removeAttribute(a.name);
-      else if (n === 'class') { const keep = v.split(/\s+/).filter(c => c === 'pgbreak' || c === 'cols' || c === 'colbreak'); keep.length ? x.setAttribute('class', keep.join(' ')) : x.removeAttribute('class'); }
-      else if (n === 'id' || n === 'contenteditable' && !x.classList.contains('pgbreak') && !x.classList.contains('colbreak') || n === 'data-pick' || n === 'tabindex') x.removeAttribute(a.name);
+      else if (n === 'class') { const keep = v.split(/\s+/).filter(c => KEEP_CLASS.has(c)); keep.length ? x.setAttribute('class', keep.join(' ')) : x.removeAttribute('class'); }
+      else if (n === 'id' || n === 'contenteditable' && ![...x.classList].some(c => FIXED_CLASS.has(c)) || n === 'data-pick' || n === 'tabindex') x.removeAttribute(a.name);
     }
     if (x.tagName === 'INPUT' && x.type !== 'checkbox') x.remove();
     if (x.style) { x.style.removeProperty('position'); x.style.removeProperty('z-index'); if (fromOutside) { x.style.removeProperty('color'); x.style.removeProperty('background'); x.style.removeProperty('background-color'); x.style.removeProperty('font-family'); x.style.removeProperty('white-space'); } }
@@ -79,7 +82,7 @@ function load(d) {
   if (!d || !d.entry) return; hideImgSel(); entry = d.entry; dirty = !!entry.dirty; $('name').value = entry.name || 'Page';
   doc.innerHTML = entry.html ? sanitize(entry.html) : textToHtml(entry.text); $('loading').hidden = !entry.loading; doc.contentEditable = entry.loading ? 'false' : 'true';
   const b = $('banner'); b.hidden = !entry.empty; b.textContent = entry.empty ? 'No text was found in that area. Try Grab again with a tighter box around clear text, or type it in yourself.' : '';
-  $('picImg').classList.remove('full'); fillSide();
+  $('picImg').classList.remove('full'); fillSide(); if (typeof pageLoaded === 'function') pageLoaded();
   showPic(); brand(); fillHist(d.list || []); counts(); stateLabel(); closeFind(true);
   if (!entry.loading) { doc.focus(); if (isGrab() && !entry.libId) selectAll(); else caretToEnd(); }
   document.body.dataset.state = entry.loading ? 'loading' : 'ready';
@@ -167,7 +170,7 @@ function setSpacing(fn) { const bl = selectedBlocks(); if (!bl.length) return; f
 $('spacing').onclick = () => {
   const lh = v => () => setSpacing(b => { b.style.lineHeight = v; });
   menu($('spacing'), [['Single (1.0)', lh('1.15')], ['1.15', lh('1.3')], ['Normal (1.45)', lh('')], ['1.5', lh('1.7')], ['Double (2.0)', lh('2.3')], ['2.5', lh('2.85')], ['Triple (3.0)', lh('3.4')], null,
-    ['Add space before paragraph', () => setSpacing(b => { b.style.marginTop = '8pt'; })], ['Add space after paragraph', () => setSpacing(b => { b.style.marginBottom = '8pt'; })], ['Remove paragraph spacing', () => setSpacing(b => { b.style.marginTop = ''; b.style.marginBottom = ''; })]]);
+    ['Add space before paragraph', () => setSpacing(b => { b.style.marginTop = '8pt'; })], ['Add space after paragraph', () => setSpacing(b => { b.style.marginBottom = '8pt'; })], ['Remove paragraph spacing', () => setSpacing(b => { b.style.marginTop = ''; b.style.marginBottom = ''; })], ...(typeof indentMenuRows === 'function' ? indentMenuRows() : [])]);
 };
 
 // ---------- Insert tab ----------
@@ -528,7 +531,7 @@ window.te.onContext(d => {
   const img = sel.contains(el) ? selImg : el.tagName === 'IMG' && doc.contains(el) ? el : null;
   if (img) { if (img !== selImg) selectImg(img); rows.push({ head: 'Picture' }, ['Crop', startCrop], ['Rotate right', rotateImg], ['In line with text', () => replaceImg(selImg, imgHtml(selImg, { wrap: 'inline' }))], ['Wrap text, picture on the left', () => replaceImg(selImg, imgHtml(selImg, { wrap: 'left' }))], ['Wrap text, picture on the right', () => replaceImg(selImg, imgHtml(selImg, { wrap: 'right' }))], ['Centre on its own line', () => replaceImg(selImg, imgHtml(selImg, { wrap: 'center' }))], ['Reset size', () => replaceImg(selImg, imgHtml(selImg, { w: Math.min(selImg.naturalWidth, contentW()), h: null }))], ['Copy picture', () => { document.execCommand('copy'); toast('Picture copied'); }], ['Delete picture', () => $('imgbar').querySelector('[data-a=del]')?.click()], null); }
   const cell = inDoc && el.closest && el.closest('td,th');
-  if (cell && doc.contains(cell)) rows.push({ head: 'Table' }, ['Insert row above', () => tableOp(cell, 'rowAbove')], ['Insert row below', () => tableOp(cell, 'rowBelow')], ['Insert column left', () => tableOp(cell, 'colLeft')], ['Insert column right', () => tableOp(cell, 'colRight')], ['Delete row', () => tableOp(cell, 'delRow')], ['Delete column', () => tableOp(cell, 'delCol')], ['Delete table', () => tableOp(cell, 'delTable')], null);
+  if (cell && doc.contains(cell)) rows.push({ head: 'Table' }, ['Insert row above', () => tableOp(cell, 'rowAbove')], ['Insert row below', () => tableOp(cell, 'rowBelow')], ['Insert column left', () => tableOp(cell, 'colLeft')], ['Insert column right', () => tableOp(cell, 'colRight')], ['Delete row', () => tableOp(cell, 'delRow')], ['Delete column', () => tableOp(cell, 'delCol')], ['Delete table', () => tableOp(cell, 'delTable')], null, ...(typeof tableMore === 'function' ? tableMore(cell) : []));
   const a = inDoc && el.closest && el.closest('a');
   if (a && doc.contains(a)) rows.push({ head: 'Link' }, ['Open link', () => window.te.ctx({ act: 'openLink', url: a.getAttribute('href') }), 'Ctrl+click'], ['Edit link…', () => editLink(a)], ['Remove link', () => { const r = document.createRange(); r.selectNodeContents(a); const s = getSelection(); s.removeAllRanges(); s.addRange(r); keptRange = r; ex('unlink'); }], null);
   if (!d.editable && !inDoc && !d.canCopy) return;
@@ -592,20 +595,20 @@ async function docxBytes() {
   // Converted from a copy at 100% zoom, so sizes are the page's real sizes
   const p = pageSetup(), host = document.createElement('div'); host.className = 'page'; host.style.cssText = `position:fixed;left:-20000px;top:0;background:#fff;color:#111;white-space:pre-wrap;word-wrap:break-word;tab-size:6;font:11pt/1.45 "Segoe UI","Calibri",sans-serif;width:${doc.style.width};padding:${doc.style.padding}`;
   if (doc.classList.contains('nowrap')) host.style.whiteSpace = 'pre';
-  host.innerHTML = cleanHtml(); document.body.append(host);
-  try { await Promise.all([...host.querySelectorAll('img')].map(i => i.decode().catch(() => {}))); return await window.SaveitDocx.toDocx(host, { ...p, title: $('name').value }); } finally { host.remove(); }
+  host.innerHTML = cleanHtml(); host.querySelectorAll('.pgset').forEach(x => x.remove()); document.body.append(host);
+  try { await Promise.all([...host.querySelectorAll('img')].map(i => i.decode().catch(() => {}))); return await window.SaveitDocx.toDocx(host, { ...p, title: $('name').value, hf: typeof hfGet === 'function' ? hfGet() : null }); } finally { host.remove(); }
 }
 async function saveFile(fmt) {
   const name = $('name').value.trim() || (isGrab() ? 'Grabbed text' : 'Page'); let data = null;
   try {
     if (fmt === 'docx') data = await docxBytes();
-    else if (fmt === 'html') { const p = pageSetup(), d = pageDims(p); data = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)}</title><style>@page{size:${d.w}in ${d.h}in;margin:${p.margin}in}body{font:11pt/1.45 "Segoe UI",Calibri,sans-serif;white-space:pre-wrap;max-width:${Math.round((d.w - 2 * p.margin) * 96)}px;margin:30px auto;color:#111}table{border-collapse:collapse;white-space:normal}td,th{border:1px solid #b9c0c7;padding:3px 8px;vertical-align:top}img{max-width:100%}h1{font-size:20pt}h2{font-size:16pt}h3{font-size:13pt}blockquote{margin:.3em 0 .3em 1.2em;padding-left:10px;border-left:3px solid #c5cbd1;color:#444}pre{font:10pt/1.4 Consolas,monospace;background:#f3f4f6;padding:6px 8px}ul,ol{white-space:normal}li{white-space:pre-wrap}.pgbreak{break-after:page}.colbreak{break-after:column}</style></head><body>${cleanHtml()}</body></html>`; }
+    else if (fmt === 'html') { const p = pageSetup(), d = pageDims(p); data = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)}</title><style>@page{size:${d.w}in ${d.h}in;margin:${p.margin}in}body{font:11pt/1.45 "Segoe UI",Calibri,sans-serif;white-space:pre-wrap;max-width:${Math.round((d.w - 2 * p.margin) * 96)}px;margin:30px auto;color:#111}table{border-collapse:collapse;white-space:normal}td,th{border:1px solid #b9c0c7;padding:3px 8px;vertical-align:top}img{max-width:100%}h1{font-size:20pt}h2{font-size:16pt}h3{font-size:13pt}blockquote{margin:.3em 0 .3em 1.2em;padding-left:10px;border-left:3px solid #c5cbd1;color:#444}pre{font:10pt/1.4 Consolas,monospace;background:#f3f4f6;padding:6px 8px}ul,ol{white-space:normal}li{white-space:pre-wrap}.pgbreak{break-after:page}.colbreak{break-after:column}.pgset{display:none}h4{font-size:11.5pt;font-style:italic}.p-title{font-size:26pt;font-weight:600;line-height:1.2}.p-subtitle{font-size:14pt;color:#5a6168}.toc{white-space:normal}.toc-t{font-weight:700;font-size:13pt}.toc-2{margin-left:.3in}.toc-3{margin-left:.6in}.toc-4{margin-left:.9in}.fnotes{border-top:1px solid #a0a6ad;margin-top:24px;padding-top:6px;font-size:9.5pt}</style></head><body>${cleanHtml()}</body></html>`; }
     else if (fmt === 'txt') data = plain();
     if (fmt === 'pdf') { hideImgSel(); closeFind(true); }
-    const p = await window.te.saveFile(name, fmt, data, pageSetup()); if (p) toast('Saved ' + p.split(/[\\/]/).pop(), 4000);
+    const p = await window.te.saveFile(name, fmt, data, { ...pageSetup(), hf: typeof hfGet === 'function' ? hfGet() : null }); if (p) toast('Saved ' + p.split(/[\\/]/).pop(), 4000);
   } catch (e) { toast('Could not save: ' + errMsg(e), 6000); }
 }
-function printPage() { hideImgSel(); window.te.print(); }
+function printPage() { hideImgSel(); window.te.print(typeof hfGet === 'function' ? hfGet() : null); }
 $('print').onclick = printPage;
 async function newPage() { syncNow(); const fresh = entry && !entry.libId && !plain().trim() && !doc.querySelector('img,table'); if (fresh) { doc.focus(); return; } await window.te.newPage({ name: 'New page' }); }
 $('newPage').onclick = newPage;
@@ -613,7 +616,7 @@ async function openFromFile(f) {
   try {
     let html, page = null;
     const bytes = f.bytes || (f.file && f.ext === 'docx' ? new Uint8Array(await f.file.arrayBuffer()) : null), text = f.text ?? (f.file && f.ext !== 'docx' ? await f.file.text() : null);
-    if (f.ext === 'docx') { const r = await window.SaveitDocx.fromDocx(bytes); html = sanitize(r.html); page = r.page; }
+    if (f.ext === 'docx') { const r = await window.SaveitDocx.fromDocx(bytes); html = sanitize(r.html); page = r.page; if (page && page.hf) { if (typeof hfHtml === 'function') html = hfHtml(page.hf) + html; delete page.hf; } }
     else if (f.ext === 'html' || f.ext === 'htm') { const d = new DOMParser().parseFromString(text, 'text/html'); html = sanitize(d.body ? d.body.innerHTML : text); }
     else html = textToHtml(text);
     const empty = entry && !entry.libId && !plain().trim() && !doc.querySelector('img,table'), oldKey = entry && entry.key;

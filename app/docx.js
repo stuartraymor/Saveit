@@ -129,7 +129,7 @@
     }
     function paraProps(el, extra = '') {
       const cs = getComputedStyle(el), p = [];
-      const tag = el.tagName, style = { H1: 'Heading1', H2: 'Heading2', H3: 'Heading3', H4: 'Heading3', H5: 'Heading3', H6: 'Heading3', BLOCKQUOTE: 'Quote', PRE: 'Code' }[tag];
+      const tag = el.tagName, cl = el.classList, style = cl && cl.contains('p-title') ? 'Title' : cl && cl.contains('p-subtitle') ? 'Subtitle' : { H1: 'Heading1', H2: 'Heading2', H3: 'Heading3', H4: 'Heading4', H5: 'Heading4', H6: 'Heading4', BLOCKQUOTE: 'Quote', PRE: 'Code' }[tag];
       if (style) p.push(`<w:pStyle w:val="${style}"/>`);
       p.push(extra);
       if (cs.pageBreakBefore === 'always' || cs.breakBefore === 'page') p.push('<w:pageBreakBefore/>');
@@ -138,8 +138,9 @@
       const line = lh ? Math.round(240 * (lh / fs) / 1.17) : 0;
       p.push(`<w:spacing w:before="${TW(mt)}" w:after="${TW(mb)}"${line ? ` w:line="${Math.max(120, line)}" w:lineRule="auto"` : ''}/>`);
       const ml = own ? (parseFloat(cs.marginLeft) || 0) + (tag === 'BLOCKQUOTE' ? parseFloat(cs.paddingLeft) || 0 : 0) : 0;
-      if (ml > 0.5 && !extra.includes('numPr')) p.push(`<w:ind w:left="${TW(ml)}"/>`);
-      const ti = own ? parseFloat(cs.textIndent) || 0 : 0; if (ti && !extra.includes('numPr')) p.push(`<w:ind w:firstLine="${TW(ti)}"/>`);
+      // 10.5.4: one indent element (two were written when a paragraph had both), and hanging indents
+      const ti = own ? parseFloat(cs.textIndent) || 0 : 0;
+      if (!extra.includes('numPr') && (ml > 0.5 || ti)) p.push(`<w:ind${ml > 0.5 ? ` w:left="${TW(ml)}"` : ''}${ti > 0 ? ` w:firstLine="${TW(ti)}"` : ti < 0 ? ` w:hanging="${TW(-ti)}"` : ''}/>`);
       const al = { center: 'center', right: 'right', end: 'right', justify: 'both' }[cs.textAlign]; if (al) p.push(`<w:jc w:val="${al}"/>`);
       return `<w:pPr>${p.join('')}</w:pPr>`;
     }
@@ -203,7 +204,17 @@
     const [pw, ph] = PAGES[opts.size] || PAGES.letter, land = opts.orientation === 'landscape', m = TW((opts.margin ?? 1) * 96);
     const W = Math.round((land ? ph : pw) * 1440), H = Math.round((land ? pw : ph) * 1440);
     // 10.5.3: a section's settings sit in its last paragraph (Word's rule); the last section's sit at the end of the body.
-    const sectPr = (cols, cont) => `<w:sectPr>${cont ? '<w:type w:val="continuous"/>' : ''}<w:pgSz w:w="${W}" w:h="${H}"${land ? ' w:orient="landscape"' : ''}/><w:pgMar w:top="${m}" w:right="${m}" w:bottom="${m}" w:left="${m}" w:header="720" w:footer="720" w:gutter="0"/>${cols && cols.n > 1 ? `<w:cols w:num="${cols.n}" w:space="${Math.round(cols.gap * 1440)}"${cols.line ? ' w:sep="1"' : ''}/>` : '<w:cols w:space="720"/>'}</w:sectPr>`;
+    const hf = opts.hf && (String(opts.hf.header || '').trim() || String(opts.hf.footer || '').trim() || ['bc', 'br', 'tr'].includes(opts.hf.num)) ? opts.hf : null, parts = [];
+    if (hf) {
+      const cw = W - 2 * m, field = name => `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> ${name} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`;
+      const txt = t => t ? `<w:r><w:t xml:space="preserve">${x(t)}</w:t></w:r>` : '', tab = '<w:r><w:tab/></w:r>', num = hf.fmt === 'nofm' ? txt('Page ') + field('PAGE') + txt(' of ') + field('NUMPAGES') : field('PAGE');
+      const HNS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+      const line = body => `<w:p><w:pPr><w:tabs><w:tab w:val="center" w:pos="${Math.round(cw / 2)}"/><w:tab w:val="right" w:pos="${cw}"/></w:tabs><w:rPr><w:color w:val="555555"/><w:sz w:val="18"/></w:rPr></w:pPr>${body.replace(/<w:r>/g, '<w:r><w:rPr><w:color w:val="555555"/><w:sz w:val="18"/></w:rPr>')}</w:p>`;
+      const head = line(txt(String(hf.header || '').trim()) + (hf.num === 'tr' ? tab + tab + num : '')), foot = line(txt(String(hf.footer || '').trim()) + (hf.num === 'bc' ? tab + num : hf.num === 'br' ? tab + tab + num : ''));
+      parts.push({ name: 'word/header1.xml', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:hdr ${HNS}>${head}</w:hdr>`, rid: rel('header', 'header1.xml'), kind: 'header' }, { name: 'word/footer1.xml', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:ftr ${HNS}>${foot}</w:ftr>`, rid: rel('footer', 'footer1.xml'), kind: 'footer' });
+    }
+    const hfRefs = parts.map(p => `<w:${p.kind}Reference w:type="default" r:id="${p.rid}"/>`).join('');
+    const sectPr = (cols, cont) => `<w:sectPr>${hfRefs}${cont ? '<w:type w:val="continuous"/>' : ''}<w:pgSz w:w="${W}" w:h="${H}"${land ? ' w:orient="landscape"' : ''}/><w:pgMar w:top="${m}" w:right="${m}" w:bottom="${m}" w:left="${m}" w:header="720" w:footer="720" w:gutter="0"/>${cols && cols.n > 1 ? `<w:cols w:num="${cols.n}" w:space="${Math.round(cols.gap * 1440)}"${cols.line ? ' w:sep="1"' : ''}/>` : '<w:cols w:space="720"/>'}</w:sectPr>`;
     const colsOf = el => { const cs = getComputedStyle(el), n = parseInt(cs.columnCount) || 1; return n > 1 ? { n: Math.min(45, n), gap: Math.max(0, (parseFloat(cs.columnGap) || 48) / 96), line: cs.columnRuleStyle !== 'none' && parseFloat(cs.columnRuleWidth) > 0 } : null; };
     const segs = []; { let loose = null;
       for (const c of root.childNodes) { if (c.nodeType === 1 && c.classList.contains('cols') && colsOf(c)) { loose = null; segs.push({ cols: colsOf(c), node: c }); } else { if (!loose) { loose = { cols: null, node: { childNodes: [], tagName: 'DIV' } }; segs.push(loose); } loose.node.childNodes.push(c); } } }
@@ -231,11 +242,13 @@
     const hs = (id, name, sz, extra = '') => `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${name}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/>${extra}<w:rPr><w:b/><w:sz w:val="${sz}"/></w:rPr></w:style>`;
     const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${x(font)}" w:hAnsi="${x(font)}" w:cs="${x(font)}" w:eastAsia="${x(font)}"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="en-US"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>`
       + `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>`
+      + `<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="52"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:rPr><w:color w:val="5A6168"/><w:sz w:val="28"/></w:rPr></w:style>`
+      + `<w:style w:type="paragraph" w:styleId="Heading4"><w:name w:val="heading 4"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:outlineLvl w:val="3"/></w:pPr><w:rPr><w:b/><w:i/><w:sz w:val="23"/></w:rPr></w:style>`
       + hs('Heading1', 'heading 1', 40, '<w:pPr><w:keepNext/><w:outlineLvl w:val="0"/></w:pPr>') + hs('Heading2', 'heading 2', 32, '<w:pPr><w:keepNext/><w:outlineLvl w:val="1"/></w:pPr>') + hs('Heading3', 'heading 3', 26, '<w:pPr><w:keepNext/><w:outlineLvl w:val="2"/></w:pPr>')
       + `<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:pBdr><w:left w:val="single" w:sz="18" w:space="8" w:color="C5CBD1"/></w:pBdr></w:pPr><w:rPr><w:color w:val="444444"/></w:rPr></w:style>`
       + `<w:style w:type="paragraph" w:styleId="Code"><w:name w:val="Code"/><w:basedOn w:val="Normal"/><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/></w:pPr><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="20"/></w:rPr></w:style>`
       + `<w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr></w:style></w:styles>`;
-    const ct = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
+    const ct = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>${parts.map(p => `<Override PartName="/${p.name}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${p.kind}+xml"/>`).join('')}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
     const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`;
     const docRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>${rels.join('')}</Relationships>`;
     const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
@@ -243,7 +256,7 @@
     const appx = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Saveit</Application></Properties>`;
     return zip([{ name: '[Content_Types].xml', data: ct }, { name: '_rels/.rels', data: rootRels }, { name: 'docProps/core.xml', data: core }, { name: 'docProps/app.xml', data: appx },
       { name: 'word/document.xml', data: document_ }, { name: 'word/styles.xml', data: styles }, { name: 'word/numbering.xml', data: numbering }, { name: 'word/_rels/document.xml.rels', data: docRels },
-      ...media.map(m => ({ name: 'word/media/' + m.name, data: m.data }))]);
+      ...parts.map(p => ({ name: p.name, data: p.data })), ...media.map(m => ({ name: 'word/media/' + m.name, data: m.data }))]);
   }
 
   // ---------- docx -> HTML ----------
@@ -314,8 +327,9 @@
       const sp = kid(pr, 'spacing'); if (sp) { const b = att(sp, 'before'), a = att(sp, 'after'), l = att(sp, 'line'), lr = att(sp, 'lineRule'); if (b && +b) st.push(`margin-top:${Math.round(+b / 15)}px`); if (a && +a) st.push(`margin-bottom:${Math.round(+a / 15)}px`); if (l && (!lr || lr === 'auto')) st.push(`line-height:${Math.max(1, +l / 240 * 1.17).toFixed(2)}`); }
       if (on(kid(pr, 'pageBreakBefore'))) st.push('break-before:page');
       let inner = await runsHtml(p); if (!inner) inner = '<br>';
-      const tag = /^(heading 1|title)$/.test(nm) ? 'h1' : nm === 'heading 2' || nm === 'subtitle' ? 'h2' : /^heading [3-9]$/.test(nm) ? 'h3' : /quote/.test(nm) ? 'blockquote' : 'div';
-      return `<${tag}${st.length ? ` style="${st.join(';')}"` : ''}>${inner}</${tag}>`;
+      const tag = nm === 'heading 1' ? 'h1' : nm === 'heading 2' ? 'h2' : nm === 'heading 3' ? 'h3' : /^heading [4-9]$/.test(nm) ? 'h4' : /quote/.test(nm) ? 'blockquote' : 'div', cls = nm === 'title' ? ' class="p-title"' : nm === 'subtitle' ? ' class="p-subtitle"' : '';
+      if (ind && !kid(pr, 'numPr')) { const fl = +att(ind, 'firstLine') || 0, hg = +att(ind, 'hanging') || 0; if (hg > 0) st.push(`text-indent:-${Math.round(hg / 15)}px`); else if (fl > 0) st.push(`text-indent:${Math.round(fl / 15)}px`); }
+      return `<${tag}${cls}${st.length ? ` style="${st.join(';')}"` : ''}>${inner}</${tag}>`;
     }
     async function tableHtml(tbl) {
       let h = '<table>';
@@ -355,6 +369,15 @@
     const parts = []; let run = [];
     for (const c of body.children) { if (c.localName === 'sectPr') continue; run.push(c); const sp = c.localName === 'p' ? kid(kid(c, 'pPr'), 'sectPr') : null; if (sp) { parts.push({ kids: run, css: colsCss(sp) }); run = []; } }
     if (run.length || !parts.length) parts.push({ kids: run, css: sect ? colsCss(sect) : '' });
+    // 10.5.4: the header and footer of the last section (text, and whether they carry a page number)
+    { const RN = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', hfv = { header: '', footer: '', num: 'none', fmt: 'n' };
+      for (const kind of ['header', 'footer']) { const ref = kids(sect, kind + 'Reference').find(r => (att(r, 'type') || 'default') === 'default'), rl = ref && rels[ref.getAttributeNS(RN, 'id') || ref.getAttribute('r:id')]; if (!rl) continue;
+        const xml = await z.text('word/' + rl.target.replace(/^\/?(word\/)?/, '')); if (!xml) continue; const d = P(xml), instr = [...d.getElementsByTagNameNS(W, 'instrText')].map(n => n.textContent).join(' ') + [...d.getElementsByTagNameNS(W, 'fldSimple')].map(n => att(n, 'instr') || '').join(' ');
+        const hasPage = /\bPAGE\b/.test(instr), ofM = /\bNUMPAGES\b/.test(instr); let text = '';
+        let tabsBefore = -1; for (const pp of d.getElementsByTagNameNS(W, 'p')) { let inField = 0, line = '', tabs = 0; for (const n of pp.getElementsByTagNameNS(W, '*')) { if (n.localName === 'tab' && n.parentElement && n.parentElement.localName === 'r') { tabs++; line += ' '; } else if (n.localName === 'instrText' && /\bPAGE\b/.test(n.textContent) && tabsBefore < 0) tabsBefore = tabs; else if (n.localName === 'fldChar') { const t = att(n, 'fldCharType'); if (t === 'begin') inField++; else if (t === 'end') inField = Math.max(0, inField - 1); } else if (n.localName === 't' && !inField && !(n.parentElement && n.parentElement.parentElement && n.parentElement.parentElement.localName === 'fldSimple')) line += n.textContent; } text += (text && line ? ' ' : '') + line; }
+        text = text.replace(/\s+/g, ' ').trim(); if (hasPage) text = text.replace(/(^|\s)Page(\s+of)?\s*$/i, '').trim();
+        hfv[kind] = text.slice(0, 300); if (hasPage) { hfv.num = kind === 'header' ? 'tr' : tabsBefore >= 2 ? 'br' : 'bc'; if (ofM) hfv.fmt = 'nofm'; } }
+      if (hfv.header || hfv.footer || hfv.num !== 'none') page.hf = hfv; }
     let html = '';
     for (const p of parts) { const h = await bodyHtml({ children: p.kids }); html += p.css && h ? `<div class="cols" style="${p.css}">${h}</div>` : h; }
     return { html, page };

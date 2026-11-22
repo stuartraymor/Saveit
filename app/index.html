@@ -989,7 +989,7 @@ async function save(fmtArg){const it=S.cur;if(!it)return;commitText();saveTarget
   let b=fmt==='mp4'?it.mp4:it.webm;if(b&&fmt!=='mp4'&&window.WebmFix)b=await WebmFix.ensure(b);if(!b){toast(fmt==='mp4'?'This recording was made without MP4. Choose WebM, or record again in this version to get both.':'This recording only has MP4. Choose MP4.',6000);return}saveBlob(b,fileName(fmt));return}
   if(it.kind==='audio'){const tgt=saveTarget9,own=saveOwner9;saveTarget9=null;saveOwner9=null;const af=fmt==='mp3'||fmt==='m4a'?fmt:'wav';toast(af==='m4a'?'Making the M4A…':af==='mp3'?'Making the MP3…':'Mixing the audio…',af==='m4a'?9000:3000);try{const b=await AEdit.renderAs(it,af);saveTarget9=tgt;saveOwner9=own;await saveBlob(b,fileName(af),'Saved the audio ('+AEdit.fmt(it.dur||0)+') to')}catch(e){toast('Could not save the audio: '+(e.message||e),6000)}return}
   if(fmt==='saveit')return saveSaveit(it.guide&&false?it.guide:it);
-  if(it.kind==='guide'){if(fmt==='docx')return exportDocx(it);if(fmt==='pdf')return exportPdf(it);if(fmt==='jpg')return exportGuideJpg(it);if(fmt==='png'){const pc=renderPageCanvas(it,2);pc.canvas.toBlob(b=>saveBlob(b,safeName(it.title)+'.png'),'image/png');return}return}
+  if(it.kind==='guide'){if(fmt==='docx')return exportDocx(it);if(fmt==='pdf'){saveTarget9=null;saveOwner9=null;return exportPdf(it)}if(fmt==='jpg')return exportGuideJpg(it);if(fmt==='png'){const pc=renderPageCanvas(it,2);pc.canvas.toBlob(b=>saveBlob(b,safeName(it.title)+'.png'),'image/png');return}return}
   const c=exportCanvas();
   if(fmt==='jpg'){const j=document.createElement('canvas');j.width=c.width;j.height=c.height;const g=j.getContext('2d');g.fillStyle='#ffffff';g.fillRect(0,0,j.width,j.height);g.drawImage(c,0,0);j.toBlob(b=>saveBlob(b,fileName('jpg')),'image/jpeg',saveQuality);return}
   if(fmt==='webp'){c.toBlob(b=>saveBlob(b,fileName('webp')),'image/webp',saveQuality);return}
@@ -1795,13 +1795,13 @@ function libBatch(move){const l=libChosen();if(!l.length)return;if($('#libBatch'
   document.body.appendChild(m);/* 10.4.5: Esc closes this dialog like the others */m.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();m.remove()}});(m.querySelector('select')||m.querySelector('[data-go]')).focus();
   m.onclick=async e=>{if(e.target===m||e.target.closest('[data-x]')){m.remove();return}
     if(!e.target.closest('[data-go]'))return;const fm={};m.querySelectorAll('[data-g]').forEach(s=>fm[s.dataset.g]=s.value);m.remove();
-    toast('Preparing files…',2500);const files=[],used=new Set(),skipped=[],keep=S.cur;
+    toast('Preparing files…',2500);const files=[],used=new Set(),skipped=[],moved=[],keep=S.cur;
     for(const it of l){const fmt=fm[kindOf(it)];let blob=null;try{blob=await blobFor(it,fmt)}catch(err){blob=null}
-      if(!blob){skipped.push(itemName(it));continue}let nm=baseName(it),n=nm,k=2;while(used.has(n+'.'+fmt))n=nm+'-'+k++;used.add(n+'.'+fmt);files.push({name:n+'.'+fmt,blob})}
+      if(!blob){skipped.push(itemName(it));continue}let nm=baseName(it),n=nm,k=2;while(used.has(n+'.'+fmt))n=nm+'-'+k++;used.add(n+'.'+fmt);files.push({name:n+'.'+fmt,blob});moved.push(it)}
     if(keep&&S.cur!==keep&&S.items.includes(keep))openItem(keep);
     if(!files.length){toast('Nothing could be saved in that format.');return}
     const where=await saveMany(files);if(!where)return;
-    if(move){const done=new Set(files.map(f=>f.name));deleteItems(l.filter(it=>{const b=baseName(it);return [...done].some(d=>d.startsWith(b+'.'))}),true);l.forEach(i=>libSel.delete(i.id));toast(`Moved ${files.length} file${files.length>1?'s':''} to ${where}`,6000)}
+    if(move){deleteItems(moved,true);moved.forEach(i=>libSel.delete(i.id));toast(`Moved ${files.length} file${files.length>1?'s':''} to ${where}`+(skipped.length?`. ${skipped.length} could not be saved and stayed in the library.`:''),skipped.length?9000:6000)}
     else toast(`Saved ${files.length} file${files.length>1?'s':''} to ${where}`+(skipped.length?`. Skipped ${skipped.length}.`:''),6000);
     renderLib()}}
 async function blobFor(it,fmt){await hydrate(it);
