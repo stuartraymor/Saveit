@@ -1,4 +1,5 @@
-// Effect picker: a dropdown plus a small settings button that pops up the controls for the chosen effect.
+// Effect picker: a dropdown plus a small settings button that pops up the controls for the chosen effect (mount),
+// or a dropdown with its settings in one row (inline).
 window.FXUI={
  mount(sel,gear,state,onChange,onToggle){
   if(!document.getElementById('fxui-css')){const st=document.createElement('style');st.id='fxui-css';st.textContent=`
@@ -22,4 +23,18 @@ window.FXUI={
   gear.onclick=e=>{e.stopPropagation();if(gear.disabled)return;const on=!pop.classList.contains('on');if(on){build();pop.classList.add('on');place()}else pop.classList.remove('on');onToggle&&onToggle(on)};
   document.addEventListener('mousedown',e=>{if(!pop.contains(e.target)&&e.target!==gear&&e.target!==sel)close()},true);
   build();
-  return{set(s){state.id=s&&s.id||'none';state.p=s&&s.p||FXDEFAULTS(state.id);build()},close,popEl:pop}}};
+  return{set(s){state.id=s&&s.id||'none';state.p=s&&s.p||FXDEFAULTS(state.id);build()},close,popEl:pop}},
+ // 10.4.11: the same picker laid out in one row (capture bar under the selection): the effect dropdown, then each of
+ // its settings beside it, so no pop-up is needed.
+ inline(sel,host,state,onChange){
+  sel.innerHTML=FXDEFS.map(d=>`<option value="${d.id}">${d.label}</option>`).join('');
+  const def=()=>FXDEFS.find(d=>d.id===state.id)||FXDEFS[0];
+  function build(){const d=def();sel.value=d.id;
+   host.innerHTML=d.params.map(q=>{const v=state.p[q.k]!=null?state.p[q.k]:q.def,lab=`<span class="sep"></span><label class="fxp" data-p="${q.k}">${q.label} `;
+    if(q.type==='color')return lab+`<input type="color" data-k="${q.k}" value="${v}" aria-label="${q.label}"></label>`;
+    if(q.type==='select')return lab+`<select data-k="${q.k}" aria-label="${q.label}">${q.options.map(([a,b])=>`<option value="${a}" ${a===v?'selected':''}>${b}</option>`).join('')}</select></label>`;
+    return lab+`<input type="range" data-k="${q.k}" min="${q.min}" max="${q.max}" value="${v}" aria-label="${q.label}"><span class="v">${v}</span></label>`}).join('');
+   host.querySelectorAll('[data-k]').forEach(el=>{const h=()=>{state.p[el.dataset.k]=el.type==='range'?+el.value:el.value;if(el.type==='range')el.nextElementSibling.textContent=el.value;onChange(state)};el.oninput=h;el.onchange=h})}
+  sel.onchange=()=>{state.id=sel.value;state.p=FXDEFAULTS(state.id);build();onChange(state);sel.blur()};
+  build();
+  return{set(s){state.id=s&&s.id||'none';state.p=Object.assign(FXDEFAULTS(state.id),s&&s.p||{});build()}}}};
